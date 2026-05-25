@@ -8,3 +8,5 @@ dist
 *.log
 .vscode
 *.pyc
+artifacts/
+config.toml
