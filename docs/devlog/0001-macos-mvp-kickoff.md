@@ -42,6 +42,8 @@ Later manual testing narrowed the conclusion:
 - later timing tests showed `SetSpeedZero` works with `hold_s = 0.0`, while `RollLeftButton` needed a non-zero dwell and became reliable starting around `0.05`, with smoother behavior around `0.2`
 - the resulting control policy is now implemented with a `0.1s` minimum dwell floor for all actions and a `0.2s` default dwell for continuous controls
 - later manual sequencing confirmed that contradictory actions should be separated with explicit delays when the goal is to observe each effect clearly
+- later experiments showed that modifier-combo ship controls such as `Ctrl+...` are still unresolved through the current `System Events` backend
+- an attempted letter-to-key-code macOS input change regressed previously working plain-key ship controls and was reverted to restore the last known-good sequence behavior
 
 ## What Is Implemented
 

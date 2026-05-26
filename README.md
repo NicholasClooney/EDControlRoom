@@ -33,6 +33,8 @@ On the current macOS + CrossOver setup, manual testing now shows a narrower resu
 - synthetic key input reaches the game
 - repeated taps appear in in-game chat
 - flight controls respond once the macOS backend sends real key-down and key-up events with a short dwell
+- plain unmodified ship-control keys are the current known-good path
+- modifier-combo ship controls such as `Ctrl+...` are not yet reliable through the current `System Events` backend
 
 Confirmed finding: CrossOver/Elite flight controls need real key presses, not just tap-style `keystroke` delivery.
 

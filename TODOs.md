@@ -25,6 +25,9 @@
 - Extend it as needed for direct action testing beyond `SetSpeedZero`.
 - Confirmed on the current setup: flight controls respond when the macOS backend sends real key-down, short dwell, and key-up events.
 - Use this path as the baseline for further ship-control testing instead of the older tap-style `keystroke` behavior.
+- Plain unmodified ship-control keys are the current known-good path.
+- `System Events` modifier-combo ship controls such as `Ctrl+...` are still unresolved on the current setup.
+- A later experiment that switched letters to macOS key codes regressed previously working plain-key control delivery; that change was reverted.
 - Measured so far on the current setup:
   - `SetSpeedZero` works with `hold_s = 0.0`
   - `RollLeftButton` did not work reliably at `0.0`, `0.01`, or `0.02`

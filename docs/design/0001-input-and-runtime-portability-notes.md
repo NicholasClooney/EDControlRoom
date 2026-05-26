@@ -119,6 +119,8 @@ Manual testing on the current macOS + CrossOver setup shows a narrower result:
 - synthetic tap-style input reaches the game
 - repeated taps appear in in-game chat
 - ship controls respond once the backend sends real key-down, short dwell, and key-up events
+- plain unmodified ship-control keys are the current known-good path
+- modifier-combo ship controls such as `Ctrl+...` are not yet reliable through the current `System Events` backend
 
 This matters most for:
 
@@ -138,6 +140,7 @@ Measured findings on the current setup:
 - `RollLeftButton` started working at `0.05`
 - `RollLeftButton` works at `0.1`
 - `RollLeftButton` feels smoother at `0.2`
+- a later experiment that switched letter keys to physical macOS key codes regressed previously working plain-key ship controls and was reverted
 
 ### Immediate next step
 
