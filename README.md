@@ -36,6 +36,12 @@ On the current macOS + CrossOver setup, manual testing now shows a narrower resu
 
 Confirmed finding: CrossOver/Elite flight controls need real key presses, not just tap-style `keystroke` delivery.
 
+Current control-timing policy:
+
+- all actions have a minimum dwell floor of `0.1s`
+- continuous controls default to `0.2s`
+- continuous controls can also be driven by total requested actuation time
+
 ## What `diagnostics.py` Is
 
 `diagnostics.py` is the diagnostic runner entry point.

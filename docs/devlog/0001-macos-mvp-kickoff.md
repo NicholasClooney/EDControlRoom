@@ -39,6 +39,8 @@ Later manual testing narrowed the conclusion:
 - repeated taps also appear in Elite chat
 - `ship_controls.py` action dispatch did not move ship controls while `edap/platform/input/macos.py` still used tap-style `keystroke` behavior
 - after switching the backend to real key-down, dwell, and key-up behavior, `SetSpeedZero` worked in-game
+- later timing tests showed `SetSpeedZero` works with `hold_s = 0.0`, while `RollLeftButton` needed a non-zero dwell and became reliable starting around `0.05`, with smoother behavior around `0.2`
+- the resulting control policy is now implemented with a `0.1s` minimum dwell floor for all actions and a `0.2s` default dwell for continuous controls
 
 ## What Is Implemented
 

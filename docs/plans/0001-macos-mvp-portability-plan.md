@@ -204,6 +204,7 @@ Still incomplete:
 - bindings discovery still depends on a `.binds` file existing inside the active bottle layout
 - repeated tap-style input is verified to reach the game UI and in-game chat on the current macOS + CrossOver setup
 - ship-control input is now also proven once the macOS backend uses real key-down, dwell, and key-up behavior
+- a higher-level control timing policy is now implemented with a `0.1s` minimum dwell floor and `0.2s` continuous-control default
 - a shared runtime context now assembles config fallback, path resolution, input backend wiring, and optional action-scoped binding lookup
 - the normalized binding lookup seam is now wired into a first small set of runtime actions plus one tiny composed routine
 - the capture calibration seam exists, but the legacy CV pipeline has not been ported onto it yet

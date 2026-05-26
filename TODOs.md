@@ -25,6 +25,17 @@
 - Extend it as needed for direct action testing beyond `SetSpeedZero`.
 - Confirmed on the current setup: flight controls respond when the macOS backend sends real key-down, short dwell, and key-up events.
 - Use this path as the baseline for further ship-control testing instead of the older tap-style `keystroke` behavior.
+- Measured so far on the current setup:
+  - `SetSpeedZero` works with `hold_s = 0.0`
+  - `RollLeftButton` did not work reliably at `0.0`, `0.01`, or `0.02`
+  - `RollLeftButton` started working at `0.05`
+  - `RollLeftButton` works at `0.1`
+  - `RollLeftButton` feels smoother at `0.2`
+- Implemented policy:
+  - minimum dwell floor is now `0.1s` for all actions
+  - continuous controls default to `0.2s`
+  - explicit holds below `0.1s` are clamped up to `0.1s`
+  - continuous controls can be dispatched by total requested actuation time via `ceil(total / dwell)`
 
 ### Manual harness
 
@@ -32,3 +43,25 @@
 - Add only the smallest features that materially improve manual verification loops.
 - Avoid turning it into a second app, console, or long-term runtime surface.
 - Good future candidates: `--interval-seconds`, `--dry-run`, and explicit `tap|press|release` mode selection.
+
+### Control timing policy
+
+- Treat controls as two categories until proven otherwise:
+  - discrete actions, where a single activation is enough
+  - continuous actions, where each activation needs a minimum dwell time
+- Likely discrete examples:
+  - `SetSpeedZero`
+  - `SetSpeed100`
+  - `HyperSuperCombination` / FSD-style actions
+- Likely continuous examples:
+  - `RollLeftButton`
+  - `RollRightButton`
+  - `PitchUpButton`
+  - `PitchDownButton`
+  - `YawLeftButton`
+  - `YawRightButton`
+- Implemented direction:
+  - keep low-level backend primitives generic
+  - apply dwell timing defaults for continuous controls in a higher-level policy layer
+  - keep those defaults configurable in config
+  - if a routine needs total actuation time `t`, dispatch `ceil(t / dwell)` activations using the configured dwell

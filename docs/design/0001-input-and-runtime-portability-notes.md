@@ -131,6 +131,14 @@ This matters most for:
 
 The result should be treated as setup-specific evidence, not a universal guarantee. The current confirmed requirement on this machine is real press/release timing for ship-control delivery.
 
+Measured findings on the current setup:
+
+- `SetSpeedZero` works with `hold_s = 0.0`
+- `RollLeftButton` did not work reliably at `0.0`, `0.01`, or `0.02`
+- `RollLeftButton` started working at `0.05`
+- `RollLeftButton` works at `0.1`
+- `RollLeftButton` feels smoother at `0.2`
+
 ### Immediate next step
 
 Document backend capabilities and keep the interface level explicit:
@@ -140,6 +148,47 @@ Document backend capabilities and keep the interface level explicit:
 - press followed by delayed release
 
 The first runtime ports should use real key-down, short dwell, and key-up behavior in the macOS backend for flight controls.
+
+### Control categories
+
+The controls appear to split into two policy categories:
+
+1. discrete actions
+   A single activation is enough.
+   Examples likely include:
+   - `SetSpeedZero`
+   - `SetSpeed100`
+   - FSD / jump-style actions
+
+2. continuous actions
+   A single activation still needs a dwell time to register reliably.
+   Examples likely include:
+   - `RollLeftButton`
+   - `RollRightButton`
+   - `PitchUpButton`
+   - `PitchDownButton`
+   - `YawLeftButton`
+   - `YawRightButton`
+
+Implemented policy direction:
+
+- keep the low-level macOS input backend generic
+- keep `hold_s` available as the primitive
+- add a higher-level dwell policy for control dispatch
+- make those defaults configurable
+
+Current implemented model:
+
+- all actions have a minimum dwell floor of `0.1s`
+- continuous controls default to `0.2s`
+- explicit holds below `0.1s` are clamped to `0.1s`
+
+For continuous controls, if a routine needs total actuation time `t`, the current model is:
+
+- choose a default dwell duration `d` for each activation
+- dispatch `ceil(t / d)` activations
+
+This is now implemented as a policy layer on top of the current backend.
 
 ### Manual harness boundary
 
