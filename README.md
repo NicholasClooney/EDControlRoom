@@ -53,7 +53,7 @@ That code is useful as a behavior reference, but it should not be treated as the
 
 ## Diagnostics Usage
 
-Copy `config.example.toml` to `config.toml` and fill in the journal and bindings locations if auto-detection is not sufficient.
+Copy `config.example.toml` to `config.toml` and fill in the journal and bindings locations if auto-detection is not sufficient. Leaving either path blank tells diagnostics to try platform auto-detection.
 
 Then run:
 
@@ -73,6 +73,7 @@ Current behavior:
 
 - journal and bindings diagnostics are implemented
 - macOS path fallback discovery is implemented
+- diagnostics output distinguishes configured, auto-detected, and effective paths
 - screen capture diagnostic can save a debug image
 - macOS test input is wired through a native `osascript` backend for validation
 
@@ -108,6 +109,12 @@ Those assumptions may need adjustment on macOS because of Retina scaling and Cro
 ## Development
 
 This project is still experimental. Do not leave it running unattended.
+
+Run the lightweight verification harness with:
+
+```sh
+python3 -m unittest discover -s tests -p 'test_*.py'
+```
 
 For commits, use Conventional Commits.
 
