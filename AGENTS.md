@@ -37,15 +37,13 @@ The current engineering focus is wiring parsed bindings and small runtime action
 When work is delegated to agents:
 
 - spawn agents only for narrow, disjoint slices that can be integrated independently
-- give each agent a narrow, disjoint ownership scope
 - prefer concrete implementation or verification slices over broad analysis
 - require the agent to verify its own work locally when practical
 - require the agent to report changed files, what works, what remains unresolved, and key assumptions
 
 After an agent finishes:
 
-- require the agent result to be captured in docs when it changes project understanding, status, or next steps
-- make sure its work is documented if the result changes project understanding, status, or next steps
+- capture the result in docs if it changes project understanding, status, or next steps
 - integrate and commit the work atomically in logically grouped commits
 - close the completed agent once its work has been captured
 
