@@ -1,0 +1,19 @@
+[project]
+name = "edautopilot"
+version = "0.1.0"
+description = "Elite Dangerous autopilot experimentation"
+requires-python = ">=3.12"
+dependencies = [
+  "opencv-python~=4.2.0.34",
+  "requests~=2.21.0",
+  "numpy~=1.18.2",
+  "colorlog~=4.0.2",
+  "pystray~=0.14.4",
+  "PyAutoGUI~=0.9.42",
+  "kthread~=0.2.2",
+  "keyboard~=0.13.3",
+  "Pillow~=8.1.1",
+]
+
+[tool.uv]
+package = false
