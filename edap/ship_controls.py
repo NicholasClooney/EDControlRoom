@@ -26,9 +26,13 @@ class ShipControls:
         cls,
         bindings_file: Path,
         input_controller: InputController,
+        actions: list[str] | None = None,
     ) -> ShipControls:
-        binding_lookup = load_binding_lookup(bindings_file, actions=["SetSpeedZero"])
+        binding_lookup = load_binding_lookup(bindings_file, actions=actions or ["SetSpeedZero"])
         return cls.from_binding_lookup(binding_lookup, input_controller)
 
+    def tap_action(self, action: str, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        return self._dispatcher.tap_action(action, repeat=repeat, hold_s=hold_s)
+
     def set_speed_zero(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
-        return self._dispatcher.tap_action("SetSpeedZero", repeat=repeat, hold_s=hold_s)
+        return self.tap_action("SetSpeedZero", repeat=repeat, hold_s=hold_s)

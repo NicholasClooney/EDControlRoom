@@ -17,6 +17,8 @@ That means the project is still in a portability-first phase rather than a featu
 
 The active plan is documented in [docs/plans/0001-macos-mvp-portability-plan.md](docs/plans/0001-macos-mvp-portability-plan.md).
 
+Short-term parked issues are tracked in [TODOs.md](TODOs.md).
+
 In short, the current checkpoint has already proven:
 
 - journal access from configured or auto-detected paths

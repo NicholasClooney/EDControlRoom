@@ -80,3 +80,17 @@ class ShipControlsTests(unittest.TestCase):
 
         self.assertEqual(result.status, "ok")
         self.assertEqual(input_controller.calls, [{"method": "tap", "key": "x", "modifier": None, "hold_s": 0.0}])
+
+    def test_tap_action_dispatches_arbitrary_action(self) -> None:
+        lookup = build_binding_lookup(
+            bindings={"RollLeftButton": Binding(key="A")},
+            actions=["RollLeftButton"],
+        )
+        input_controller = FakeInputController()
+        controls = ShipControls.from_binding_lookup(lookup, input_controller)
+
+        result = controls.tap_action("RollLeftButton", repeat=3)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.binding.to_dict(), {"key": "a", "modifier": None})
+        self.assertEqual(len(input_controller.calls), 3)
