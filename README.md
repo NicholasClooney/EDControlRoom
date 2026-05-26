@@ -28,7 +28,13 @@ In short, the current checkpoint has already proven:
 
 The current implementation focus is the seam between parsed Elite bindings and future runtime actions, followed by small action ports onto the new platform interfaces.
 
-On the current macOS + CrossOver setup, manual testing suggests repeated key taps are sufficient for the first keyboard-driven control ports. Treat that as machine-specific evidence, not a general guarantee.
+On the current macOS + CrossOver setup, manual testing now shows a narrower result:
+
+- synthetic key input reaches the game
+- repeated taps appear in in-game chat
+- the same tap-style path has not yet been shown to drive ship controls like `SetSpeedZero` or `RollLeftButton`
+
+The current theory is that the macOS backend likely needs true key-down, dwell, and key-up behavior for flight controls instead of the current tap-style `keystroke` path.
 
 ## What `diagnostics.py` Is
 

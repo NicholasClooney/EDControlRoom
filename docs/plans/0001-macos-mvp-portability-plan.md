@@ -202,7 +202,8 @@ Still incomplete:
 
 - the legacy autopilot loop has not been migrated onto the new interfaces
 - bindings discovery still depends on a `.binds` file existing inside the active bottle layout
-- repeated taps are manually verified as sufficient for the first keyboard-driven control ports on the current macOS + CrossOver setup, but this remains setup-specific evidence rather than a universal guarantee
+- repeated tap-style input is verified to reach the game UI and in-game chat on the current macOS + CrossOver setup, but that is not yet sufficient proof for flight controls
+- the current macOS input backend likely needs true key-down, dwell, and key-up behavior for ship-control actions
 - the normalized binding lookup seam exists, but it is not yet wired into runtime actions
 - the capture calibration seam exists, but the legacy CV pipeline has not been ported onto it yet
 - the new verification harness exists, but broader runtime and integration coverage is still needed

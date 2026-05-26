@@ -52,9 +52,10 @@ What operations should the input backend guarantee beyond a simple tap?
 
 Current evidence:
 
-- manual testing on the current macOS + CrossOver setup indicates repeated tapping is sufficient for the first control ports
-- the current macOS path is therefore usable for early keyboard-driven runtime actions on this machine
-- this is still not universal proof for every setup or for later backends
+- manual testing on the current macOS + CrossOver setup shows that tap-style synthetic input reaches Elite UI and in-game chat
+- the same path has not yet been shown to drive ship controls like `SetSpeedZero` or `RollLeftButton`
+- the current likely gap is missing true key-down and key-up behavior with a short dwell
+- this remains setup-specific evidence, not universal proof for every setup or later backend
 
 What the implementation should eventually decide:
 
@@ -66,12 +67,12 @@ What the implementation should eventually decide:
 
 Remaining caution:
 
-- keep treating hold semantics as an interface capability question
-- re-check the assumption if later steering behavior or another machine suggests repeated taps are not enough
+- treat true press/release semantics as an immediate implementation gap for the macOS backend
+- re-check whether tap-only behavior is ever sufficient for ship controls after real press/release support exists
 
 Recommended next trigger:
 
-Do this after the first binding-driven action is wired, because that will expose whether the current backend remains acceptable beyond the initial manual test.
+Do this before trusting further ship-control action ports, because the current backend now appears to prove UI delivery more than flight-control delivery.
 
 ## 3. Screen And Capture Calibration Model
 
