@@ -10,6 +10,16 @@ from edap.bindings import Binding, REQUIRED_BINDINGS, read_bindings
 
 KEY_ALIASES = {
     "Space": "space",
+    "Comma": ",",
+    "Period": ".",
+    "Slash": "/",
+    "Backslash": "\\",
+    "Semicolon": ";",
+    "Quote": "'",
+    "Minus": "-",
+    "Equals": "=",
+    "LeftBracket": "[",
+    "RightBracket": "]",
     "Return": "enter",
     "Enter": "enter",
     "Tab": "tab",

@@ -56,3 +56,17 @@ class MacOSInputControllerTests(unittest.TestCase):
             "  key up key code 59\n"
             "end tell",
         )
+
+    def test_punctuation_keys_use_key_codes(self) -> None:
+        input_controller = MacOSInputController()
+
+        script = input_controller._build_tap_script(".", hold_s=0.2)
+
+        self.assertEqual(
+            script,
+            'tell application "System Events"\n'
+            "  key down key code 47\n"
+            "  delay 0.200\n"
+            "  key up key code 47\n"
+            "end tell",
+        )

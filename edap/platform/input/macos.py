@@ -41,6 +41,16 @@ class MacOSInputController(InputController):
 
     SPECIAL_KEYS = {
         "space": "space",
+        ",": "comma",
+        ".": "period",
+        "/": "slash",
+        "\\": "backslash",
+        ";": "semicolon",
+        "'": "quote",
+        "-": "minus",
+        "=": "equals",
+        "[": "left bracket",
+        "]": "right bracket",
         "return": "return",
         "enter": "return",
         "tab": "tab",
@@ -144,6 +154,16 @@ class MacOSInputController(InputController):
     def _special_key_code(self, key: str) -> int:
         key_codes = {
             "space": 49,
+            ",": 43,
+            ".": 47,
+            "/": 44,
+            "\\": 42,
+            ";": 41,
+            "'": 39,
+            "-": 27,
+            "=": 24,
+            "[": 33,
+            "]": 30,
             "return": 36,
             "enter": 76,
             "tab": 48,
