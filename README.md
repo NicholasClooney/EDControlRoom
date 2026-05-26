@@ -33,10 +33,10 @@ On the current macOS + CrossOver setup, manual testing now shows a narrower resu
 - synthetic key input reaches the game
 - repeated taps appear in in-game chat
 - flight controls respond once the macOS backend sends real key-down and key-up events with a short dwell
-- plain unmodified ship-control keys are the current known-good path
-- modifier-combo ship controls such as `Ctrl+...` are not yet reliable through the current `System Events` backend
+- plain and modifier-combo ship controls both work through the macOS input backend
+- `.` (`Key_Period`) and similar osascript-broken keys now route correctly because the backend posts Quartz `CGEvent` keyboard events directly instead of going through `osascript` / `System Events`
 
-Confirmed finding: CrossOver/Elite flight controls need real key presses, not just tap-style `keystroke` delivery.
+Confirmed finding: CrossOver/Elite flight controls need real key presses delivered through `CGEventPost`. The earlier `osascript` backend was reliable for letters but had two dead-ends (the `.` → `PitchDownButton` quirk and unresolved `Ctrl+...` modifier combos) that CGEvent fixes.
 
 Current control-timing policy:
 
@@ -102,7 +102,7 @@ Current behavior:
 - diagnostics output distinguishes configured, auto-detected, and effective paths
 - diagnostics output includes the effective capture layout in normalized and pixel terms
 - screen capture diagnostic can save a debug image
-- macOS test input is wired through a native `osascript` backend for validation
+- macOS test input is wired through a native Quartz `CGEvent` backend (via `pyobjc-framework-Quartz`)
 
 On macOS, synthetic input and screen capture may require Accessibility or Screen Recording permissions depending on system settings.
 
@@ -139,9 +139,7 @@ python3 ship_controls.py --delay-seconds 3 --sequence "SetSpeedZero; RollLeftBut
 
 Per-step fields inside `--sequence` are `repeat=<n> hold=<seconds> total=<seconds> delay=<seconds>`. `total=` is only valid for continuous controls (roll, yaw, pitch) and plans the number of repeated activations from the requested total actuation time. `delay=` pauses before the step so the game window can stay focused between effects.
 
-Plain unmodified ship-control keys are the current known-good path. Modifier-combo bindings such as `Ctrl+...` are not yet reliable through the `System Events` backend.
-
-Some individual keys can also route correctly to chat but silently fail to trigger their in-flight binding. The confirmed case so far is `.` (`Key_Period`): every osascript form tried (string, keycode, `keystroke`, variable, ASCII character) produced a period in chat but did not move the ship when bound to `PitchDownButton`, while the same action works immediately after rebinding to a letter. If you hit this on another key, rebind the affected control inside ED to a letter as a workaround until a lower-level input backend (Quartz / CGEvent) replaces the `osascript` path.
+Plain bindings and modifier-combo bindings (`Ctrl+...` etc.) both work through the Quartz `CGEvent` backend. The earlier osascript-only quirks around `.` (`Key_Period`) and modifier combos are resolved.
 
 ## Configuration Direction
 

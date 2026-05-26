@@ -50,6 +50,9 @@ Later manual testing narrowed the conclusion:
 - every osascript variant tried for `.` had the same result in flight: `key down "."` + `key up "."` with hold, `key down key code 47` with hold, `keystroke "."`, a variable form `set k to "."`, and an ASCII form `set k to (ASCII character 46)` — all five reached chat as a period, none triggered PitchDownButton
 - rebinding `PitchDownButton` in ED from `.` to a letter (`i`) made the same action work immediately, so the bindings file shape, the action dispatcher, and the macOS backend are all fine; the failure is below our layer where the scancode AppleScript generates for `.` does not match what ED resolves as `Key_Period` for flight controls on this CrossOver setup, even though it does match for text input
 - working assumption: this is an osascript→CrossOver routing quirk specific to certain keys, not a bad binding; users hitting the same issue can rebind `PitchDownButton` (or any other affected binding) to a letter as a workaround until a lower-level input backend is in place
+- the macOS input backend was then ported off `osascript` onto Quartz `CGEventCreateKeyboardEvent` + `CGEventPost` via `pyobjc-framework-Quartz`, prototyped first in a throwaway `scratch_cgevent.py` script and validated in-game with the same full flight sweep that previously ran through `osascript`
+- CGEvent fixed both known dead-ends from the `osascript` era: `.` now triggers `PitchDownButton` (validated both with and without a Unicode payload), and `Ctrl+...` modifier combos work because `CGEventSetFlags` carries the modifier on the event itself rather than relying on AppleScript to sequence a separate modifier-key down/up
+- the production controller exposes `poster` and `sleeper` keyword arguments for tests, so test code can record events in order without going near `Quartz` or actually posting input
 
 ## What Is Implemented
 

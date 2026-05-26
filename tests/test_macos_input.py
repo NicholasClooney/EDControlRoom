@@ -2,73 +2,125 @@ from __future__ import annotations
 
 import unittest
 
-from edap.platform.input.macos import MacOSInputController
+from edap.platform.input.macos import KEY_CODES, MODIFIER_FLAGS, MacOSInputController
+
+
+class FakeBackend:
+    def __init__(self) -> None:
+        self.events: list[tuple] = []
+
+    def post(self, keycode: int, down: bool, flags: int, unicode_char: str | None) -> None:
+        self.events.append(("down" if down else "up", keycode, flags, unicode_char))
+
+    def sleep(self, duration: float) -> None:
+        self.events.append(("sleep", duration))
+
+
+def _build() -> tuple[MacOSInputController, FakeBackend]:
+    backend = FakeBackend()
+    return (
+        MacOSInputController(poster=backend.post, sleeper=backend.sleep),
+        backend,
+    )
 
 
 class MacOSInputControllerTests(unittest.TestCase):
-    def test_tap_script_uses_real_key_down_and_key_up(self) -> None:
-        input_controller = MacOSInputController()
+    def test_tap_letter_with_hold(self) -> None:
+        controller, backend = _build()
 
-        script = input_controller._build_tap_script("a", hold_s=0.1)
-
-        self.assertEqual(
-            script,
-            'tell application "System Events"\n'
-            '  key down "a"\n'
-            "  delay 0.100\n"
-            '  key up "a"\n'
-            "end tell",
-        )
-
-    def test_tap_script_wraps_modifier_around_key(self) -> None:
-        input_controller = MacOSInputController()
-
-        script = input_controller._build_tap_script("x", modifier="left_shift", hold_s=0.05)
+        controller.tap_key("a", hold_s=0.1)
 
         self.assertEqual(
-            script,
-            'tell application "System Events"\n'
-            "  key down key code 56\n"
-            '  key down "x"\n'
-            "  delay 0.050\n"
-            '  key up "x"\n'
-            "  key up key code 56\n"
-            "end tell",
+            backend.events,
+            [
+                ("down", KEY_CODES["a"], 0, "a"),
+                ("sleep", 0.1),
+                ("up", KEY_CODES["a"], 0, "a"),
+            ],
         )
 
-    def test_press_and_release_scripts_are_split(self) -> None:
-        input_controller = MacOSInputController()
+    def test_tap_with_zero_hold_skips_sleep(self) -> None:
+        controller, backend = _build()
 
-        press_script = input_controller._build_press_script("left", modifier="right_control")
-        release_script = input_controller._build_release_script("left", modifier="right_control")
+        controller.tap_key("x")
 
         self.assertEqual(
-            press_script,
-            'tell application "System Events"\n'
-            "  key down key code 59\n"
-            "  key down key code 123\n"
-            "end tell",
-        )
-        self.assertEqual(
-            release_script,
-            'tell application "System Events"\n'
-            "  key up key code 123\n"
-            "  key up key code 59\n"
-            "end tell",
+            backend.events,
+            [
+                ("down", KEY_CODES["x"], 0, "x"),
+                ("up", KEY_CODES["x"], 0, "x"),
+            ],
         )
 
-    def test_bracket_and_comma_period_use_character_form(self) -> None:
-        input_controller = MacOSInputController()
+    def test_tap_with_control_modifier(self) -> None:
+        controller, backend = _build()
+
+        controller.tap_key("x", modifier="control", hold_s=0.05)
+
+        flags = MODIFIER_FLAGS["control"]
+        self.assertNotEqual(flags, 0)
+        self.assertEqual(
+            backend.events,
+            [
+                ("down", KEY_CODES["x"], flags, "x"),
+                ("sleep", 0.05),
+                ("up", KEY_CODES["x"], flags, "x"),
+            ],
+        )
+
+    def test_punctuation_uses_correct_keycodes(self) -> None:
+        controller, backend = _build()
 
         for character in (",", ".", "[", "]"):
-            with self.subTest(character=character):
-                script = input_controller._build_tap_script(character, hold_s=0.2)
+            backend.events.clear()
+            controller.tap_key(character, hold_s=0.2)
 
-                self.assertEqual(
-                    script,
-                    'tell application "System Events"\n'
-                    f'  key down "{character}"\n'
-                    "  delay 0.200\n"
-                    f'  key up "{character}"\n'
-                    "end tell",
-                )
+            self.assertEqual(
+                backend.events,
+                [
+                    ("down", KEY_CODES[character], 0, character),
+                    ("sleep", 0.2),
+                    ("up", KEY_CODES[character], 0, character),
+                ],
+                msg=f"unexpected events for {character!r}",
+            )
+
+    def test_press_and_release_are_split(self) -> None:
+        controller, backend = _build()
+
+        controller.press_key("left", modifier="right_control")
+        controller.release_key("left", modifier="right_control")
+
+        flags = MODIFIER_FLAGS["right_control"]
+        self.assertEqual(
+            backend.events,
+            [
+                ("down", KEY_CODES["left"], flags, None),
+                ("up", KEY_CODES["left"], flags, None),
+            ],
+        )
+
+    def test_multi_char_key_sends_no_unicode_payload(self) -> None:
+        controller, backend = _build()
+
+        controller.tap_key("left_shift")
+
+        self.assertEqual(
+            backend.events,
+            [
+                ("down", KEY_CODES["left_shift"], 0, None),
+                ("up", KEY_CODES["left_shift"], 0, None),
+            ],
+        )
+
+    def test_unsupported_key_raises(self) -> None:
+        controller, _ = _build()
+
+        with self.assertRaises(ValueError):
+            controller.tap_key("not_a_real_key")
+
+    def test_unsupported_modifier_raises(self) -> None:
+        controller, _ = _build()
+
+        with self.assertRaises(ValueError):
+            controller.tap_key("a", modifier="weird")

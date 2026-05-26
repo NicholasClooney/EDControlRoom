@@ -1,170 +1,146 @@
 from __future__ import annotations
 
-import subprocess
-from time import sleep
+from collections.abc import Callable
+from time import sleep as _default_sleep
+
+from Quartz import (
+    CGEventCreateKeyboardEvent,
+    CGEventKeyboardSetUnicodeString,
+    CGEventPost,
+    CGEventSetFlags,
+    CGEventSourceCreate,
+    kCGEventFlagMaskAlternate,
+    kCGEventFlagMaskCommand,
+    kCGEventFlagMaskControl,
+    kCGEventFlagMaskShift,
+    kCGEventSourceStateHIDSystemState,
+    kCGHIDEventTap,
+)
 
 from .base import InputController
 
 
+KEY_CODES: dict[str, int] = {
+    "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8, "v": 9,
+    "b": 11, "q": 12, "w": 13, "e": 14, "r": 15, "y": 16, "t": 17,
+    "1": 18, "2": 19, "3": 20, "4": 21, "6": 22, "5": 23,
+    "=": 24, "9": 25, "7": 26, "-": 27, "8": 28, "0": 29,
+    "]": 30, "o": 31, "u": 32, "[": 33, "i": 34, "p": 35,
+    "l": 37, "j": 38, "'": 39, "k": 40, ";": 41, "\\": 42,
+    ",": 43, "/": 44, "n": 45, "m": 46, ".": 47,
+    "enter": 36,
+    "return": 36,
+    "tab": 48,
+    "space": 49,
+    "`": 50,
+    "backspace": 51,
+    "escape": 53,
+    "esc": 53,
+    "right_command": 54,
+    "left_command": 55,
+    "left_shift": 56,
+    "right_shift": 60,
+    "left_option": 58,
+    "right_option": 61,
+    "left_alt": 58,
+    "right_alt": 61,
+    "left_control": 59,
+    "right_control": 62,
+    "numpad_0": 82, "numpad_1": 83, "numpad_2": 84, "numpad_3": 85,
+    "numpad_4": 86, "numpad_5": 87, "numpad_6": 88, "numpad_7": 89,
+    "numpad_8": 91, "numpad_9": 92,
+    "home": 115,
+    "page_up": 116,
+    "delete": 117,
+    "end": 119,
+    "page_down": 121,
+    "left": 123,
+    "right": 124,
+    "down": 125,
+    "up": 126,
+    "f1": 122, "f2": 120, "f3": 99, "f4": 118, "f5": 96, "f6": 97,
+    "f7": 98, "f8": 100, "f9": 101, "f10": 109, "f11": 103, "f12": 111,
+    "f13": 105, "f14": 107, "f15": 113, "f16": 106, "f17": 64,
+    "f18": 79, "f19": 80, "f20": 90,
+}
+
+
+MODIFIER_FLAGS: dict[str, int] = {
+    "shift": kCGEventFlagMaskShift,
+    "left_shift": kCGEventFlagMaskShift,
+    "right_shift": kCGEventFlagMaskShift,
+    "control": kCGEventFlagMaskControl,
+    "ctrl": kCGEventFlagMaskControl,
+    "left_control": kCGEventFlagMaskControl,
+    "right_control": kCGEventFlagMaskControl,
+    "option": kCGEventFlagMaskAlternate,
+    "alt": kCGEventFlagMaskAlternate,
+    "left_option": kCGEventFlagMaskAlternate,
+    "right_option": kCGEventFlagMaskAlternate,
+    "left_alt": kCGEventFlagMaskAlternate,
+    "right_alt": kCGEventFlagMaskAlternate,
+    "command": kCGEventFlagMaskCommand,
+    "cmd": kCGEventFlagMaskCommand,
+    "left_command": kCGEventFlagMaskCommand,
+    "right_command": kCGEventFlagMaskCommand,
+}
+
+
+PosterFn = Callable[[int, bool, int, "str | None"], None]
+SleeperFn = Callable[[float], None]
+
+
+def _make_default_poster() -> PosterFn:
+    source = CGEventSourceCreate(kCGEventSourceStateHIDSystemState)
+
+    def poster(keycode: int, down: bool, flags: int, unicode_char: str | None) -> None:
+        event = CGEventCreateKeyboardEvent(source, keycode, down)
+        if flags:
+            CGEventSetFlags(event, flags)
+        if unicode_char is not None:
+            CGEventKeyboardSetUnicodeString(event, 1, unicode_char)
+        CGEventPost(kCGHIDEventTap, event)
+
+    return poster
+
+
 class MacOSInputController(InputController):
-    MODIFIER_KEY_CODES = {
-        "command": 55,
-        "cmd": 55,
-        "shift": 56,
-        "left_shift": 56,
-        "right_shift": 56,
-        "option": 58,
-        "alt": 58,
-        "left_alt": 58,
-        "right_alt": 58,
-        "control": 59,
-        "ctrl": 59,
-        "left_control": 59,
-        "right_control": 59,
-    }
-
-    MODIFIER_FLAGS = {
-        "command": "command down",
-        "cmd": "command down",
-        "shift": "shift down",
-        "left_shift": "shift down",
-        "right_shift": "shift down",
-        "option": "option down",
-        "alt": "option down",
-        "left_alt": "option down",
-        "right_alt": "option down",
-        "control": "control down",
-        "ctrl": "control down",
-        "left_control": "control down",
-        "right_control": "control down",
-    }
-
-    SPECIAL_KEYS = {
-        "space": "space",
-        "/": "slash",
-        "\\": "backslash",
-        ";": "semicolon",
-        "'": "quote",
-        "-": "minus",
-        "=": "equals",
-        "return": "return",
-        "enter": "return",
-        "tab": "tab",
-        "escape": "escape",
-        "esc": "escape",
-        "delete": "delete",
-        "up": "up arrow",
-        "down": "down arrow",
-        "left": "left arrow",
-        "right": "right arrow",
-    }
+    def __init__(
+        self,
+        *,
+        poster: PosterFn | None = None,
+        sleeper: SleeperFn | None = None,
+    ) -> None:
+        self._poster = poster if poster is not None else _make_default_poster()
+        self._sleeper = sleeper if sleeper is not None else _default_sleep
 
     def press_key(self, key: str, modifier: str | None = None) -> None:
-        script = self._build_press_script(key, modifier=modifier)
-        self._run_script(script)
+        keycode, flags, unicode_char = self._resolve(key, modifier)
+        self._poster(keycode, True, flags, unicode_char)
 
     def release_key(self, key: str, modifier: str | None = None) -> None:
-        script = self._build_release_script(key, modifier=modifier)
-        self._run_script(script)
+        keycode, flags, unicode_char = self._resolve(key, modifier)
+        self._poster(keycode, False, flags, unicode_char)
 
     def tap_key(self, key: str, modifier: str | None = None, hold_s: float = 0.0) -> None:
-        script = self._build_tap_script(key, modifier=modifier, hold_s=hold_s)
-        self._run_script(script)
-
-    def _run_script(self, script: str) -> None:
-        subprocess.run(["osascript", "-e", script], check=True, capture_output=True, text=True)
-
-    def _build_tap_script(self, key: str, modifier: str | None = None, hold_s: float = 0.0) -> str:
-        statements = [
-            self._modifier_press_statement(modifier),
-            self._key_press_statement(key),
-        ]
+        keycode, flags, unicode_char = self._resolve(key, modifier)
+        self._poster(keycode, True, flags, unicode_char)
         if hold_s > 0:
-            statements.append(f"delay {hold_s:.3f}")
-        statements.extend(
-            [
-                self._key_release_statement(key),
-                self._modifier_release_statement(modifier),
-            ]
-        )
-        return self._wrap_statements(statements)
+            self._sleeper(hold_s)
+        self._poster(keycode, False, flags, unicode_char)
 
-    def _build_press_script(self, key: str, modifier: str | None = None) -> str:
-        return self._wrap_statements(
-            [
-                self._modifier_press_statement(modifier),
-                self._key_press_statement(key),
-            ]
-        )
+    def _resolve(self, key: str, modifier: str | None) -> tuple[int, int, str | None]:
+        normalized = key.lower()
+        if normalized not in KEY_CODES:
+            raise ValueError(f"Unsupported key: {key}")
+        keycode = KEY_CODES[normalized]
 
-    def _build_release_script(self, key: str, modifier: str | None = None) -> str:
-        return self._wrap_statements(
-            [
-                self._key_release_statement(key),
-                self._modifier_release_statement(modifier),
-            ]
-        )
+        flags = 0
+        if modifier is not None:
+            normalized_mod = modifier.lower()
+            if normalized_mod not in MODIFIER_FLAGS:
+                raise ValueError(f"Unsupported modifier: {modifier}")
+            flags = MODIFIER_FLAGS[normalized_mod]
 
-    def _wrap_statements(self, statements: list[str | None]) -> str:
-        active_statements = [statement for statement in statements if statement is not None]
-        body = "\n  ".join(active_statements)
-        return f'tell application "System Events"\n  {body}\nend tell'
-
-    def _key_press_statement(self, key: str) -> str:
-        return self._key_statement(key, event="down")
-
-    def _key_release_statement(self, key: str) -> str:
-        return self._key_statement(key, event="up")
-
-    def _key_statement(self, key: str, event: str) -> str:
-        normalized_key = key.lower()
-        if normalized_key in self.SPECIAL_KEYS:
-            return f"key {event} key code {self._special_key_code(normalized_key)}"
-        escaped_key = key.replace("\\", "\\\\").replace('"', '\\"')
-        return f'key {event} "{escaped_key}"'
-
-    def _modifier_press_statement(self, modifier: str | None) -> str | None:
-        if modifier is None:
-            return None
-        return f"key down key code {self._modifier_key_code(modifier)}"
-
-    def _modifier_release_statement(self, modifier: str | None) -> str | None:
-        if modifier is None:
-            return None
-        return f"key up key code {self._modifier_key_code(modifier)}"
-
-    def _build_modifier_clause(self, modifier: str | None) -> str:
-        if modifier is None:
-            return ""
-        normalized = modifier.lower()
-        if normalized not in self.MODIFIER_FLAGS:
-            raise ValueError(f"Unsupported modifier: {modifier}")
-        return f" using {{{self.MODIFIER_FLAGS[normalized]}}}"
-
-    def _modifier_key_code(self, modifier: str) -> int:
-        normalized = modifier.lower()
-        if normalized not in self.MODIFIER_KEY_CODES:
-            raise ValueError(f"Unsupported modifier: {modifier}")
-        return self.MODIFIER_KEY_CODES[normalized]
-
-    def _special_key_code(self, key: str) -> int:
-        key_codes = {
-            "space": 49,
-            "/": 44,
-            "\\": 42,
-            ";": 41,
-            "'": 39,
-            "-": 27,
-            "=": 24,
-            "return": 36,
-            "enter": 76,
-            "tab": 48,
-            "escape": 53,
-            "esc": 53,
-            "delete": 51,
-            "up": 126,
-            "down": 125,
-            "left": 123,
-            "right": 124,
-        }
-        return key_codes[key]
+        unicode_char = key if len(key) == 1 else None
+        return keycode, flags, unicode_char

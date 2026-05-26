@@ -5,7 +5,7 @@ import unittest
 from edap.actions import ActionDispatchResult, ActionDispatcher
 from edap.binding_lookup import build_binding_lookup
 from edap.bindings import Binding
-from edap.platform.input.macos import MacOSInputController
+from edap.platform.input.macos import MODIFIER_FLAGS, MacOSInputController
 
 
 class FakeInputController:
@@ -73,15 +73,25 @@ class ActionDispatcherTests(unittest.TestCase):
             dispatcher.tap_action("UI_Back", hold_s=-0.1)
 
     def test_macos_input_accepts_left_right_modifier_aliases(self) -> None:
-        input_controller = MacOSInputController()
+        events: list[tuple] = []
+        input_controller = MacOSInputController(
+            poster=lambda keycode, down, flags, unicode_char: events.append(
+                ("down" if down else "up", flags)
+            ),
+            sleeper=lambda _duration: None,
+        )
 
+        input_controller.tap_key("a", modifier="left_shift")
+        input_controller.tap_key("a", modifier="right_control")
+
+        shift_flags = MODIFIER_FLAGS["shift"]
+        control_flags = MODIFIER_FLAGS["control"]
         self.assertEqual(
-            input_controller._build_modifier_clause("left_shift"),
-            " using {shift down}",
+            events,
+            [
+                ("down", shift_flags),
+                ("up", shift_flags),
+                ("down", control_flags),
+                ("up", control_flags),
+            ],
         )
-        self.assertEqual(
-            input_controller._build_modifier_clause("right_control"),
-            " using {control down}",
-        )
-        self.assertEqual(input_controller._modifier_key_code("left_shift"), 56)
-        self.assertEqual(input_controller._modifier_key_code("right_control"), 59)
