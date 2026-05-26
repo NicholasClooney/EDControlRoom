@@ -9,6 +9,7 @@ DEFAULT_CONFIG_PATH = Path("config.toml")
 EXAMPLE_CONFIG_PATH = Path("config.example.toml")
 
 VALID_PLATFORMS = {"macos", "windows"}
+VALID_CAPTURE_MODES = {"fullscreen", "region"}
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,22 @@ class ScreenConfig:
     resolution_height: int
     scale: float
     capture_debug_path: Path | None
+    capture: "CaptureConfig"
+
+
+@dataclass(frozen=True)
+class CaptureRegionConfig:
+    left: float
+    top: float
+    right: float
+    bottom: float
+
+
+@dataclass(frozen=True)
+class CaptureConfig:
+    mode: str
+    base_region: CaptureRegionConfig
+    regions: dict[str, CaptureRegionConfig]
 
 
 @dataclass(frozen=True)
@@ -57,6 +74,13 @@ def _optional_path(value: object) -> Path | None:
 
 
 def _require_table(raw: dict[str, object], key: str) -> dict[str, object]:
+    value = raw.get(key, {})
+    if not isinstance(value, dict):
+        raise ConfigError(f"Config section `{key}` must be a table.")
+    return value
+
+
+def _optional_table(raw: dict[str, object], key: str) -> dict[str, object]:
     value = raw.get(key, {})
     if not isinstance(value, dict):
         raise ConfigError(f"Config section `{key}` must be a table.")
@@ -100,6 +124,34 @@ def _validate_path_shape(path: Path | None, *, key: str, should_be_dir: bool) ->
         raise ConfigError(f"Config path `{key}` must point to a file: {path}")
 
 
+def _capture_region(
+    raw: dict[str, object],
+    defaults: tuple[float, float, float, float],
+) -> CaptureRegionConfig:
+    return CaptureRegionConfig(
+        left=_float(raw, "left", defaults[0]),
+        top=_float(raw, "top", defaults[1]),
+        right=_float(raw, "right", defaults[2]),
+        bottom=_float(raw, "bottom", defaults[3]),
+    )
+
+
+def _validate_capture_region(region: CaptureRegionConfig, *, key: str) -> None:
+    for name, value in (
+        ("left", region.left),
+        ("top", region.top),
+        ("right", region.right),
+        ("bottom", region.bottom),
+    ):
+        if value < 0 or value > 1:
+            raise ConfigError(f"Config value `{key}.{name}` must be between 0.0 and 1.0.")
+
+    if region.left >= region.right:
+        raise ConfigError(f"Config region `{key}` must have left < right.")
+    if region.top >= region.bottom:
+        raise ConfigError(f"Config region `{key}` must have top < bottom.")
+
+
 def validate_config(config: AppConfig) -> AppConfig:
     if not config.controls.start_hotkey.strip():
         raise ConfigError("Config value `controls.start_hotkey` cannot be empty.")
@@ -111,6 +163,9 @@ def validate_config(config: AppConfig) -> AppConfig:
         raise ConfigError("Config value `screen.resolution_height` must be greater than 0.")
     if config.screen.scale <= 0:
         raise ConfigError("Config value `screen.scale` must be greater than 0.")
+    if config.screen.capture.mode not in VALID_CAPTURE_MODES:
+        supported = ", ".join(sorted(VALID_CAPTURE_MODES))
+        raise ConfigError(f"Config value `screen.capture.mode` must be one of: {supported}.")
     if config.runtime.platform.lower() not in VALID_PLATFORMS:
         supported = ", ".join(sorted(VALID_PLATFORMS))
         raise ConfigError(
@@ -124,6 +179,11 @@ def validate_config(config: AppConfig) -> AppConfig:
             raise ConfigError(
                 "Config value `screen.capture_debug_path` must point to a file, not a directory."
             )
+    _validate_capture_region(config.screen.capture.base_region, key="screen.capture.base_region")
+    for name, region in config.screen.capture.regions.items():
+        if not name.strip():
+            raise ConfigError("Config section `screen.capture.regions` cannot contain an empty name.")
+        _validate_capture_region(region, key=f"screen.capture.regions.{name}")
 
     return config
 
@@ -141,7 +201,31 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
     paths = _require_table(raw, "paths")
     controls = _require_table(raw, "controls")
     screen = _require_table(raw, "screen")
+    screen_capture = _optional_table(screen, "capture")
+    screen_capture_regions = _optional_table(screen_capture, "regions")
     runtime = _require_table(raw, "runtime")
+
+    capture_regions: dict[str, CaptureRegionConfig] = {
+        "center": CaptureRegionConfig(
+            left=1 / 3,
+            top=1 / 3,
+            right=2 / 3,
+            bottom=2 / 3,
+        ),
+        "compass": CaptureRegionConfig(
+            left=5 / 16,
+            top=5 / 8,
+            right=2 / 4,
+            bottom=15 / 16,
+        ),
+    }
+    for name, region_raw in screen_capture_regions.items():
+        if not isinstance(name, str) or not isinstance(region_raw, dict):
+            raise ConfigError("Config section `screen.capture.regions` must contain named tables.")
+        capture_regions[name] = _capture_region(
+            region_raw,
+            (0.0, 0.0, 1.0, 1.0),
+        )
 
     config = AppConfig(
         paths=PathsConfig(
@@ -158,6 +242,14 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             resolution_height=_integer(screen, "resolution_height", 1080),
             scale=_float(screen, "scale", 1.0),
             capture_debug_path=_optional_path(screen.get("capture_debug_path")),
+            capture=CaptureConfig(
+                mode=_string(screen_capture, "mode", "fullscreen"),
+                base_region=_capture_region(
+                    screen_capture,
+                    (0.0, 0.0, 1.0, 1.0),
+                ),
+                regions=capture_regions,
+            ),
         ),
         runtime=RuntimeConfig(
             platform=_string(runtime, "platform", "macos"),

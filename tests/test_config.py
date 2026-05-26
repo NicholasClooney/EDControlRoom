@@ -4,6 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
+from edap.capture import build_capture_layout
 from edap.config import ConfigError, load_config
 
 
@@ -36,7 +37,53 @@ class LoadConfigTests(unittest.TestCase):
             self.assertEqual(config.controls.start_hotkey, "home")
             self.assertEqual(config.controls.stop_hotkey, "end")
             self.assertEqual(config.screen.resolution_width, 1920)
+            self.assertEqual(config.screen.capture.mode, "fullscreen")
+            self.assertIn("center", config.screen.capture.regions)
             self.assertEqual(config.runtime.platform, "macos")
+
+    def test_loads_capture_region_overrides(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            _write_config(
+                config_path,
+                """
+[paths]
+
+[controls]
+
+[screen]
+resolution_width = 2560
+resolution_height = 1440
+scale = 2.0
+
+[screen.capture]
+mode = "region"
+left = 0.1
+top = 0.2
+right = 0.9
+bottom = 0.8
+
+[screen.capture.regions.nav]
+left = 0.25
+top = 0.5
+right = 0.75
+bottom = 0.9
+
+[runtime]
+""".strip(),
+            )
+
+            config = load_config(config_path)
+            layout = build_capture_layout(config.screen)
+
+            self.assertEqual(config.screen.capture.mode, "region")
+            self.assertEqual(layout.reference_width, 5120)
+            self.assertEqual(layout.reference_height, 2880)
+            self.assertEqual(layout.base_bounds.left, 512)
+            self.assertEqual(layout.base_bounds.top, 576)
+            self.assertEqual(layout.base_bounds.right, 4608)
+            self.assertEqual(layout.base_bounds.bottom, 2304)
+            self.assertEqual(layout.named_regions["nav"].width, 2048)
 
     def test_rejects_unsupported_platform(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -99,4 +146,48 @@ resolution_width = true
             )
 
             with self.assertRaisesRegex(ConfigError, "resolution_width"):
+                load_config(config_path)
+
+    def test_rejects_invalid_capture_mode(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            _write_config(
+                config_path,
+                """
+[paths]
+
+[controls]
+
+[screen]
+
+[screen.capture]
+mode = "weird"
+
+[runtime]
+""".strip(),
+            )
+
+            with self.assertRaisesRegex(ConfigError, "screen.capture.mode"):
+                load_config(config_path)
+
+    def test_rejects_out_of_range_capture_region(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            _write_config(
+                config_path,
+                """
+[paths]
+
+[controls]
+
+[screen]
+
+[screen.capture]
+left = 1.1
+
+[runtime]
+""".strip(),
+            )
+
+            with self.assertRaisesRegex(ConfigError, "screen.capture.base_region.left"):
                 load_config(config_path)

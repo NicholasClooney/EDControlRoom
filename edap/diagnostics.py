@@ -5,6 +5,7 @@ from pathlib import Path
 from time import sleep
 
 from edap.bindings import read_bindings
+from edap.capture import build_capture_layout
 from edap.config import AppConfig
 from edap.platform.input.factory import build_input_controller
 from edap.platform.paths.factory import build_game_paths
@@ -173,6 +174,7 @@ def run_diagnostics(config: AppConfig, options: DiagnosticsOptions) -> dict[str,
             },
         },
         "options": asdict(options),
+        "capture_layout": build_capture_layout(config.screen).to_dict(),
     }
 
     if effective_journal_dir and effective_journal_dir.exists():
@@ -221,9 +223,14 @@ def run_screen_capture_diagnostic(config: AppConfig) -> dict[str, object]:
     if screen_capture is None:
         return {"status": "unsupported"}
 
-    width = int(config.screen.resolution_width * config.screen.scale)
-    height = int(config.screen.resolution_height * config.screen.scale)
-    image = screen_capture.capture_region(0, 0, width, height)
+    capture_layout = build_capture_layout(config.screen)
+    base_bounds = capture_layout.base_bounds
+    image = screen_capture.capture_region(
+        base_bounds.left,
+        base_bounds.top,
+        base_bounds.right,
+        base_bounds.bottom,
+    )
 
     output_path = config.screen.capture_debug_path
     saved_path = None
@@ -234,8 +241,12 @@ def run_screen_capture_diagnostic(config: AppConfig) -> dict[str, object]:
 
     return {
         "status": "ok",
-        "width": getattr(image, "width", width),
-        "height": getattr(image, "height", height),
+        "mode": capture_layout.mode,
+        "reference_width": capture_layout.reference_width,
+        "reference_height": capture_layout.reference_height,
+        "captured_bounds": base_bounds.to_dict(),
+        "width": getattr(image, "width", base_bounds.width),
+        "height": getattr(image, "height", base_bounds.height),
         "saved_path": saved_path,
     }
 
