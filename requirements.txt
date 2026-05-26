@@ -8,3 +8,5 @@ kthread~=0.2.3
 keyboard~=0.13.5
 Pillow~=11.1.0
 pyobjc-framework-Quartz~=12.1; sys_platform == "darwin"
+rich~=14.0
+
