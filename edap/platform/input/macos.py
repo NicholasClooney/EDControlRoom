@@ -11,10 +11,16 @@ class MacOSInputController(InputController):
         "command": "command down",
         "cmd": "command down",
         "shift": "shift down",
+        "left_shift": "shift down",
+        "right_shift": "shift down",
         "option": "option down",
         "alt": "option down",
+        "left_alt": "option down",
+        "right_alt": "option down",
         "control": "control down",
         "ctrl": "control down",
+        "left_control": "control down",
+        "right_control": "control down",
     }
 
     SPECIAL_KEYS = {
