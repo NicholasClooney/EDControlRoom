@@ -10,11 +10,12 @@ from __future__ import annotations
 
 import argparse
 import sys
+from math import ceil
 from pathlib import Path
 from xml.etree.ElementTree import parse as parse_xml
 
 from rich.columns import Columns
-from rich.console import Console, Group
+from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
@@ -27,8 +28,6 @@ from edap.runtime import build_runtime_context, load_config_with_fallback
 
 
 TOP_ROW_TITLES = ("Roll & Throttle", "Pitch & Yaw")
-MIDDLE_LEFT_TITLE = "UI Navigation"
-MIDDLE_RIGHT_TITLES = ("Combat & Targeting", "Cockpit & Travel")
 BOTTOM_TITLE = "Unmapped"
 
 
@@ -65,41 +64,22 @@ def main() -> int:
     console.print(_render_header(bindings_file, preset))
     console.print()
 
-    top_panels = [_render_group_panel(g) for g in groups if g.title in TOP_ROW_TITLES]
+    top_panels = [
+        _render_group_panel(g, two_column_items=False)
+        for g in groups
+        if g.title in TOP_ROW_TITLES
+    ]
     if top_panels:
         console.print(Columns(top_panels, equal=True, expand=True))
 
-    groups_by_title = {g.title: g for g in groups}
+    for group in groups:
+        if group.title in TOP_ROW_TITLES or group.title == BOTTOM_TITLE:
+            continue
+        console.print(_render_group_panel(group))
 
-    middle_left_group = groups_by_title.get(MIDDLE_LEFT_TITLE)
-    middle_right_groups = [
-        groups_by_title[title]
-        for title in MIDDLE_RIGHT_TITLES
-        if title in groups_by_title
-    ]
-    bottom_group = groups_by_title.get(BOTTOM_TITLE)
-
-    rendered_middle = False
-    if middle_left_group is not None and middle_right_groups:
-        left_panel = _render_group_panel(middle_left_group)
-        right_panels = [_render_group_panel(g) for g in middle_right_groups]
-        right_stack = Group(*right_panels)
-        middle_grid = Table.grid(expand=True, padding=(0, 0))
-        middle_grid.add_column(ratio=1)
-        middle_grid.add_column(ratio=1)
-        middle_grid.add_row(left_panel, right_stack)
-        console.print(middle_grid)
-        rendered_middle = True
-
-    if not rendered_middle:
-        # Fallback: render whatever middle panels exist in order.
-        for group in groups:
-            if group.title in TOP_ROW_TITLES or group.title == BOTTOM_TITLE:
-                continue
-            console.print(_render_group_panel(group))
-
+    bottom_group = next((g for g in groups if g.title == BOTTOM_TITLE), None)
     if bottom_group is not None and bottom_group.rows:
-        console.print(_render_group_panel(bottom_group))
+        console.print(_render_group_panel(bottom_group, two_column_items=False))
 
     return 0 if not any(g.is_unmapped for g in groups) else 1
 
@@ -163,26 +143,39 @@ def _render_header(bindings_file: Path, preset: dict[str, str]) -> Text:
     return header
 
 
-def _render_group_panel(group: BindingGroup) -> Panel:
-    table = Table.grid(padding=(0, 2))
-    table.add_column(justify="right")
-    table.add_column(justify="left", no_wrap=False)
-    table.add_column(justify="left")
-
-    for row in group.rows:
-        table.add_row(*_render_row_cells(row))
-
+def _render_group_panel(group: BindingGroup, two_column_items: bool = True) -> Panel:
     if not group.rows:
-        table.add_row(Text("(empty)", style="dim"), Text(""), Text(""))
+        body = Table.grid(padding=(0, 2))
+        body.add_column(justify="right")
+        body.add_column(justify="left", no_wrap=False)
+        body.add_column(justify="left")
+        body.add_row(Text("(empty)", style="dim"), Text(""), Text(""))
+    elif not two_column_items or len(group.rows) <= 1:
+        body = _build_rows_table(group.rows)
+    else:
+        split = ceil(len(group.rows) / 2)
+        left_table = _build_rows_table(group.rows[:split])
+        right_table = _build_rows_table(group.rows[split:])
+        body = Columns([left_table, right_table], equal=True, expand=True)
 
     border_style = "red" if group.is_unmapped else "green"
     title_style = "bold red" if group.is_unmapped else "bold green"
     return Panel(
-        table,
+        body,
         title=Text(group.title, style=title_style),
         border_style=border_style,
         title_align="left",
     )
+
+
+def _build_rows_table(rows: list[BindingRow]) -> Table:
+    table = Table.grid(padding=(0, 2))
+    table.add_column(justify="right")
+    table.add_column(justify="left", no_wrap=False)
+    table.add_column(justify="left")
+    for row in rows:
+        table.add_row(*_render_row_cells(row))
+    return table
 
 
 def _render_row_cells(row: BindingRow) -> tuple[Text, Text, Text]:
