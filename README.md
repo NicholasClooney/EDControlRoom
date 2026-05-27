@@ -17,6 +17,14 @@ That means the project is still in a portability-first phase rather than a featu
 
 The active plan is documented in [docs/plans/0001-macos-mvp-portability-plan.md](docs/plans/0001-macos-mvp-portability-plan.md).
 
+Follow-up work is split across three smaller plans:
+
+- [docs/plans/0002-cv-pipeline-scaffold.md](docs/plans/0002-cv-pipeline-scaffold.md) — probe whether the legacy compass/navpoint/destination templates match on macOS + CrossOver.
+- [docs/plans/0003-journal-driven-routines.md](docs/plans/0003-journal-driven-routines.md) — `JournalWatcher`, `jump`, `refuel`, `dock`, `undock`, `auto_zero_throttle_on_arrival`, plus a `run_routine.py` CLI.
+- [docs/plans/0004-runtime-diagnostics-dashboard.md](docs/plans/0004-runtime-diagnostics-dashboard.md) — capture benchmark, journal-latency probe, and a `rich.live` stats-for-nerds dashboard.
+
+The legacy-to-port mapping that motivates the plans lives in [docs/research/0004-legacy-autopilot-port-status.md](docs/research/0004-legacy-autopilot-port-status.md).
+
 In short, the current checkpoint has already proven:
 
 - journal access from configured or auto-detected paths

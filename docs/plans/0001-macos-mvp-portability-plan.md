@@ -296,3 +296,13 @@ Finish the transition from diagnostics plumbing to autopilot portability:
 - treat hold-versus-tap as a follow-up capability question instead of a current gate
 
 This is the next pickup point for the following agent.
+
+## Follow-up Plans
+
+The diagnostic and runtime-action milestones above are complete enough that follow-up work is now split into three smaller plans, each scoped tightly enough for one agent to pick up:
+
+- `docs/plans/0002-cv-pipeline-scaffold.md` — answer whether the legacy CV templates match on macOS + CrossOver before any align/dock/undock loop is attempted.
+- `docs/plans/0003-journal-driven-routines.md` — build `JournalWatcher` and the journal-only routines (jump, refuel, dock, undock, auto-zero-throttle-on-arrival) plus a `run_routine.py` CLI.
+- `docs/plans/0004-runtime-diagnostics-dashboard.md` — capture-loop benchmark, journal-latency probe, and a `rich.live` stats-for-nerds dashboard.
+
+Plans 0002 and 0003 are independent and can proceed in parallel. Plan 0004's first two deliverables feed defaults into plans 0002 and 0003, but are not strict blockers.
