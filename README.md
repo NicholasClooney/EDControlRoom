@@ -80,7 +80,7 @@ On macOS, synthetic input and screen capture may require Accessibility or Screen
 
 ## Manual Utility Scripts
 
-Beyond `diagnostics.py`, four scripts are useful for poking at bindings, exercising single controls, and running the first journal-driven routine. All honor the same `--config` flag and reuse the shared runtime context.
+Beyond `diagnostics.py`, five scripts are useful for watching journal traffic, poking at bindings, exercising single controls, and running the current journal-driven routines. All honor the same `--config` flag and reuse the shared runtime context where applicable.
 
 ### `check_bindings.py`
 
@@ -99,6 +99,16 @@ To inspect specific actions, pipe the JSON into `jq` or a small Python snippet:
 ```sh
 python3 check_bindings.py --json | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['all_supported'].get('YawLeftButton'))"
 ```
+
+### `watch_journal.py`
+
+Watches the live Elite journal through `JournalWatcher`, prints only a small filtered event set to stdout, and logs every raw event to `artifacts/journal-watcher.log`.
+
+```sh
+python3 watch_journal.py
+```
+
+This is the quickest way to confirm that the repo is seeing real-time journal transitions like `StartJump`, `SupercruiseEntry`, `SupercruiseExit`, and `FSDJump` on the current machine before testing a higher-level routine.
 
 ### `ship_controls.py`
 
@@ -140,6 +150,7 @@ Runs the current journal-driven routines against a live Elite session. The suppo
 python3 run_routine.py --config config.toml --routine auto_zero_throttle_on_arrival
 python3 run_routine.py --config config.toml --routine auto_zero_throttle_on_arrival --delay-seconds 5
 python3 run_routine.py --config config.toml --routine jump --delay-seconds 5
+python3 run_routine.py --config config.toml --routine jump --delay-seconds 5 --log-events
 ```
 
 The detailed manual test flow lives in [docs/manual-journal-routine-testing.md](docs/manual-journal-routine-testing.md).

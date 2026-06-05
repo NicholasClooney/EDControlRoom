@@ -13,7 +13,7 @@ Plan 0001 (macOS MVP portability) is complete. The four hard platform problems a
 - Screen capture from the CrossOver window works.
 - Synthetic key input via Quartz `CGEventPost` reaches the game, including modifier combos and punctuation keys that broke the earlier `osascript` backend.
 
-A shared runtime context, config system, bindings lookup seam, and a small runtime action surface are wired up. Utility scripts `diagnostics.py`, `ship_controls.py`, `check_bindings.py`, `set_binding.py`, `view_bindings.py`, and `run_routine.py` all work.
+A shared runtime context, config system, bindings lookup seam, and a small runtime action surface are wired up. Utility scripts `diagnostics.py`, `ship_controls.py`, `check_bindings.py`, `set_binding.py`, `view_bindings.py`, `watch_journal.py`, and `run_routine.py` all work.
 
 The first journal-driven runtime pieces now exist:
 

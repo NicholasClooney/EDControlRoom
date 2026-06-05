@@ -5,6 +5,7 @@ This document describes the current supported live test flows for the journal-dr
 - `JournalWatcher` tails the latest `Journal.*` file incrementally
 - `auto_zero_throttle_on_arrival` dispatches `SetSpeedZero` when a `SupercruiseExit` event appears
 - `jump` dispatches `HyperSuperCombination`, waits for jump start, waits to re-enter `in_supercruise`, then dispatches `SetSpeedZero`
+- `watch_journal.py` is the quickest low-level probe for confirming that live journal events are arriving as expected
 - `run_routine.py` is the supported manual harness for running those paths against a real Elite session
 
 ## Current Commands
@@ -49,9 +50,12 @@ Before running the manual test:
 If you are unsure about the runtime prerequisites, verify them first with:
 
 ```sh
+python3 watch_journal.py
 python3 diagnostics.py --config config.toml
 python3 ship_controls.py --config config.toml --action SetSpeedZero --delay-seconds 3
 ```
+
+`watch_journal.py` prints only a small filtered event set to stdout and writes every raw event to `artifacts/journal-watcher.log`, which is useful when you want to confirm event sequences before testing a routine.
 
 ## Manual Test Flow: Arrival Throttle Zero
 
@@ -128,6 +132,10 @@ For `jump`, the key part of the result is that:
   Controls how long `jump` waits for hyperspace start.
 - `--completion-timeout-seconds 30`
   Controls how long `jump` waits to return to `in_supercruise` after jump start.
+- `--log-events`
+  Logs every watched journal event during a routine run.
+- `--event-log-path artifacts/run-routine-events.log`
+  Controls where `run_routine.py --log-events` writes raw event output.
 
 ## Failure Modes To Watch
 
@@ -137,6 +145,7 @@ For `jump`, the key part of the result is that:
 - The game reacts inconsistently, which may justify trying a larger dwell or repeat count before changing routine logic.
 - `jump` times out before `StartJump`, which points at a bad bind, bad focus, or a game state that was not actually ready to jump.
 - `jump` sees `StartJump` but never reaches `FSDJump` / `SupercruiseEntry` before timeout, which points at an incomplete or interrupted jump sequence rather than a journal-resolution failure.
+- If a routine behaves unexpectedly, compare the concise terminal output with the raw event log from `watch_journal.py` or `run_routine.py --log-events`.
 
 ## Follow-On Work
 
