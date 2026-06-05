@@ -33,6 +33,7 @@ Latest live validation on the current macOS + CrossOver setup:
 - `run_routine.py --routine jump --log-events` captured the expected hyperspace sequence: `StartJump` with `JumpType == "Hyperspace"` followed by `FSDJump`
 - `run_routine.py --routine dock --skip-supercruise-exit --auto-refuel --log-events` completed a full dock-and-refuel cycle; live testing revealed a retry-after-grant bug (watcher offset primed too late when supercruise wait is skipped) which was fixed in `edap/routines.py`
 - Dock routine was further extended (not yet live-validated): boost after SupercruiseExit with configurable settle time, DockingDenied retry loop with configurable delay, `ui_left` after `ui_select` to dismiss the station contact menu
+- `run_routine.py --routine undock --log-events` completed a full undock cycle from a docked state
 
 The important caveat is that the real autopilot loop is still largely unported. The project is in a portability-first and runtime-seams phase, not a "macOS autopilot feature complete" phase.
 
@@ -54,7 +55,7 @@ The important caveat is that the real autopilot loop is still largely unported. 
 | Jump sequencing | Done | `edap/routines.py` — retrying journal-driven routine with start/completion timeouts and throttle-zero follow-up |
 | Refuel sequencing | Deferred | Legacy behavior is understood, but implementation is intentionally paused for now |
 | Dock sequencing | Done | `edap/routines.py` — waits on journal events, boosts after SCX and settles, drives legacy-style docking request UI walk (with `ui_left` to exit contacts menu), retries after DockingDenied with configurable delay, optionally chains station refuel menu |
-| Undock sequencing | Done | `edap/routines.py` — menu walk (UI_Back x10, HeadLookReset, UI_Down, UI_Select), polls for `Undocked` event; not yet live-validated |
+| Undock sequencing | Done | `edap/routines.py` — menu walk (UI_Back x10, HeadLookReset, UI_Down, UI_Select), polls for `Undocked` event; live-validated |
 | Station / docked state detection | Partial | `edap/state.py` derives coarse statuses like `in_station`, `starting_docking`, and `in_docking`, but there is no dedicated docked/station snapshot model yet |
 | Hotkey registration | Parked | `keyboard` lib doesn't work on macOS; likely future direction is a menu-bar app |
 | Legacy autopilot loop migration | Not ported | `dev_autopilot.py` remains the behavior reference; new `edap/` routines are still minimal |
@@ -78,7 +79,7 @@ Full detail: `docs/research/0004-legacy-autopilot-port-status.md`.
 
 Plans 0002 and 0003 are independent and can run in parallel.
 
-- Next task in 0003: `undock` is implemented but not yet live-validated. Run `python3 run_routine.py --config config.toml --routine undock --log-events` from a docked state.
+- Next task in 0003: `undock` is live-validated. `refuel` is the only remaining routine; it remains intentionally deferred.
 - `refuel` is intentionally deferred for now.
 - Next task in 0002: re-bake `templates/compass.png` from a live capture. Run `uv run python3 scratch_cv.py --config config.toml --save-raw /tmp/cv-raw.png`, then crop the compass from the raw frame.
 - Destination template needs a supercruise test before deciding whether it also needs re-baking.
