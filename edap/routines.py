@@ -269,6 +269,7 @@ def dock(
     request_timeout_s: float = 20.0,
     dock_timeout_s: float = 120.0,
     settle_s: float = 2.0,
+    step_delay_s: float = 0.3,
     time_fn: Callable[[], float] = monotonic,
     sleeper: Callable[[float], None] = sleep,
 ) -> RoutineResult:
@@ -280,6 +281,8 @@ def dock(
         raise ValueError("dock_timeout_s must be non-negative")
     if settle_s < 0:
         raise ValueError("settle_s must be non-negative")
+    if step_delay_s < 0:
+        raise ValueError("step_delay_s must be non-negative")
 
     supercruise_exit_event: dict[str, object] | None = None
     if wait_for_supercruise_exit:
@@ -311,7 +314,7 @@ def dock(
     request_event: dict[str, object] | None = None
     zero_dispatch: ActionDispatchResult | None = None
     for attempt in range(1, max_retries + 1):
-        request_dispatch = docking_request_sequence(controls, sleeper=sleeper)
+        request_dispatch = docking_request_sequence(controls, step_delay_s=step_delay_s, sleeper=sleeper)
         if request_dispatch.status != "ok":
             return RoutineResult(
                 action=request_dispatch.action,
@@ -453,7 +456,7 @@ def station_refuel_menu_sequence(
 def docking_request_sequence(
     controls: SupportsDockingControls,
     *,
-    step_delay_s: float = 0.1,
+    step_delay_s: float = 0.3,
     post_request_delay_s: float = 1.0,
     sleeper: Callable[[float], None] = sleep,
 ) -> ActionDispatchResult:

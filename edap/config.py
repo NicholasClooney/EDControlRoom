@@ -25,6 +25,7 @@ class ControlsConfig:
     scanner_mode: str
     minimum_action_hold_seconds: float
     continuous_action_hold_seconds: float
+    step_delay_seconds: float
 
 
 @dataclass(frozen=True)
@@ -168,6 +169,8 @@ def validate_config(config: AppConfig) -> AppConfig:
             "Config value `controls.continuous_action_hold_seconds` must be greater than or equal to "
             "`controls.minimum_action_hold_seconds`."
         )
+    if config.controls.step_delay_seconds < 0:
+        raise ConfigError("Config value `controls.step_delay_seconds` must be non-negative.")
     if config.screen.resolution_width <= 0:
         raise ConfigError("Config value `screen.resolution_width` must be greater than 0.")
     if config.screen.resolution_height <= 0:
@@ -249,6 +252,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             scanner_mode=_string(controls, "scanner_mode", "off"),
             minimum_action_hold_seconds=_float(controls, "minimum_action_hold_seconds", 0.1),
             continuous_action_hold_seconds=_float(controls, "continuous_action_hold_seconds", 0.2),
+            step_delay_seconds=_float(controls, "step_delay_seconds", 0.3),
         ),
         screen=ScreenConfig(
             resolution_width=_integer(screen, "resolution_width", 1920),

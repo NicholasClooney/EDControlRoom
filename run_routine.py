@@ -143,6 +143,12 @@ def main() -> int:
         help="Post-trigger settle delay before a routine sends follow-up inputs",
     )
     parser.add_argument(
+        "--step-delay-seconds",
+        type=float,
+        default=None,
+        help="Delay between individual key presses in the docking request menu sequence (overrides config)",
+    )
+    parser.add_argument(
         "--dock-timeout-seconds",
         type=float,
         default=120.0,
@@ -188,6 +194,12 @@ def main() -> int:
         sys.stderr.write(f"Invalid config: {exc}\n")
         return 2
 
+    step_delay_seconds = (
+        args.step_delay_seconds
+        if args.step_delay_seconds is not None
+        else loaded.config.controls.step_delay_seconds
+    )
+
     if args.poll_interval_seconds < 0:
         sys.stderr.write("Invalid routine request: --poll-interval-seconds must be non-negative\n")
         return 2
@@ -202,6 +214,9 @@ def main() -> int:
         return 2
     if args.settle_seconds < 0:
         sys.stderr.write("Invalid routine request: --settle-seconds must be non-negative\n")
+        return 2
+    if step_delay_seconds < 0:
+        sys.stderr.write("Invalid routine request: --step-delay-seconds must be non-negative\n")
         return 2
     if args.dock_timeout_seconds < 0:
         sys.stderr.write("Invalid routine request: --dock-timeout-seconds must be non-negative\n")
@@ -349,6 +364,7 @@ def main() -> int:
                 request_timeout_s=args.request_timeout_seconds,
                 dock_timeout_s=args.dock_timeout_seconds,
                 settle_s=args.settle_seconds,
+                step_delay_s=step_delay_seconds,
             )
         elif args.routine == ROUTINE_STATION_REFUEL_MENU:
             result = station_refuel_menu(
