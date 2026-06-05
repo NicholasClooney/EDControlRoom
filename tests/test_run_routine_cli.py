@@ -140,7 +140,7 @@ class RunRoutineCliTests(unittest.TestCase):
         ) as auto_zero_mock, patch("sys.stdout", new_callable=io.StringIO) as stdout, patch(
             "sys.stderr", new_callable=io.StringIO
         ) as stderr:
-            with patch("sys.argv", ["run_routine.py", "--routine", "auto_zero_throttle_on_arrival"]):
+            with patch("sys.argv", ["run_routine.py", "--routine", "auto_zero_throttle_on_arrival", "--json"]):
                 exit_code = run_routine.main()
 
         self.assertEqual(exit_code, 0)
@@ -218,7 +218,7 @@ class RunRoutineCliTests(unittest.TestCase):
         ) as jump_mock, patch("sys.stdout", new_callable=io.StringIO) as stdout, patch(
             "sys.stderr", new_callable=io.StringIO
         ) as stderr:
-            with patch("sys.argv", ["run_routine.py", "--routine", "jump"]):
+            with patch("sys.argv", ["run_routine.py", "--routine", "jump", "--json"]):
                 exit_code = run_routine.main()
 
         self.assertEqual(exit_code, 0)
@@ -297,7 +297,7 @@ class RunRoutineCliTests(unittest.TestCase):
         ) as station_refuel_menu_mock, patch("sys.stdout", new_callable=io.StringIO) as stdout, patch(
             "sys.stderr", new_callable=io.StringIO
         ) as stderr:
-            with patch("sys.argv", ["run_routine.py", "--routine", "station_refuel_menu"]):
+            with patch("sys.argv", ["run_routine.py", "--routine", "station_refuel_menu", "--json"]):
                 exit_code = run_routine.main()
 
         self.assertEqual(exit_code, 0)
@@ -393,7 +393,7 @@ class RunRoutineCliTests(unittest.TestCase):
         ) as stderr:
             with patch(
                 "sys.argv",
-                ["run_routine.py", "--routine", "dock", "--skip-supercruise-exit", "--auto-refuel"],
+                ["run_routine.py", "--routine", "dock", "--skip-supercruise-exit", "--auto-refuel", "--json"],
             ):
                 exit_code = run_routine.main()
 
@@ -506,6 +506,7 @@ class RunRoutineCliTests(unittest.TestCase):
                         "--log-events",
                         "--event-log-path",
                         str(log_path),
+                        "--json",
                     ],
                 ):
                     exit_code = run_routine.main()

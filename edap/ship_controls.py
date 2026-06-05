@@ -13,6 +13,7 @@ DEFAULT_SHIP_CONTROL_ACTIONS = [
     "SetSpeedZero",
     "SetSpeed100",
     "HyperSuperCombination",
+    "FocusLeftPanel",
     "UI_Back",
     "UIFocus",
     "UI_Left",
@@ -20,6 +21,7 @@ DEFAULT_SHIP_CONTROL_ACTIONS = [
     "UI_Up",
     "UI_Down",
     "CycleNextPanel",
+    "CyclePreviousPanel",
     "HeadLookReset",
     "RollLeftButton",
     "RollRightButton",
@@ -168,6 +170,9 @@ class ShipControls:
     def ui_select(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
         return self.dispatch_action("UI_Select", repeat=repeat, hold_s=hold_s)
 
+    def focus_left_panel(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
+        return self.dispatch_action("FocusLeftPanel", repeat=repeat, hold_s=hold_s)
+
     def ui_back(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
         return self.dispatch_action("UI_Back", repeat=repeat, hold_s=hold_s)
 
@@ -188,6 +193,9 @@ class ShipControls:
 
     def cycle_next_panel(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
         return self.dispatch_action("CycleNextPanel", repeat=repeat, hold_s=hold_s)
+
+    def cycle_previous_panel(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
+        return self.dispatch_action("CyclePreviousPanel", repeat=repeat, hold_s=hold_s)
 
     def head_look_reset(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
         return self.dispatch_action("HeadLookReset", repeat=repeat, hold_s=hold_s)

@@ -25,6 +25,14 @@ DEFAULT_EVENT_LOG_PATH = Path("artifacts/run-routine-events.log")
 
 def _progress(message: str) -> None:
     sys.stderr.write(f"{message}\n")
+    sys.stderr.flush()
+
+
+def _make_logging_sleeper(progress_fn):
+    def _sleeper(s: float) -> None:
+        progress_fn(f"  pause {s:g}s")
+        sleep(s)
+    return _sleeper
 
 
 def _sleep_with_countdown(routine: str, delay_seconds: float) -> None:
@@ -79,6 +87,58 @@ class LoggingJournalWatcher:
         self._log_handle.write(json.dumps(event))
         self._log_handle.write("\n")
         self._log_handle.flush()
+
+
+class ProgressShipControls:
+    """Wraps ShipControls to log each key dispatch to stderr."""
+
+    def __init__(self, controls: ShipControls, progress_fn) -> None:
+        self._controls = controls
+        self._progress = progress_fn
+
+    def _log(self, action: str, repeat: int) -> None:
+        suffix = f" x{repeat}" if repeat > 1 else ""
+        self._progress(f"  key: {action}{suffix}")
+
+    def set_speed_zero(self, repeat: int = 1, hold_s: float | None = None):
+        self._log("SetSpeedZero", repeat)
+        return self._controls.set_speed_zero(repeat=repeat, hold_s=hold_s)
+
+    def hyper_super_combination(self, repeat: int = 1, hold_s: float | None = None):
+        self._log("HyperSuperCombination", repeat)
+        return self._controls.hyper_super_combination(repeat=repeat, hold_s=hold_s)
+
+    def focus_left_panel(self, repeat: int = 1, hold_s: float | None = None):
+        self._log("FocusLeftPanel", repeat)
+        return self._controls.focus_left_panel(repeat=repeat, hold_s=hold_s)
+
+    def ui_back(self, repeat: int = 1, hold_s: float | None = None):
+        self._log("UI_Back", repeat)
+        return self._controls.ui_back(repeat=repeat, hold_s=hold_s)
+
+    def cycle_next_panel(self, repeat: int = 1, hold_s: float | None = None):
+        self._log("CycleNextPanel", repeat)
+        return self._controls.cycle_next_panel(repeat=repeat, hold_s=hold_s)
+
+    def cycle_previous_panel(self, repeat: int = 1, hold_s: float | None = None):
+        self._log("CyclePreviousPanel", repeat)
+        return self._controls.cycle_previous_panel(repeat=repeat, hold_s=hold_s)
+
+    def ui_right(self, repeat: int = 1, hold_s: float | None = None):
+        self._log("UI_Right", repeat)
+        return self._controls.ui_right(repeat=repeat, hold_s=hold_s)
+
+    def ui_up(self, repeat: int = 1, hold_s: float | None = None):
+        self._log("UI_Up", repeat)
+        return self._controls.ui_up(repeat=repeat, hold_s=hold_s)
+
+    def ui_select(self, repeat: int = 1, hold_s: float | None = None):
+        self._log("UI_Select", repeat)
+        return self._controls.ui_select(repeat=repeat, hold_s=hold_s)
+
+    def ui_down(self, repeat: int = 1, hold_s: float | None = None):
+        self._log("UI_Down", repeat)
+        return self._controls.ui_down(repeat=repeat, hold_s=hold_s)
 
 
 def main() -> int:
@@ -179,6 +239,11 @@ def main() -> int:
         "--event-log-path",
         default=str(DEFAULT_EVENT_LOG_PATH),
         help="Path for --log-events output",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Write the result as JSON to stdout (for scripting)",
     )
     args = parser.parse_args()
 
@@ -285,6 +350,8 @@ def main() -> int:
         minimum_action_hold_s=loaded.config.controls.minimum_action_hold_seconds,
         continuous_action_hold_s=loaded.config.controls.continuous_action_hold_seconds,
     )
+    logging_controls = ProgressShipControls(controls, _progress)
+    logging_sleeper = _make_logging_sleeper(_progress)
 
     if args.delay_seconds > 0:
         _sleep_with_countdown(args.routine, args.delay_seconds)
@@ -340,23 +407,25 @@ def main() -> int:
     try:
         if args.routine == ROUTINE_AUTO_ZERO_THROTTLE_ON_ARRIVAL:
             result = auto_zero_throttle_on_arrival(
-                controls,
+                logging_controls,
                 watcher.watch(),
                 repeat=args.repeat,
                 hold_s=args.hold_seconds,
+                progress_fn=_progress,
             )
         elif args.routine == ROUTINE_JUMP:
             result = jump(
-                controls,
+                logging_controls,
                 watcher,
                 max_retries=args.max_retries,
                 jump_hold_s=args.hold_seconds if args.hold_seconds > 0 else 1.0,
                 start_timeout_s=args.start_timeout_seconds,
                 completion_timeout_s=args.completion_timeout_seconds,
+                progress_fn=_progress,
             )
         elif args.routine == ROUTINE_DOCK:
             result = dock(
-                controls,
+                logging_controls,
                 watcher,
                 wait_for_supercruise_exit=not args.skip_supercruise_exit,
                 auto_refuel=args.auto_refuel,
@@ -365,13 +434,17 @@ def main() -> int:
                 dock_timeout_s=args.dock_timeout_seconds,
                 settle_s=args.settle_seconds,
                 step_delay_s=step_delay_seconds,
+                sleeper=logging_sleeper,
+                progress_fn=_progress,
             )
         elif args.routine == ROUTINE_STATION_REFUEL_MENU:
             result = station_refuel_menu(
-                controls,
+                logging_controls,
                 watcher,
                 dock_timeout_s=args.dock_timeout_seconds,
                 settle_s=args.settle_seconds,
+                sleeper=logging_sleeper,
+                progress_fn=_progress,
             )
         else:
             raise RuntimeError(f"unsupported routine: {args.routine}")
@@ -384,33 +457,37 @@ def main() -> int:
         if watcher is not None:
             watcher.close()
 
-    payload = {
-        "config_path": loaded.config_path,
-        "used_example_config_fallback": loaded.used_example_config_fallback,
-        "routine": args.routine,
-        "journal_dir": str(journal_dir) if journal_dir is not None else None,
-        "journal_source": journal_source,
-        "bindings_file": str(bindings_file),
-        "bindings_source": bindings_source,
-        "repeat": args.repeat,
-        "hold_s": args.hold_seconds,
-        "poll_interval_s": args.poll_interval_seconds,
-        "settle_s": args.settle_seconds,
-        "dock_timeout_s": args.dock_timeout_seconds,
-        "request_timeout_s": args.request_timeout_seconds,
-        "skip_supercruise_exit": args.skip_supercruise_exit,
-        "auto_refuel": args.auto_refuel,
-        "event_log_path": args.event_log_path if args.log_events and routine_needs_journal else None,
-        "result": {
-            "action": result.action,
-            "dispatch": result.dispatch.to_dict(),
-            "wait_s": result.wait_s,
-            "trigger_event": result.trigger_event,
-            "details": result.details,
-        },
-    }
-    json.dump(payload, sys.stdout, indent=2)
-    sys.stdout.write("\n")
+    status_label = "ok" if result.dispatch.status == "ok" else result.dispatch.status
+    _progress(f"Done: {result.action} ({status_label})")
+
+    if args.json:
+        payload = {
+            "config_path": loaded.config_path,
+            "used_example_config_fallback": loaded.used_example_config_fallback,
+            "routine": args.routine,
+            "journal_dir": str(journal_dir) if journal_dir is not None else None,
+            "journal_source": journal_source,
+            "bindings_file": str(bindings_file),
+            "bindings_source": bindings_source,
+            "repeat": args.repeat,
+            "hold_s": args.hold_seconds,
+            "poll_interval_s": args.poll_interval_seconds,
+            "settle_s": args.settle_seconds,
+            "dock_timeout_s": args.dock_timeout_seconds,
+            "request_timeout_s": args.request_timeout_seconds,
+            "skip_supercruise_exit": args.skip_supercruise_exit,
+            "auto_refuel": args.auto_refuel,
+            "event_log_path": args.event_log_path if args.log_events and routine_needs_journal else None,
+            "result": {
+                "action": result.action,
+                "dispatch": result.dispatch.to_dict(),
+                "wait_s": result.wait_s,
+                "trigger_event": result.trigger_event,
+                "details": result.details,
+            },
+        }
+        json.dump(payload, sys.stdout, indent=2)
+        sys.stdout.write("\n")
     return 0 if result.dispatch.status == "ok" else 1
 
 

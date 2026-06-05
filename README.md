@@ -145,12 +145,17 @@ Runs the current journal-driven routines against a live Elite session. The suppo
 
 - `auto_zero_throttle_on_arrival` — watches the journal for `SupercruiseExit` and dispatches `SetSpeedZero`
 - `jump` — dispatches `HyperSuperCombination`, waits for jump start, waits to return to `in_supercruise`, then zeroes throttle
+- `dock` — optionally waits for `SupercruiseExit`, sends the docking-request menu walk, waits for docking events, and can chain the in-station refuel menu
+- `station_refuel_menu` — waits for `Docked`, then sends the station refuel menu sequence
 
 ```sh
 python3 run_routine.py --config config.toml --routine auto_zero_throttle_on_arrival
 python3 run_routine.py --config config.toml --routine auto_zero_throttle_on_arrival --delay-seconds 5
 python3 run_routine.py --config config.toml --routine jump --delay-seconds 5
 python3 run_routine.py --config config.toml --routine jump --delay-seconds 5 --log-events
+python3 run_routine.py --config config.toml --routine dock --delay-seconds 5 --log-events
+python3 run_routine.py --config config.toml --routine dock --skip-supercruise-exit --delay-seconds 5 --log-events
+python3 run_routine.py --config config.toml --routine dock --delay-seconds 5 --auto-refuel --log-events
 ```
 
 The detailed manual test flow lives in [docs/manual-journal-routine-testing.md](docs/manual-journal-routine-testing.md).

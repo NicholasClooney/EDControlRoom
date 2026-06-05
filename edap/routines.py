@@ -88,11 +88,15 @@ def auto_zero_throttle_on_arrival(
     *,
     repeat: int = 1,
     hold_s: float = 0.0,
+    progress_fn: Callable[[str], None] | None = None,
 ) -> RoutineResult:
     for event in events:
         if event.get("event") != "SupercruiseExit":
             continue
 
+        if progress_fn is not None:
+            system = event.get("StarSystem", "")
+            progress_fn(f"SupercruiseExit: {system}" if system else "SupercruiseExit")
         dispatch = controls.set_speed_zero(repeat=repeat, hold_s=hold_s)
         return RoutineResult(
             action="SetSpeedZero",
@@ -112,6 +116,7 @@ def jump(
     start_timeout_s: float = 20.0,
     completion_timeout_s: float = 30.0,
     time_fn: Callable[[], float] = monotonic,
+    progress_fn: Callable[[str], None] | None = None,
 ) -> RoutineResult:
     if max_retries < 1:
         raise ValueError("max_retries must be at least 1")
@@ -126,6 +131,8 @@ def jump(
     last_trigger_event: dict[str, object] | None = None
 
     for attempt in range(1, max_retries + 1):
+        if progress_fn is not None:
+            progress_fn(f"Dispatching jump (attempt {attempt}/{max_retries})...")
         dispatch = controls.hyper_super_combination(hold_s=jump_hold_s)
         last_dispatch = dispatch
         if dispatch.status != "ok":
@@ -135,6 +142,8 @@ def jump(
                 details={"attempt": attempt, "max_retries": max_retries, "phase": "dispatch"},
             )
 
+        if progress_fn is not None:
+            progress_fn("Waiting for jump to start...")
         start_deadline = time_fn() + start_timeout_s
         start_event = _wait_for_event(
             watcher,
@@ -143,8 +152,12 @@ def jump(
             time_fn=time_fn,
         )
         if start_event is None:
+            if progress_fn is not None:
+                progress_fn(f"Jump start timed out after {start_timeout_s:.0f}s, retrying...")
             continue
 
+        if progress_fn is not None:
+            progress_fn("Jump started, waiting for arrival...")
         completion_deadline = time_fn() + completion_timeout_s
         completion_event = _wait_for_event(
             watcher,
@@ -153,8 +166,13 @@ def jump(
             time_fn=time_fn,
         )
         if completion_event is None:
+            if progress_fn is not None:
+                progress_fn(f"Jump completion timed out after {completion_timeout_s:.0f}s, retrying...")
             continue
 
+        if progress_fn is not None:
+            system = completion_event.get("StarSystem", "")
+            progress_fn(f"Arrived: {system}" if system else f"Arrived ({completion_event.get('event')})")
         last_trigger_event = completion_event
         zero_dispatch = controls.set_speed_zero()
         return RoutineResult(
@@ -224,12 +242,15 @@ def station_refuel_menu(
     settle_s: float = 2.0,
     time_fn: Callable[[], float] = monotonic,
     sleeper: Callable[[float], None] = sleep,
+    progress_fn: Callable[[str], None] | None = None,
 ) -> RoutineResult:
     if dock_timeout_s < 0:
         raise ValueError("dock_timeout_s must be non-negative")
     if settle_s < 0:
         raise ValueError("settle_s must be non-negative")
 
+    if progress_fn is not None:
+        progress_fn("Waiting for Docked...")
     docked_event = _wait_for_event(
         watcher,
         predicate=_is_docked_event,
@@ -247,6 +268,9 @@ def station_refuel_menu(
             details={"phase": "wait_for_docked", "dock_timeout_s": dock_timeout_s},
         )
 
+    if progress_fn is not None:
+        station = docked_event.get("StationName", "")
+        progress_fn(f"Docked: {station}" if station else "Docked")
     if settle_s > 0:
         sleeper(settle_s)
 
@@ -272,6 +296,7 @@ def dock(
     step_delay_s: float = 0.3,
     time_fn: Callable[[], float] = monotonic,
     sleeper: Callable[[float], None] = sleep,
+    progress_fn: Callable[[str], None] | None = None,
 ) -> RoutineResult:
     if max_retries < 1:
         raise ValueError("max_retries must be at least 1")
@@ -286,6 +311,8 @@ def dock(
 
     supercruise_exit_event: dict[str, object] | None = None
     if wait_for_supercruise_exit:
+        if progress_fn is not None:
+            progress_fn("Waiting for SupercruiseExit...")
         supercruise_exit_event = _wait_for_event(
             watcher,
             predicate=_is_supercruise_exit_event,
@@ -302,6 +329,9 @@ def dock(
                 ),
                 details={"phase": "wait_for_supercruise_exit", "dock_timeout_s": dock_timeout_s},
             )
+        if progress_fn is not None:
+            system = supercruise_exit_event.get("StarSystem", "")
+            progress_fn(f"SupercruiseExit: {system}" if system else "SupercruiseExit")
 
     # Prime the watcher offset before the first request so that journal events
     # written during docking_request_sequence are not missed. Without this,
@@ -314,6 +344,8 @@ def dock(
     request_event: dict[str, object] | None = None
     zero_dispatch: ActionDispatchResult | None = None
     for attempt in range(1, max_retries + 1):
+        if progress_fn is not None:
+            progress_fn(f"Sending dock request (attempt {attempt}/{max_retries})...")
         request_dispatch = docking_request_sequence(controls, step_delay_s=step_delay_s, sleeper=sleeper)
         if request_dispatch.status != "ok":
             return RoutineResult(
@@ -323,6 +355,8 @@ def dock(
                 details={"phase": "dispatch", "attempt": attempt, "max_retries": max_retries},
             )
 
+        if progress_fn is not None:
+            progress_fn("Waiting for docking response...")
         request_event = _wait_for_event(
             watcher,
             predicate=_is_docking_started_event,
@@ -330,8 +364,14 @@ def dock(
             time_fn=time_fn,
         )
         if request_event is None:
+            if progress_fn is not None:
+                progress_fn("No docking response, retrying...")
             continue
 
+        if progress_fn is not None:
+            evt = request_event.get("event", "")
+            station = request_event.get("StationName", "")
+            progress_fn(f"{evt}: {station}" if station else str(evt))
         zero_dispatch = controls.set_speed_zero(repeat=2)
         break
 
@@ -347,6 +387,8 @@ def dock(
             details={"phase": "wait_for_docking_request", "attempts": max_retries},
         )
 
+    if progress_fn is not None:
+        progress_fn("Waiting for Docked...")
     docked_event = _wait_for_event(
         watcher,
         predicate=_is_docked_event,
@@ -364,6 +406,10 @@ def dock(
             trigger_event=request_event,
             details={"phase": "wait_for_docked", "dock_timeout_s": dock_timeout_s},
         )
+
+    if progress_fn is not None:
+        station = docked_event.get("StationName", "")
+        progress_fn(f"Docked: {station}" if station else "Docked")
 
     details = {
         "supercruise_exit_event": supercruise_exit_event,

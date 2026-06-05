@@ -5,6 +5,7 @@ This document describes the current supported live test flows for the journal-dr
 - `JournalWatcher` tails the latest `Journal.*` file incrementally
 - `auto_zero_throttle_on_arrival` dispatches `SetSpeedZero` when a `SupercruiseExit` event appears
 - `jump` dispatches `HyperSuperCombination`, waits for jump start, waits to re-enter `in_supercruise`, then dispatches `SetSpeedZero`
+- `dock` can wait for `SupercruiseExit`, send the docking-request menu sequence, wait for docking events, and optionally trigger the station refuel menu after `Docked`
 - `watch_journal.py` is the quickest low-level probe for confirming that live journal events are arriving as expected
 - `run_routine.py` is the supported manual harness for running those paths against a real Elite session
 
@@ -15,6 +16,7 @@ Run:
 ```sh
 python3 run_routine.py --config config.toml --routine auto_zero_throttle_on_arrival
 python3 run_routine.py --config config.toml --routine jump
+python3 run_routine.py --config config.toml --routine dock
 ```
 
 Useful variants:
@@ -23,6 +25,9 @@ Useful variants:
 python3 run_routine.py --config config.toml --routine auto_zero_throttle_on_arrival --delay-seconds 5
 python3 run_routine.py --config config.toml --routine jump --delay-seconds 5
 python3 run_routine.py --config config.toml --routine jump --max-retries 3 --start-timeout-seconds 20 --completion-timeout-seconds 30
+python3 run_routine.py --config config.toml --routine dock --delay-seconds 5
+python3 run_routine.py --config config.toml --routine dock --delay-seconds 5 --auto-refuel --log-events
+python3 run_routine.py --config config.toml --routine dock --skip-supercruise-exit --delay-seconds 5
 python3 run_routine.py --config config.toml --routine auto_zero_throttle_on_arrival --poll-interval-seconds 0.5
 python3 run_routine.py --config config.toml --routine auto_zero_throttle_on_arrival --hold-seconds 0.1
 python3 run_routine.py --config config.toml --routine auto_zero_throttle_on_arrival --repeat 2
@@ -89,6 +94,38 @@ python3 run_routine.py --config config.toml --routine jump --delay-seconds 5
 5. Observe whether the routine starts the jump, sees `StartJump` / hyperspace start in the journal, waits for return to `in_supercruise`, and then zeroes throttle.
 6. If the routine times out, inspect the JSON result to see whether it failed before `StartJump` or after jump start but before `in_supercruise`.
 
+## Manual Test Flow: Dock
+
+Recommended flow:
+
+1. Start Elite Dangerous and approach a station in supercruise.
+2. Run:
+
+```sh
+python3 run_routine.py --config config.toml --routine dock --delay-seconds 5 --log-events
+```
+
+3. During the countdown, focus the Elite window.
+4. Exit supercruise near the station.
+5. Observe whether the routine:
+   - sees `SupercruiseExit`
+   - sends the docking-request menu walk
+   - sees `DockingRequested` or `DockingGranted`
+   - zeroes throttle
+   - waits for `Docked`
+
+For a manual trigger while already outside the station in local space, use:
+
+```sh
+python3 run_routine.py --config config.toml --routine dock --skip-supercruise-exit --delay-seconds 5 --log-events
+```
+
+To chain the in-station refuel menu automatically after docking:
+
+```sh
+python3 run_routine.py --config config.toml --routine dock --delay-seconds 5 --auto-refuel --log-events
+```
+
 ## Expected Output
 
 While waiting, stderr should show progress like:
@@ -116,6 +153,13 @@ For `jump`, the key part of the result is that:
 - `trigger_event.event` should usually be `FSDJump` or `SupercruiseEntry`
 - the final dispatch status should be `ok`
 
+For `dock`, the key part of the result is that:
+
+- `routine` is `dock`
+- `details.request_event.event` should be `DockingRequested` or `DockingGranted`
+- `trigger_event.event` should be `Docked`
+- if `--auto-refuel` is used, `details.followup_action` should be `station_refuel_menu`
+
 ## Useful Flags
 
 - `--delay-seconds 5`
@@ -136,6 +180,12 @@ For `jump`, the key part of the result is that:
   Logs every watched journal event during a routine run.
 - `--event-log-path artifacts/run-routine-events.log`
   Controls where `run_routine.py --log-events` writes raw event output.
+- `--skip-supercruise-exit`
+  Starts `dock` immediately instead of waiting for `SupercruiseExit`.
+- `--auto-refuel`
+  After `Docked`, sends the station refuel menu sequence automatically.
+- `--request-timeout-seconds 20`
+  Controls how long `dock` waits for `DockingRequested` / `DockingGranted` after sending the menu sequence.
 
 ## Failure Modes To Watch
 
