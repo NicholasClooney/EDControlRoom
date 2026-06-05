@@ -23,6 +23,17 @@ class SupportsPollEvents(Protocol):
         """Return newly observed journal events."""
 
 
+class SupportsStationMenuControls(Protocol):
+    def ui_up(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        """Dispatch the UI_Up action."""
+
+    def ui_select(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        """Dispatch the UI_Select action."""
+
+    def ui_down(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        """Dispatch the UI_Down action."""
+
+
 @dataclass(frozen=True)
 class RoutineResult:
     action: str
@@ -178,3 +189,100 @@ def _is_starting_hyperspace_event(event: dict[str, object]) -> bool:
 
 def _is_in_supercruise_event(event: dict[str, object]) -> bool:
     return event.get("event") in {"SupercruiseEntry", "FSDJump"}
+
+
+def station_refuel_menu(
+    controls: SupportsStationMenuControls,
+    watcher: SupportsPollEvents,
+    *,
+    dock_timeout_s: float = 120.0,
+    settle_s: float = 2.0,
+    time_fn: Callable[[], float] = monotonic,
+    sleeper: Callable[[float], None] = sleep,
+) -> RoutineResult:
+    if dock_timeout_s < 0:
+        raise ValueError("dock_timeout_s must be non-negative")
+    if settle_s < 0:
+        raise ValueError("settle_s must be non-negative")
+
+    docked_event = _wait_for_event(
+        watcher,
+        predicate=_is_docked_event,
+        deadline=time_fn() + dock_timeout_s,
+        time_fn=time_fn,
+    )
+    if docked_event is None:
+        return RoutineResult(
+            action="Docked",
+            dispatch=ActionDispatchResult(
+                action="Docked",
+                status="error",
+                reason="docked event was not observed before timeout",
+            ),
+            details={"phase": "wait_for_docked", "dock_timeout_s": dock_timeout_s},
+        )
+
+    if settle_s > 0:
+        sleeper(settle_s)
+
+    return station_refuel_menu_sequence(
+        controls,
+        settle_s=0.5,
+        sleeper=sleeper,
+        trigger_event=docked_event,
+        pre_wait_s=settle_s,
+    )
+
+
+def station_refuel_menu_sequence(
+    controls: SupportsStationMenuControls,
+    *,
+    settle_s: float = 0.5,
+    sleeper: Callable[[float], None] = sleep,
+    trigger_event: dict[str, object] | None = None,
+    pre_wait_s: float = 0.0,
+) -> RoutineResult:
+    if settle_s < 0:
+        raise ValueError("settle_s must be non-negative")
+
+    up_dispatch = controls.ui_up()
+    if up_dispatch.status != "ok":
+        return RoutineResult(
+            action="UI_Up",
+            dispatch=up_dispatch,
+            details={"phase": "ui_up"},
+        )
+
+    if settle_s > 0:
+        sleeper(settle_s)
+
+    select_dispatch = controls.ui_select()
+    if select_dispatch.status != "ok":
+        return RoutineResult(
+            action="UI_Select",
+            dispatch=select_dispatch,
+            details={"phase": "ui_select"},
+        )
+
+    if settle_s > 0:
+        sleeper(settle_s)
+
+    down_dispatch = controls.ui_down()
+    return RoutineResult(
+        action="UI_Down",
+        dispatch=down_dispatch,
+        wait_s=pre_wait_s + (settle_s * 2),
+        trigger_event=trigger_event,
+        details={
+            "phase": "ui_down",
+            "sequence": [
+                up_dispatch.to_dict(),
+                select_dispatch.to_dict(),
+                down_dispatch.to_dict(),
+            ],
+        },
+    )
+
+
+def _is_docked_event(event: dict[str, object]) -> bool:
+    return event.get("event") == "Docked"

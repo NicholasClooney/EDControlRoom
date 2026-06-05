@@ -200,6 +200,84 @@ class RunRoutineCliTests(unittest.TestCase):
         self.assertIn("Follow-up binding: SetSpeedZero -> x", stderr.getvalue())
         self.assertIsNone(payload["event_log_path"])
 
+    def test_main_runs_station_refuel_menu_routine_and_emits_json(self) -> None:
+        fake_controls = _FakeControls({"action": "UI_Down", "status": "ok"})
+        loaded = LoadedConfig(
+            config=load_config("config.example.toml"),
+            config_path="config.example.toml",
+            used_example_config_fallback=True,
+        )
+        runtime = type(
+            "_Runtime",
+            (),
+            {
+                "journal": type(
+                    "_Journal",
+                    (),
+                    {
+                        "effective_path": Path("/tmp/Journal"),
+                        "cli_source_status": staticmethod(lambda: "auto_detected"),
+                    },
+                )(),
+                "bindings": type(
+                    "_Bindings",
+                    (),
+                    {
+                        "effective_path": Path("/tmp/Custom.binds"),
+                        "cli_source_status": staticmethod(lambda: "auto_detected"),
+                    },
+                )(),
+                "input_controller": object(),
+                "binding_lookup": build_binding_lookup(
+                    bindings={
+                        "UI_Up": Binding(key="UpArrow"),
+                        "UI_Select": Binding(key="Space"),
+                        "UI_Down": Binding(key="DownArrow"),
+                    },
+                    actions=["UI_Up", "UI_Select", "UI_Down"],
+                ),
+            },
+        )()
+        fake_result = type(
+            "_RoutineResult",
+            (),
+            {
+                "action": "UI_Down",
+                "dispatch": fake_controls.set_speed_zero(),
+                "wait_s": 1.0,
+                "trigger_event": None,
+                "details": {"phase": "ui_down"},
+            },
+        )()
+
+        with patch("run_routine.load_config_with_fallback", return_value=loaded), patch(
+            "run_routine.build_runtime_context",
+            return_value=runtime,
+        ), patch(
+            "run_routine.ShipControls.from_binding_lookup",
+            return_value=fake_controls,
+        ), patch(
+            "run_routine.JournalWatcher",
+            return_value=type("_Watcher", (), {"watch": lambda self: iter(()), "poll": lambda self: []})(),
+        ), patch(
+            "run_routine.station_refuel_menu",
+            return_value=fake_result,
+        ) as station_refuel_menu_mock, patch("sys.stdout", new_callable=io.StringIO) as stdout, patch(
+            "sys.stderr", new_callable=io.StringIO
+        ) as stderr:
+            with patch("sys.argv", ["run_routine.py", "--routine", "station_refuel_menu"]):
+                exit_code = run_routine.main()
+
+        self.assertEqual(exit_code, 0)
+        station_refuel_menu_mock.assert_called_once()
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["routine"], "station_refuel_menu")
+        self.assertEqual(payload["journal_dir"], "/tmp/Journal")
+        self.assertIn("Dispatch binding: UI_Up -> up", stderr.getvalue())
+        self.assertIn("Dispatch binding: UI_Select -> space", stderr.getvalue())
+        self.assertIn("Dispatch binding: UI_Down -> down", stderr.getvalue())
+        self.assertIn("Watching /tmp/Journal for Docked events", stderr.getvalue())
+
     def test_main_can_log_events_to_file(self) -> None:
         fake_controls = _FakeControls({"action": "SetSpeedZero", "status": "ok"})
         loaded = LoadedConfig(

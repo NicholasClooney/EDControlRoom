@@ -13,6 +13,14 @@ DEFAULT_SHIP_CONTROL_ACTIONS = [
     "SetSpeedZero",
     "SetSpeed100",
     "HyperSuperCombination",
+    "UI_Back",
+    "UIFocus",
+    "UI_Left",
+    "UI_Right",
+    "UI_Up",
+    "UI_Down",
+    "CycleNextPanel",
+    "HeadLookReset",
     "RollLeftButton",
     "RollRightButton",
     "UI_Select",
@@ -159,6 +167,30 @@ class ShipControls:
 
     def ui_select(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
         return self.dispatch_action("UI_Select", repeat=repeat, hold_s=hold_s)
+
+    def ui_back(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
+        return self.dispatch_action("UI_Back", repeat=repeat, hold_s=hold_s)
+
+    def ui_focus(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
+        return self.dispatch_action("UIFocus", repeat=repeat, hold_s=hold_s)
+
+    def ui_left(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
+        return self.dispatch_action("UI_Left", repeat=repeat, hold_s=hold_s)
+
+    def ui_right(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
+        return self.dispatch_action("UI_Right", repeat=repeat, hold_s=hold_s)
+
+    def ui_up(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
+        return self.dispatch_action("UI_Up", repeat=repeat, hold_s=hold_s)
+
+    def ui_down(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
+        return self.dispatch_action("UI_Down", repeat=repeat, hold_s=hold_s)
+
+    def cycle_next_panel(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
+        return self.dispatch_action("CycleNextPanel", repeat=repeat, hold_s=hold_s)
+
+    def head_look_reset(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
+        return self.dispatch_action("HeadLookReset", repeat=repeat, hold_s=hold_s)
 
     def hyper_super_combination(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
         return self.dispatch_action("HyperSuperCombination", repeat=repeat, hold_s=hold_s)

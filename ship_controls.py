@@ -16,6 +16,11 @@ def _progress(message: str) -> None:
     sys.stderr.write(f"{message}\n")
 
 
+PRESET_SEQUENCES = {
+    "station_refuel_menu": "UI_Up; UI_Select delay=0.5; UI_Down delay=0.5",
+}
+
+
 @dataclass(frozen=True)
 class SequenceStep:
     action: str
@@ -100,6 +105,12 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--preset",
+        choices=sorted(PRESET_SEQUENCES),
+        default=None,
+        help="Named manual control preset, for example station_refuel_menu",
+    )
+    parser.add_argument(
         "--repeat",
         type=int,
         default=1,
@@ -137,8 +148,14 @@ def main() -> int:
         sys.stderr.write(f"Invalid config: {exc}\n")
         return 2
 
+    if args.sequence and args.preset:
+        sys.stderr.write("Choose either --sequence or --preset, not both.\n")
+        return 2
+
+    resolved_sequence = PRESET_SEQUENCES.get(args.preset) if args.preset else args.sequence
+
     try:
-        sequence_steps = _parse_sequence(args.sequence) if args.sequence else [SequenceStep(action=args.action)]
+        sequence_steps = _parse_sequence(resolved_sequence) if resolved_sequence else [SequenceStep(action=args.action)]
     except ValueError as exc:
         sys.stderr.write(f"Invalid sequence: {exc}\n")
         return 2
@@ -215,7 +232,8 @@ def main() -> int:
         "used_example_config_fallback": loaded.used_example_config_fallback,
         "bindings_file": str(bindings_file),
         "bindings_source": bindings_source,
-        "sequence": args.sequence is not None,
+        "sequence": resolved_sequence is not None,
+        "preset": args.preset,
         "results": results,
     }
     if len(results) == 1:

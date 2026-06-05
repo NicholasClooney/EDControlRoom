@@ -9,7 +9,7 @@ from time import sleep
 
 from edap.binding_lookup import BindingLookup
 from edap.config import ConfigError, DEFAULT_CONFIG_PATH
-from edap.routines import auto_zero_throttle_on_arrival, jump
+from edap.routines import auto_zero_throttle_on_arrival, jump, station_refuel_menu
 from edap.runtime import build_runtime_context, load_config_with_fallback
 from edap.ship_controls import ShipControls
 from edap.state import JournalWatcher
@@ -17,7 +17,8 @@ from edap.state import JournalWatcher
 
 ROUTINE_AUTO_ZERO_THROTTLE_ON_ARRIVAL = "auto_zero_throttle_on_arrival"
 ROUTINE_JUMP = "jump"
-SUPPORTED_ROUTINES = [ROUTINE_AUTO_ZERO_THROTTLE_ON_ARRIVAL, ROUTINE_JUMP]
+ROUTINE_STATION_REFUEL_MENU = "station_refuel_menu"
+SUPPORTED_ROUTINES = [ROUTINE_AUTO_ZERO_THROTTLE_ON_ARRIVAL, ROUTINE_JUMP, ROUTINE_STATION_REFUEL_MENU]
 DEFAULT_EVENT_LOG_PATH = Path("artifacts/run-routine-events.log")
 
 
@@ -135,6 +136,18 @@ def main() -> int:
         help="Maximum time to wait for a started jump to reach in_supercruise",
     )
     parser.add_argument(
+        "--settle-seconds",
+        type=float,
+        default=2.0,
+        help="Post-trigger settle delay before a routine sends follow-up inputs",
+    )
+    parser.add_argument(
+        "--dock-timeout-seconds",
+        type=float,
+        default=120.0,
+        help="Maximum time to wait for a Docked event for station routines",
+    )
+    parser.add_argument(
         "--log-events",
         action="store_true",
         help="Log all watched journal events to a file while the routine runs",
@@ -170,15 +183,28 @@ def main() -> int:
     if args.completion_timeout_seconds < 0:
         sys.stderr.write("Invalid routine request: --completion-timeout-seconds must be non-negative\n")
         return 2
+    if args.settle_seconds < 0:
+        sys.stderr.write("Invalid routine request: --settle-seconds must be non-negative\n")
+        return 2
+    if args.dock_timeout_seconds < 0:
+        sys.stderr.write("Invalid routine request: --dock-timeout-seconds must be non-negative\n")
+        return 2
 
     routine_actions = ["SetSpeedZero"]
     if args.routine == ROUTINE_JUMP:
         routine_actions = ["SetSpeedZero", "HyperSuperCombination"]
+    elif args.routine == ROUTINE_STATION_REFUEL_MENU:
+        routine_actions = ["UI_Up", "UI_Select", "UI_Down"]
 
     runtime = build_runtime_context(loaded.config, actions=routine_actions)
     journal_dir = runtime.journal.effective_path
     journal_source = runtime.journal.cli_source_status()
-    if journal_dir is None:
+    routine_needs_journal = args.routine in {
+        ROUTINE_AUTO_ZERO_THROTTLE_ON_ARRIVAL,
+        ROUTINE_JUMP,
+        ROUTINE_STATION_REFUEL_MENU,
+    }
+    if routine_needs_journal and journal_dir is None:
         sys.stderr.write(
             "Could not resolve journal directory. "
             f"Source status: {journal_source}. Configure `paths.journal_dir` or ensure CrossOver auto-detection works.\n"
@@ -215,25 +241,35 @@ def main() -> int:
     if args.delay_seconds > 0:
         _sleep_with_countdown(args.routine, args.delay_seconds)
 
-    watcher = LoggingJournalWatcher(
-        JournalWatcher(
-            journal_dir,
-            poll_interval_s=args.poll_interval_seconds,
-        ),
-        Path(args.event_log_path) if args.log_events else None,
-    )
-
-    _progress(
-        f"Watching {journal_dir} for SupercruiseExit events "
-        f"(poll {args.poll_interval_seconds:.2f}s)."
-    )
-    if args.log_events:
-        _progress(f"Logging raw journal events to {args.event_log_path}")
+    watcher = None
+    if routine_needs_journal and journal_dir is not None:
+        watcher = LoggingJournalWatcher(
+            JournalWatcher(
+                journal_dir,
+                poll_interval_s=args.poll_interval_seconds,
+            ),
+            Path(args.event_log_path) if args.log_events else None,
+        )
+        watch_target = "SupercruiseExit events"
+        if args.routine == ROUTINE_JUMP:
+            watch_target = "hyperspace jump events"
+        elif args.routine == ROUTINE_STATION_REFUEL_MENU:
+            watch_target = "Docked events"
+        _progress(
+            f"Watching {journal_dir} for {watch_target} "
+            f"(poll {args.poll_interval_seconds:.2f}s)."
+        )
+        if args.log_events:
+            _progress(f"Logging raw journal events to {args.event_log_path}")
     if args.routine == ROUTINE_AUTO_ZERO_THROTTLE_ON_ARRIVAL:
         _progress(f"Dispatch binding: {_describe_binding(runtime.binding_lookup, 'SetSpeedZero')}")
     elif args.routine == ROUTINE_JUMP:
         _progress(f"Dispatch binding: {_describe_binding(runtime.binding_lookup, 'HyperSuperCombination')}")
         _progress(f"Follow-up binding: {_describe_binding(runtime.binding_lookup, 'SetSpeedZero')}")
+    elif args.routine == ROUTINE_STATION_REFUEL_MENU:
+        _progress(f"Dispatch binding: {_describe_binding(runtime.binding_lookup, 'UI_Up')}")
+        _progress(f"Dispatch binding: {_describe_binding(runtime.binding_lookup, 'UI_Select')}")
+        _progress(f"Dispatch binding: {_describe_binding(runtime.binding_lookup, 'UI_Down')}")
 
     try:
         if args.routine == ROUTINE_AUTO_ZERO_THROTTLE_ON_ARRIVAL:
@@ -252,27 +288,38 @@ def main() -> int:
                 start_timeout_s=args.start_timeout_seconds,
                 completion_timeout_s=args.completion_timeout_seconds,
             )
+        elif args.routine == ROUTINE_STATION_REFUEL_MENU:
+            result = station_refuel_menu(
+                controls,
+                watcher,
+                dock_timeout_s=args.dock_timeout_seconds,
+                settle_s=args.settle_seconds,
+            )
         else:
             raise RuntimeError(f"unsupported routine: {args.routine}")
     except KeyboardInterrupt:
-        watcher.close()
+        if watcher is not None:
+            watcher.close()
         sys.stderr.write("Interrupted.\n")
         return 130
     finally:
-        watcher.close()
+        if watcher is not None:
+            watcher.close()
 
     payload = {
         "config_path": loaded.config_path,
         "used_example_config_fallback": loaded.used_example_config_fallback,
         "routine": args.routine,
-        "journal_dir": str(journal_dir),
+        "journal_dir": str(journal_dir) if journal_dir is not None else None,
         "journal_source": journal_source,
         "bindings_file": str(bindings_file),
         "bindings_source": bindings_source,
         "repeat": args.repeat,
         "hold_s": args.hold_seconds,
         "poll_interval_s": args.poll_interval_seconds,
-        "event_log_path": args.event_log_path if args.log_events else None,
+        "settle_s": args.settle_seconds,
+        "dock_timeout_s": args.dock_timeout_seconds,
+        "event_log_path": args.event_log_path if args.log_events and routine_needs_journal else None,
         "result": {
             "action": result.action,
             "dispatch": result.dispatch.to_dict(),

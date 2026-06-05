@@ -4,7 +4,14 @@ import unittest
 
 from edap.actions import ActionDispatchResult
 from edap.binding_lookup import NormalizedBinding
-from edap.routines import RoutineResult, auto_zero_throttle_on_arrival, jump, set_speed_zero_then_wait
+from edap.routines import (
+    RoutineResult,
+    auto_zero_throttle_on_arrival,
+    jump,
+    set_speed_zero_then_wait,
+    station_refuel_menu,
+    station_refuel_menu_sequence,
+)
 
 
 class FakeShipControls:
@@ -25,6 +32,18 @@ class FakeShipControls:
     def hyper_super_combination(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
         self.calls.append({"action": "HyperSuperCombination", "repeat": repeat, "hold_s": hold_s})
         return self._jump_result
+
+    def ui_up(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        self.calls.append({"action": "UI_Up", "repeat": repeat, "hold_s": hold_s})
+        return self._set_speed_zero_result
+
+    def ui_select(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        self.calls.append({"action": "UI_Select", "repeat": repeat, "hold_s": hold_s})
+        return self._set_speed_zero_result
+
+    def ui_down(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        self.calls.append({"action": "UI_Down", "repeat": repeat, "hold_s": hold_s})
+        return self._set_speed_zero_result
 
 
 class FakeWatcher:
@@ -235,3 +254,82 @@ class RoutinesTests(unittest.TestCase):
         )
         self.assertEqual(result.dispatch.status, "error")
         self.assertIn("retry budget", result.dispatch.reason)
+
+    def test_station_refuel_menu_sequence_dispatches_up_select_down(self) -> None:
+        controls = FakeShipControls(
+            set_speed_zero_result=ActionDispatchResult(
+                action="UI_Up",
+                status="ok",
+                binding=NormalizedBinding(key="up", modifier=None),
+            )
+        )
+        sleep_calls: list[float] = []
+
+        result = station_refuel_menu_sequence(controls, settle_s=0.5, sleeper=sleep_calls.append)
+
+        self.assertEqual(
+            controls.calls,
+            [
+                {"action": "UI_Up", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Select", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Down", "repeat": 1, "hold_s": 0.0},
+            ],
+        )
+        self.assertEqual(sleep_calls, [0.5, 0.5])
+        self.assertEqual(result.action, "UI_Down")
+        self.assertEqual(result.dispatch.status, "ok")
+
+    def test_station_refuel_menu_waits_for_docked_then_dispatches_sequence(self) -> None:
+        controls = FakeShipControls(
+            set_speed_zero_result=ActionDispatchResult(
+                action="UI_Up",
+                status="ok",
+                binding=NormalizedBinding(key="up", modifier=None),
+            )
+        )
+        watcher = FakeWatcher([[{"event": "Docked", "StationName": "Pawelczyk Dock"}]])
+        sleep_calls: list[float] = []
+        time_values = iter([0.0, 0.0])
+
+        result = station_refuel_menu(
+            controls,
+            watcher,
+            dock_timeout_s=30.0,
+            settle_s=2.0,
+            time_fn=lambda: next(time_values),
+            sleeper=sleep_calls.append,
+        )
+
+        self.assertEqual(result.trigger_event, {"event": "Docked", "StationName": "Pawelczyk Dock"})
+        self.assertEqual(
+            controls.calls,
+            [
+                {"action": "UI_Up", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Select", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Down", "repeat": 1, "hold_s": 0.0},
+            ],
+        )
+        self.assertEqual(sleep_calls, [2.0, 0.5, 0.5])
+
+    def test_station_refuel_menu_returns_error_when_docked_not_seen(self) -> None:
+        controls = FakeShipControls(
+            set_speed_zero_result=ActionDispatchResult(
+                action="UI_Up",
+                status="ok",
+                binding=NormalizedBinding(key="up", modifier=None),
+            )
+        )
+        watcher = FakeWatcher([[]])
+        time_values = iter([0.0, 0.2])
+
+        result = station_refuel_menu(
+            controls,
+            watcher,
+            dock_timeout_s=0.1,
+            settle_s=2.0,
+            time_fn=lambda: next(time_values),
+            sleeper=lambda _: None,
+        )
+
+        self.assertEqual(result.dispatch.status, "error")
+        self.assertIn("docked event", result.dispatch.reason)

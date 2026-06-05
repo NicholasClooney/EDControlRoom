@@ -213,6 +213,65 @@ class ShipControlsCliTests(unittest.TestCase):
         self.assertIn("Sending UI_Select in 5s", stderr.getvalue())
         self.assertEqual(sleep_mock.call_count, 5)
 
+    def test_main_dispatches_station_refuel_preset(self) -> None:
+        fake_controls = _FakeControls({"status": "ok"})
+        loaded = LoadedConfig(
+            config=load_config("config.example.toml"),
+            config_path="config.example.toml",
+            used_example_config_fallback=True,
+        )
+        runtime = type(
+            "_Runtime",
+            (),
+            {
+                "bindings": type(
+                    "_Bindings",
+                    (),
+                    {
+                        "effective_path": Path("/tmp/Custom.binds"),
+                        "cli_source_status": staticmethod(lambda: "auto_detected"),
+                    },
+                )(),
+                "input_controller": object(),
+                "binding_lookup": object(),
+            },
+        )()
+
+        with patch("ship_controls.load_config_with_fallback", return_value=loaded), patch(
+            "ship_controls.build_runtime_context",
+            return_value=runtime,
+        ), patch(
+            "ship_controls.ShipControls.from_binding_lookup",
+            return_value=fake_controls,
+        ), patch("ship_controls.sleep") as sleep_mock, patch(
+            "sys.stdout", new_callable=io.StringIO
+        ) as stdout, patch("sys.stderr", new_callable=io.StringIO) as stderr:
+            with patch(
+                "sys.argv",
+                [
+                    "ship_controls.py",
+                    "--preset",
+                    "station_refuel_menu",
+                ],
+            ):
+                exit_code = ship_controls.main()
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(
+            fake_controls.calls,
+            [
+                {"action": "UI_Up", "repeat": 1, "hold_s": None, "total_s": None},
+                {"action": "UI_Select", "repeat": 1, "hold_s": None, "total_s": None},
+                {"action": "UI_Down", "repeat": 1, "hold_s": None, "total_s": None},
+            ],
+        )
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["preset"], "station_refuel_menu")
+        self.assertEqual(len(payload["results"]), 3)
+        self.assertIn("Sending UI_Select in 1s", stderr.getvalue())
+        self.assertIn("Sending UI_Down in 1s", stderr.getvalue())
+        self.assertEqual(sleep_mock.call_count, 2)
+
     def test_countdown_logs_to_stderr(self) -> None:
         with patch("ship_controls.sleep") as sleep_mock, patch(
             "sys.stderr", new_callable=io.StringIO
