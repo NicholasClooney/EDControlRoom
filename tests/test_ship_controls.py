@@ -93,6 +93,23 @@ class ShipControlsTests(unittest.TestCase):
         self.assertEqual(result.binding.to_dict(), {"key": "w", "modifier": None})
         self.assertEqual(input_controller.calls, [{"method": "tap", "key": "w", "modifier": None, "hold_s": 0.1}])
 
+    def test_hyper_super_combination_dispatches_through_binding_lookup(self) -> None:
+        lookup = build_binding_lookup(
+            bindings={"HyperSuperCombination": Binding(key="J", modifier="LeftShift")},
+            actions=["HyperSuperCombination"],
+        )
+        input_controller = FakeInputController()
+        controls = ShipControls.from_binding_lookup(lookup, input_controller)
+
+        result = controls.hyper_super_combination(hold_s=1.0)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.binding.to_dict(), {"key": "j", "modifier": "left_shift"})
+        self.assertEqual(
+            input_controller.calls,
+            [{"method": "tap", "key": "j", "modifier": "left_shift", "hold_s": 1.0}],
+        )
+
     def test_roll_left_dispatches_through_binding_lookup(self) -> None:
         lookup = build_binding_lookup(
             bindings={"RollLeftButton": Binding(key="A")},
@@ -220,6 +237,11 @@ class ShipControlsTests(unittest.TestCase):
   <SetSpeed100>
     <Primary Device="Keyboard" Key="Key_W" />
   </SetSpeed100>
+  <HyperSuperCombination>
+    <Primary Device="Keyboard" Key="Key_J">
+      <Modifier Device="Keyboard" Key="Key_LeftShift" />
+    </Primary>
+  </HyperSuperCombination>
   <RollLeftButton>
     <Primary Device="Keyboard" Key="Key_A" />
   </RollLeftButton>
@@ -239,6 +261,7 @@ class ShipControlsTests(unittest.TestCase):
             results = [
                 controls.set_speed_zero(),
                 controls.set_speed_full(),
+                controls.hyper_super_combination(hold_s=1.0),
                 controls.roll_left(),
                 controls.roll_right(),
                 controls.ui_select(),
@@ -250,6 +273,7 @@ class ShipControlsTests(unittest.TestCase):
             [
                 {"method": "tap", "key": "x", "modifier": None, "hold_s": 0.1},
                 {"method": "tap", "key": "w", "modifier": None, "hold_s": 0.1},
+                {"method": "tap", "key": "j", "modifier": "left_shift", "hold_s": 1.0},
                 {"method": "tap", "key": "a", "modifier": None, "hold_s": 0.2},
                 {"method": "tap", "key": "d", "modifier": None, "hold_s": 0.2},
                 {"method": "tap", "key": "space", "modifier": None, "hold_s": 0.1},

@@ -17,7 +17,20 @@ class _FakeControls:
         self._result_payload = result_payload
 
     def set_speed_zero(self, repeat: int = 1, hold_s: float = 0.0):
-        self.calls.append({"repeat": repeat, "hold_s": hold_s})
+        self.calls.append({"action": "SetSpeedZero", "repeat": repeat, "hold_s": hold_s})
+
+        class _Result:
+            def __init__(self, payload: dict[str, object]) -> None:
+                self.status = str(payload["status"])
+                self._payload = payload
+
+            def to_dict(self) -> dict[str, object]:
+                return dict(self._payload)
+
+        return _Result(self._result_payload)
+
+    def hyper_super_combination(self, repeat: int = 1, hold_s: float = 0.0):
+        self.calls.append({"action": "HyperSuperCombination", "repeat": repeat, "hold_s": hold_s})
 
         class _Result:
             def __init__(self, payload: dict[str, object]) -> None:
@@ -70,6 +83,7 @@ class RunRoutineCliTests(unittest.TestCase):
                 "dispatch": fake_controls.set_speed_zero(),
                 "wait_s": 0.0,
                 "trigger_event": {"event": "SupercruiseExit", "StarSystem": "Achenar"},
+                "details": None,
             },
         )()
 
@@ -99,6 +113,75 @@ class RunRoutineCliTests(unittest.TestCase):
         self.assertEqual(payload["bindings_source"], "auto_detected")
         self.assertEqual(payload["result"]["trigger_event"]["event"], "SupercruiseExit")
         self.assertIn("Watching /tmp/Journal for SupercruiseExit events", stderr.getvalue())
+
+    def test_main_runs_jump_routine_and_emits_json(self) -> None:
+        fake_controls = _FakeControls({"action": "SetSpeedZero", "status": "ok"})
+        loaded = LoadedConfig(
+            config=load_config("config.example.toml"),
+            config_path="config.example.toml",
+            used_example_config_fallback=True,
+        )
+        runtime = type(
+            "_Runtime",
+            (),
+            {
+                "journal": type(
+                    "_Journal",
+                    (),
+                    {
+                        "effective_path": Path("/tmp/Journal"),
+                        "cli_source_status": staticmethod(lambda: "auto_detected"),
+                    },
+                )(),
+                "bindings": type(
+                    "_Bindings",
+                    (),
+                    {
+                        "effective_path": Path("/tmp/Custom.binds"),
+                        "cli_source_status": staticmethod(lambda: "auto_detected"),
+                    },
+                )(),
+                "input_controller": object(),
+                "binding_lookup": object(),
+            },
+        )()
+        fake_result = type(
+            "_RoutineResult",
+            (),
+            {
+                "action": "HyperSuperCombination",
+                "dispatch": fake_controls.set_speed_zero(),
+                "wait_s": 0.0,
+                "trigger_event": {"event": "FSDJump", "StarSystem": "Achenar"},
+                "details": {"attempt": 1, "followup_action": "SetSpeedZero"},
+            },
+        )()
+
+        with patch("run_routine.load_config_with_fallback", return_value=loaded), patch(
+            "run_routine.build_runtime_context",
+            return_value=runtime,
+        ) as build_runtime_context_mock, patch(
+            "run_routine.ShipControls.from_binding_lookup",
+            return_value=fake_controls,
+        ), patch(
+            "run_routine.JournalWatcher",
+            return_value=type("_Watcher", (), {"watch": lambda self: iter(()), "poll": lambda self: []})(),
+        ), patch(
+            "run_routine.jump",
+            return_value=fake_result,
+        ) as jump_mock, patch("sys.stdout", new_callable=io.StringIO) as stdout, patch(
+            "sys.stderr", new_callable=io.StringIO
+        ):
+            with patch("sys.argv", ["run_routine.py", "--routine", "jump"]):
+                exit_code = run_routine.main()
+
+        self.assertEqual(exit_code, 0)
+        build_runtime_context_mock.assert_called_once_with(loaded.config, actions=["SetSpeedZero", "HyperSuperCombination"])
+        jump_mock.assert_called_once()
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["routine"], "jump")
+        self.assertEqual(payload["result"]["trigger_event"]["event"], "FSDJump")
+        self.assertEqual(payload["result"]["details"]["followup_action"], "SetSpeedZero")
 
     def test_main_returns_error_when_journal_dir_cannot_be_resolved(self) -> None:
         loaded = LoadedConfig(

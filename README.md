@@ -131,11 +131,15 @@ Changes take effect when Elite Dangerous next reads the bindings file. The game 
 
 ### `run_routine.py`
 
-Runs the first journal-driven routine against a live Elite session. The current supported routine is `auto_zero_throttle_on_arrival`, which watches the journal for `SupercruiseExit` and dispatches `SetSpeedZero`.
+Runs the current journal-driven routines against a live Elite session. The supported routines are:
+
+- `auto_zero_throttle_on_arrival` — watches the journal for `SupercruiseExit` and dispatches `SetSpeedZero`
+- `jump` — dispatches `HyperSuperCombination`, waits for jump start, waits to return to `in_supercruise`, then zeroes throttle
 
 ```sh
 python3 run_routine.py --config config.toml --routine auto_zero_throttle_on_arrival
 python3 run_routine.py --config config.toml --routine auto_zero_throttle_on_arrival --delay-seconds 5
+python3 run_routine.py --config config.toml --routine jump --delay-seconds 5
 ```
 
 The detailed manual test flow lives in [docs/manual-journal-routine-testing.md](docs/manual-journal-routine-testing.md).

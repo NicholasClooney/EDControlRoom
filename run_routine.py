@@ -7,14 +7,15 @@ import sys
 from time import sleep
 
 from edap.config import ConfigError, DEFAULT_CONFIG_PATH
-from edap.routines import auto_zero_throttle_on_arrival
+from edap.routines import auto_zero_throttle_on_arrival, jump
 from edap.runtime import build_runtime_context, load_config_with_fallback
 from edap.ship_controls import ShipControls
 from edap.state import JournalWatcher
 
 
 ROUTINE_AUTO_ZERO_THROTTLE_ON_ARRIVAL = "auto_zero_throttle_on_arrival"
-SUPPORTED_ROUTINES = [ROUTINE_AUTO_ZERO_THROTTLE_ON_ARRIVAL]
+ROUTINE_JUMP = "jump"
+SUPPORTED_ROUTINES = [ROUTINE_AUTO_ZERO_THROTTLE_ON_ARRIVAL, ROUTINE_JUMP]
 
 
 def _progress(message: str) -> None:
@@ -66,6 +67,24 @@ def main() -> int:
         default=0.5,
         help="Journal poll interval in seconds",
     )
+    parser.add_argument(
+        "--max-retries",
+        type=int,
+        default=3,
+        help="Maximum attempts for retrying routines such as jump",
+    )
+    parser.add_argument(
+        "--start-timeout-seconds",
+        type=float,
+        default=20.0,
+        help="Maximum time to wait for a jump to start",
+    )
+    parser.add_argument(
+        "--completion-timeout-seconds",
+        type=float,
+        default=30.0,
+        help="Maximum time to wait for a started jump to reach in_supercruise",
+    )
     args = parser.parse_args()
 
     try:
@@ -83,8 +102,21 @@ def main() -> int:
     if args.poll_interval_seconds < 0:
         sys.stderr.write("Invalid routine request: --poll-interval-seconds must be non-negative\n")
         return 2
+    if args.max_retries < 1:
+        sys.stderr.write("Invalid routine request: --max-retries must be at least 1\n")
+        return 2
+    if args.start_timeout_seconds < 0:
+        sys.stderr.write("Invalid routine request: --start-timeout-seconds must be non-negative\n")
+        return 2
+    if args.completion_timeout_seconds < 0:
+        sys.stderr.write("Invalid routine request: --completion-timeout-seconds must be non-negative\n")
+        return 2
 
-    runtime = build_runtime_context(loaded.config, actions=["SetSpeedZero"])
+    routine_actions = ["SetSpeedZero"]
+    if args.routine == ROUTINE_JUMP:
+        routine_actions = ["SetSpeedZero", "HyperSuperCombination"]
+
+    runtime = build_runtime_context(loaded.config, actions=routine_actions)
     journal_dir = runtime.journal.effective_path
     journal_source = runtime.journal.cli_source_status()
     if journal_dir is None:
@@ -142,6 +174,15 @@ def main() -> int:
                 repeat=args.repeat,
                 hold_s=args.hold_seconds,
             )
+        elif args.routine == ROUTINE_JUMP:
+            result = jump(
+                controls,
+                watcher,
+                max_retries=args.max_retries,
+                jump_hold_s=args.hold_seconds if args.hold_seconds > 0 else 1.0,
+                start_timeout_s=args.start_timeout_seconds,
+                completion_timeout_s=args.completion_timeout_seconds,
+            )
         else:
             raise RuntimeError(f"unsupported routine: {args.routine}")
     except KeyboardInterrupt:
@@ -164,6 +205,7 @@ def main() -> int:
             "dispatch": result.dispatch.to_dict(),
             "wait_s": result.wait_s,
             "trigger_event": result.trigger_event,
+            "details": result.details,
         },
     }
     json.dump(payload, sys.stdout, indent=2)

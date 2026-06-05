@@ -12,6 +12,7 @@ from edap.platform.input.base import InputController
 DEFAULT_SHIP_CONTROL_ACTIONS = [
     "SetSpeedZero",
     "SetSpeed100",
+    "HyperSuperCombination",
     "RollLeftButton",
     "RollRightButton",
     "UI_Select",
@@ -158,3 +159,6 @@ class ShipControls:
 
     def ui_select(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
         return self.dispatch_action("UI_Select", repeat=repeat, hold_s=hold_s)
+
+    def hyper_super_combination(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
+        return self.dispatch_action("HyperSuperCombination", repeat=repeat, hold_s=hold_s)

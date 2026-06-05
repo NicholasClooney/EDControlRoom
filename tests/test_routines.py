@@ -4,22 +4,45 @@ import unittest
 
 from edap.actions import ActionDispatchResult
 from edap.binding_lookup import NormalizedBinding
-from edap.routines import RoutineResult, auto_zero_throttle_on_arrival, set_speed_zero_then_wait
+from edap.routines import RoutineResult, auto_zero_throttle_on_arrival, jump, set_speed_zero_then_wait
 
 
 class FakeShipControls:
-    def __init__(self, result: ActionDispatchResult) -> None:
+    def __init__(
+        self,
+        *,
+        set_speed_zero_result: ActionDispatchResult,
+        jump_result: ActionDispatchResult | None = None,
+    ) -> None:
         self.calls: list[dict[str, object]] = []
-        self._result = result
+        self._set_speed_zero_result = set_speed_zero_result
+        self._jump_result = jump_result or set_speed_zero_result
 
     def set_speed_zero(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
-        self.calls.append({"repeat": repeat, "hold_s": hold_s})
-        return self._result
+        self.calls.append({"action": "SetSpeedZero", "repeat": repeat, "hold_s": hold_s})
+        return self._set_speed_zero_result
+
+    def hyper_super_combination(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        self.calls.append({"action": "HyperSuperCombination", "repeat": repeat, "hold_s": hold_s})
+        return self._jump_result
+
+
+class FakeWatcher:
+    def __init__(self, batches: list[list[dict[str, object]]]) -> None:
+        self._batches = list(batches)
+        self.poll_calls = 0
+
+    def poll(self) -> list[dict[str, object]]:
+        self.poll_calls += 1
+        if self._batches:
+            return self._batches.pop(0)
+        return []
 
 
 class RoutinesTests(unittest.TestCase):
     def test_set_speed_zero_then_wait_dispatches_and_sleeps(self) -> None:
         controls = FakeShipControls(
+            set_speed_zero_result=
             ActionDispatchResult(
                 action="SetSpeedZero",
                 status="ok",
@@ -41,11 +64,12 @@ class RoutinesTests(unittest.TestCase):
         self.assertIsInstance(result, RoutineResult)
         self.assertEqual(result.action, "SetSpeedZero")
         self.assertEqual(result.dispatch.status, "ok")
-        self.assertEqual(controls.calls, [{"repeat": 2, "hold_s": 0.05}])
+        self.assertEqual(controls.calls, [{"action": "SetSpeedZero", "repeat": 2, "hold_s": 0.05}])
         self.assertEqual(sleep_calls, [1.25])
 
     def test_set_speed_zero_then_wait_skips_sleep_when_wait_is_zero(self) -> None:
         controls = FakeShipControls(
+            set_speed_zero_result=
             ActionDispatchResult(
                 action="SetSpeedZero",
                 status="ok",
@@ -57,11 +81,12 @@ class RoutinesTests(unittest.TestCase):
         result = set_speed_zero_then_wait(controls, sleeper=sleep_calls.append)
 
         self.assertEqual(result.wait_s, 0.0)
-        self.assertEqual(controls.calls, [{"repeat": 1, "hold_s": 0.0}])
+        self.assertEqual(controls.calls, [{"action": "SetSpeedZero", "repeat": 1, "hold_s": 0.0}])
         self.assertEqual(sleep_calls, [])
 
     def test_set_speed_zero_then_wait_skips_sleep_when_dispatch_fails(self) -> None:
         controls = FakeShipControls(
+            set_speed_zero_result=
             ActionDispatchResult(
                 action="SetSpeedZero",
                 status="missing",
@@ -83,6 +108,7 @@ class RoutinesTests(unittest.TestCase):
 
     def test_set_speed_zero_then_wait_rejects_negative_wait(self) -> None:
         controls = FakeShipControls(
+            set_speed_zero_result=
             ActionDispatchResult(
                 action="SetSpeedZero",
                 status="ok",
@@ -95,6 +121,7 @@ class RoutinesTests(unittest.TestCase):
 
     def test_auto_zero_throttle_on_arrival_dispatches_on_supercruise_exit(self) -> None:
         controls = FakeShipControls(
+            set_speed_zero_result=
             ActionDispatchResult(
                 action="SetSpeedZero",
                 status="ok",
@@ -109,13 +136,14 @@ class RoutinesTests(unittest.TestCase):
 
         result = auto_zero_throttle_on_arrival(controls, events, repeat=2, hold_s=0.05)
 
-        self.assertEqual(controls.calls, [{"repeat": 2, "hold_s": 0.05}])
+        self.assertEqual(controls.calls, [{"action": "SetSpeedZero", "repeat": 2, "hold_s": 0.05}])
         self.assertEqual(result.action, "SetSpeedZero")
         self.assertEqual(result.dispatch.status, "ok")
         self.assertEqual(result.trigger_event, {"event": "SupercruiseExit", "StarSystem": "Achenar"})
 
     def test_auto_zero_throttle_on_arrival_raises_if_stream_ends_without_event(self) -> None:
         controls = FakeShipControls(
+            set_speed_zero_result=
             ActionDispatchResult(
                 action="SetSpeedZero",
                 status="ok",
@@ -127,3 +155,83 @@ class RoutinesTests(unittest.TestCase):
             auto_zero_throttle_on_arrival(controls, [{"event": "LoadGame"}])
 
         self.assertEqual(controls.calls, [])
+
+    def test_jump_dispatches_fsd_waits_for_supercruise_and_zeroes_throttle(self) -> None:
+        controls = FakeShipControls(
+            set_speed_zero_result=ActionDispatchResult(
+                action="SetSpeedZero",
+                status="ok",
+                binding=NormalizedBinding(key="x", modifier=None),
+            ),
+            jump_result=ActionDispatchResult(
+                action="HyperSuperCombination",
+                status="ok",
+                binding=NormalizedBinding(key="j", modifier="left_shift"),
+                hold_s=1.0,
+            ),
+        )
+        watcher = FakeWatcher(
+            [
+                [{"event": "StartJump", "JumpType": "Hyperspace", "StarClass": "K"}],
+                [{"event": "FSDJump", "StarSystem": "Achenar"}],
+            ]
+        )
+        time_values = iter([0.0, 0.0, 0.0, 0.1, 0.1])
+
+        result = jump(
+            controls,
+            watcher,
+            max_retries=3,
+            jump_hold_s=1.0,
+            start_timeout_s=5.0,
+            completion_timeout_s=5.0,
+            time_fn=lambda: next(time_values),
+        )
+
+        self.assertEqual(
+            controls.calls,
+            [
+                {"action": "HyperSuperCombination", "repeat": 1, "hold_s": 1.0},
+                {"action": "SetSpeedZero", "repeat": 1, "hold_s": 0.0},
+            ],
+        )
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertEqual(result.trigger_event, {"event": "FSDJump", "StarSystem": "Achenar"})
+        self.assertEqual(result.details["attempt"], 1)
+
+    def test_jump_returns_error_after_retry_budget_exhausted(self) -> None:
+        controls = FakeShipControls(
+            set_speed_zero_result=ActionDispatchResult(
+                action="SetSpeedZero",
+                status="ok",
+                binding=NormalizedBinding(key="x", modifier=None),
+            ),
+            jump_result=ActionDispatchResult(
+                action="HyperSuperCombination",
+                status="ok",
+                binding=NormalizedBinding(key="j", modifier="left_shift"),
+                hold_s=1.0,
+            ),
+        )
+        watcher = FakeWatcher([[], []])
+        time_values = iter([0.0, 0.2, 0.2, 0.4])
+
+        result = jump(
+            controls,
+            watcher,
+            max_retries=2,
+            jump_hold_s=1.0,
+            start_timeout_s=0.1,
+            completion_timeout_s=0.1,
+            time_fn=lambda: next(time_values),
+        )
+
+        self.assertEqual(
+            controls.calls,
+            [
+                {"action": "HyperSuperCombination", "repeat": 1, "hold_s": 1.0},
+                {"action": "HyperSuperCombination", "repeat": 1, "hold_s": 1.0},
+            ],
+        )
+        self.assertEqual(result.dispatch.status, "error")
+        self.assertIn("retry budget", result.dispatch.reason)

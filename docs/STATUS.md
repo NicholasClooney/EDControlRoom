@@ -19,8 +19,9 @@ The first journal-driven runtime pieces now exist:
 
 - `JournalWatcher` tails the latest `Journal.*` file incrementally, starts at end-of-file by default, and rolls over to newer journal files.
 - `auto_zero_throttle_on_arrival` exists as the first watcher-to-controls routine and dispatches `SetSpeedZero` on `SupercruiseExit`.
-- `run_routine.py --routine auto_zero_throttle_on_arrival` is the first supported live manual harness for exercising that path against a real Elite session.
-- The current live manual test flow for that harness is documented in `docs/manual-journal-routine-testing.md`.
+- `jump` now exists as the first retrying journal-driven routine. It dispatches `HyperSuperCombination`, waits for `StartJump` / hyperspace start, then waits to re-enter `in_supercruise` and zeroes throttle.
+- `run_routine.py` now supports both `auto_zero_throttle_on_arrival` and `jump` as live manual harnesses for exercising journal-driven paths against a real Elite session.
+- The current live manual test flows for those harnesses are documented in `docs/manual-journal-routine-testing.md`.
 
 The important caveat is that the real autopilot loop is still largely unported. The project is in a portability-first and runtime-seams phase, not a "macOS autopilot feature complete" phase.
 
@@ -39,7 +40,7 @@ The important caveat is that the real autopilot loop is still largely unported. 
 | Align loop | Not ported | Depends on CV pipeline |
 | Journal watcher | Done | `edap/state.py` — incremental tailing with rollover support and tests |
 | Auto-zero throttle on arrival | Done | `edap/routines.py` — dispatches `SetSpeedZero` on `SupercruiseExit` |
-| Jump sequencing | Stub | Action exists; journal-driven retry loop not wired |
+| Jump sequencing | Done | `edap/routines.py` — retrying journal-driven routine with start/completion timeouts and throttle-zero follow-up |
 | Refuel sequencing | Stub | State reads exist; scoop sequence not wired |
 | Dock sequencing | Stub | Needs UI menu walk plus status waits |
 | Undock sequencing | Stub | Needs UI menu walk plus status waits |
@@ -65,6 +66,6 @@ Full detail: `docs/research/0004-legacy-autopilot-port-status.md`.
 
 Plans 0002 and 0003 are independent and can run in parallel.
 
-- Next task in 0003: `jump` — first retrying journal-driven routine after the watcher and arrival throttle path.
+- Next task in 0003: `refuel` — next journal-driven routine after watcher, arrival throttle, and jump.
 - First task in 0002: `scratch_cv.py` — answers whether legacy templates match macOS + CrossOver captures before any align work is attempted.
 - Then: use plan 0004 to measure capture-loop performance and journal latency once the first CV probe or first journal routine exists.

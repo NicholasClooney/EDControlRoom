@@ -1,23 +1,27 @@
 # Manual Journal Routine Testing
 
-This document describes the current supported live test flow for the first journal-driven routine:
+This document describes the current supported live test flows for the journal-driven routines that can be exercised manually today:
 
 - `JournalWatcher` tails the latest `Journal.*` file incrementally
 - `auto_zero_throttle_on_arrival` dispatches `SetSpeedZero` when a `SupercruiseExit` event appears
-- `run_routine.py` is the supported manual harness for running that path against a real Elite session
+- `jump` dispatches `HyperSuperCombination`, waits for jump start, waits to re-enter `in_supercruise`, then dispatches `SetSpeedZero`
+- `run_routine.py` is the supported manual harness for running those paths against a real Elite session
 
-## Current Command
+## Current Commands
 
 Run:
 
 ```sh
 python3 run_routine.py --config config.toml --routine auto_zero_throttle_on_arrival
+python3 run_routine.py --config config.toml --routine jump
 ```
 
 Useful variants:
 
 ```sh
 python3 run_routine.py --config config.toml --routine auto_zero_throttle_on_arrival --delay-seconds 5
+python3 run_routine.py --config config.toml --routine jump --delay-seconds 5
+python3 run_routine.py --config config.toml --routine jump --max-retries 3 --start-timeout-seconds 20 --completion-timeout-seconds 30
 python3 run_routine.py --config config.toml --routine auto_zero_throttle_on_arrival --poll-interval-seconds 0.5
 python3 run_routine.py --config config.toml --routine auto_zero_throttle_on_arrival --hold-seconds 0.1
 python3 run_routine.py --config config.toml --routine auto_zero_throttle_on_arrival --repeat 2
@@ -25,14 +29,14 @@ python3 run_routine.py --config config.toml --routine auto_zero_throttle_on_arri
 
 ## What This Proves
 
-This manual test is meant to prove the first complete journal-driven runtime path on macOS + CrossOver:
+These manual tests are meant to prove the first complete journal-driven runtime paths on macOS + CrossOver:
 
 1. journal path resolution works in the shared runtime context
 2. `JournalWatcher` can see new events arrive in the live journal
 3. the routine reacts to `SupercruiseExit`
 4. `ShipControls` dispatches `SetSpeedZero` through the bindings lookup and macOS input backend
 
-This does not prove broader autopilot behavior. It only proves the watcher-to-controls path for one simple routine.
+This does not prove broader autopilot behavior. It only proves the watcher-to-controls path for a small journal-driven routine surface.
 
 ## Setup
 
@@ -49,7 +53,7 @@ python3 diagnostics.py --config config.toml
 python3 ship_controls.py --config config.toml --action SetSpeedZero --delay-seconds 3
 ```
 
-## Manual Test Flow
+## Manual Test Flow: Arrival Throttle Zero
 
 Recommended flow:
 
@@ -64,6 +68,22 @@ python3 run_routine.py --config config.toml --routine auto_zero_throttle_on_arri
 4. Enter supercruise.
 5. Exit supercruise normally.
 6. Observe whether throttle is immediately set to zero after the `SupercruiseExit` journal event lands.
+
+## Manual Test Flow: Jump
+
+Recommended flow:
+
+1. Start Elite Dangerous and get into a normal flight session where a jump is valid.
+2. Run:
+
+```sh
+python3 run_routine.py --config config.toml --routine jump --delay-seconds 5
+```
+
+3. During the countdown, focus the Elite window.
+4. Make sure the ship is in a state where triggering `HyperSuperCombination` should begin a jump.
+5. Observe whether the routine starts the jump, sees `StartJump` / hyperspace start in the journal, waits for return to `in_supercruise`, and then zeroes throttle.
+6. If the routine times out, inspect the JSON result to see whether it failed before `StartJump` or after jump start but before `in_supercruise`.
 
 ## Expected Output
 
@@ -85,6 +105,13 @@ After the trigger, stdout should emit JSON that includes:
 
 The key part of the result is that `trigger_event.event` should be `SupercruiseExit` and the dispatch status should be `ok`.
 
+For `jump`, the key part of the result is that:
+
+- `routine` is `jump`
+- `details.start_event.event` should be `StartJump`
+- `trigger_event.event` should usually be `FSDJump` or `SupercruiseEntry`
+- the final dispatch status should be `ok`
+
 ## Useful Flags
 
 - `--delay-seconds 5`
@@ -95,6 +122,12 @@ The key part of the result is that `trigger_event.event` should be `SupercruiseE
   Forces a specific dwell on the dispatched action.
 - `--repeat 2`
   Sends `SetSpeedZero` more than once if you want a more aggressive manual check.
+- `--max-retries 3`
+  Controls retry budget for `jump`.
+- `--start-timeout-seconds 20`
+  Controls how long `jump` waits for hyperspace start.
+- `--completion-timeout-seconds 30`
+  Controls how long `jump` waits to return to `in_supercruise` after jump start.
 
 ## Failure Modes To Watch
 
@@ -102,7 +135,9 @@ The key part of the result is that `trigger_event.event` should be `SupercruiseE
 - The routine keeps waiting forever because no `SupercruiseExit` event arrives in the watched journal.
 - The JSON result shows the trigger event correctly, but the ship does not respond, which would point at an input-routing or in-game focus problem rather than a journal problem.
 - The game reacts inconsistently, which may justify trying a larger dwell or repeat count before changing routine logic.
+- `jump` times out before `StartJump`, which points at a bad bind, bad focus, or a game state that was not actually ready to jump.
+- `jump` sees `StartJump` but never reaches `FSDJump` / `SupercruiseEntry` before timeout, which points at an incomplete or interrupted jump sequence rather than a journal-resolution failure.
 
 ## Follow-On Work
 
-Once this manual flow is confirmed in a real session, the next journal-driven routine to add is `jump`.
+Once these manual flows are confirmed in a real session, the next journal-driven routine to add is `refuel`.
