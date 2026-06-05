@@ -16,6 +16,7 @@ That means the project is still in a portability-first phase rather than a featu
 ## Current Status
 
 See [docs/STATUS.md](docs/STATUS.md) for port status, what is stubbed, what is unverified, and which plan to pick up next.
+See [docs/manual-journal-routine-testing.md](docs/manual-journal-routine-testing.md) for the current live manual test flow for the first journal-driven routine.
 
 Active plans:
 
@@ -79,7 +80,7 @@ On macOS, synthetic input and screen capture may require Accessibility or Screen
 
 ## Manual Utility Scripts
 
-Beyond `diagnostics.py`, three scripts are useful for poking at bindings and exercising single controls. All honor the same `--config` flag and reuse the shared runtime context.
+Beyond `diagnostics.py`, four scripts are useful for poking at bindings, exercising single controls, and running the first journal-driven routine. All honor the same `--config` flag and reuse the shared runtime context.
 
 ### `check_bindings.py`
 
@@ -127,6 +128,17 @@ python3 set_binding.py PitchDownButton --clear
 `--show` is read-only. `--key` accepts internal canonical names: letters (`a`-`z`), digits, punctuation literals (`. , [ ] / \ ; ' - =`), specials (`space`, `enter`, `tab`, `escape`, `backspace`, `delete`, `home`, `end`, `page_up`, `page_down`, arrows), modifier-as-key names (`left_shift`, `right_control`, ...), `numpad_<0-9>`, and `f<1-20>`. `--modifier` accepts the same modifier names plus the aliases `shift`, `ctrl`, `alt`. `--slot` is `primary` (default) or `secondary`. `--clear` empties the slot.
 
 Changes take effect when Elite Dangerous next reads the bindings file. The game generally re-reads on launch and when entering the Controls menu, so close and reopen ED after a write to be safe.
+
+### `run_routine.py`
+
+Runs the first journal-driven routine against a live Elite session. The current supported routine is `auto_zero_throttle_on_arrival`, which watches the journal for `SupercruiseExit` and dispatches `SetSpeedZero`.
+
+```sh
+python3 run_routine.py --config config.toml --routine auto_zero_throttle_on_arrival
+python3 run_routine.py --config config.toml --routine auto_zero_throttle_on_arrival --delay-seconds 5
+```
+
+The detailed manual test flow lives in [docs/manual-journal-routine-testing.md](docs/manual-journal-routine-testing.md).
 
 ## Existing Runtime Assumptions
 

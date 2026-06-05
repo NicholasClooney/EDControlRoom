@@ -4,7 +4,7 @@ import unittest
 
 from edap.actions import ActionDispatchResult
 from edap.binding_lookup import NormalizedBinding
-from edap.routines import RoutineResult, set_speed_zero_then_wait
+from edap.routines import RoutineResult, auto_zero_throttle_on_arrival, set_speed_zero_then_wait
 
 
 class FakeShipControls:
@@ -92,3 +92,38 @@ class RoutinesTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "wait_s must be non-negative"):
             set_speed_zero_then_wait(controls, wait_s=-0.1)
+
+    def test_auto_zero_throttle_on_arrival_dispatches_on_supercruise_exit(self) -> None:
+        controls = FakeShipControls(
+            ActionDispatchResult(
+                action="SetSpeedZero",
+                status="ok",
+                binding=NormalizedBinding(key="x", modifier=None),
+            )
+        )
+        events = [
+            {"event": "LoadGame"},
+            {"event": "SupercruiseEntry"},
+            {"event": "SupercruiseExit", "StarSystem": "Achenar"},
+        ]
+
+        result = auto_zero_throttle_on_arrival(controls, events, repeat=2, hold_s=0.05)
+
+        self.assertEqual(controls.calls, [{"repeat": 2, "hold_s": 0.05}])
+        self.assertEqual(result.action, "SetSpeedZero")
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertEqual(result.trigger_event, {"event": "SupercruiseExit", "StarSystem": "Achenar"})
+
+    def test_auto_zero_throttle_on_arrival_raises_if_stream_ends_without_event(self) -> None:
+        controls = FakeShipControls(
+            ActionDispatchResult(
+                action="SetSpeedZero",
+                status="ok",
+                binding=NormalizedBinding(key="x", modifier=None),
+            )
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "SupercruiseExit"):
+            auto_zero_throttle_on_arrival(controls, [{"event": "LoadGame"}])
+
+        self.assertEqual(controls.calls, [])
