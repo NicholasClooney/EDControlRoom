@@ -7,6 +7,8 @@ from edap.binding_lookup import NormalizedBinding
 from edap.routines import (
     RoutineResult,
     auto_zero_throttle_on_arrival,
+    dock,
+    docking_request_sequence,
     jump,
     set_speed_zero_then_wait,
     station_refuel_menu,
@@ -43,6 +45,26 @@ class FakeShipControls:
 
     def ui_down(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
         self.calls.append({"action": "UI_Down", "repeat": repeat, "hold_s": hold_s})
+        return self._set_speed_zero_result
+
+    def focus_left_panel(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        self.calls.append({"action": "FocusLeftPanel", "repeat": repeat, "hold_s": hold_s})
+        return self._set_speed_zero_result
+
+    def ui_back(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        self.calls.append({"action": "UI_Back", "repeat": repeat, "hold_s": hold_s})
+        return self._set_speed_zero_result
+
+    def cycle_next_panel(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        self.calls.append({"action": "CycleNextPanel", "repeat": repeat, "hold_s": hold_s})
+        return self._set_speed_zero_result
+
+    def cycle_previous_panel(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        self.calls.append({"action": "CyclePreviousPanel", "repeat": repeat, "hold_s": hold_s})
+        return self._set_speed_zero_result
+
+    def ui_right(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        self.calls.append({"action": "UI_Right", "repeat": repeat, "hold_s": hold_s})
         return self._set_speed_zero_result
 
 
@@ -333,3 +355,115 @@ class RoutinesTests(unittest.TestCase):
 
         self.assertEqual(result.dispatch.status, "error")
         self.assertIn("docked event", result.dispatch.reason)
+
+    def test_docking_request_sequence_dispatches_stream_deck_menu_walk(self) -> None:
+        controls = FakeShipControls(
+            set_speed_zero_result=ActionDispatchResult(
+                action="UI_Select",
+                status="ok",
+                binding=NormalizedBinding(key="space", modifier=None),
+            )
+        )
+        sleep_calls: list[float] = []
+
+        result = docking_request_sequence(controls, sleeper=sleep_calls.append)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(
+            controls.calls,
+            [
+                {"action": "UI_Back", "repeat": 10, "hold_s": 0.0},
+                {"action": "FocusLeftPanel", "repeat": 1, "hold_s": 0.0},
+                {"action": "CycleNextPanel", "repeat": 1, "hold_s": 0.0},
+                {"action": "CycleNextPanel", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Right", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Select", "repeat": 1, "hold_s": 0.0},
+                {"action": "CyclePreviousPanel", "repeat": 1, "hold_s": 0.0},
+                {"action": "CyclePreviousPanel", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Back", "repeat": 1, "hold_s": 0.0},
+            ],
+        )
+        self.assertEqual(sleep_calls, [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0])
+
+    def test_dock_waits_for_supercruise_exit_and_then_docks(self) -> None:
+        controls = FakeShipControls(
+            set_speed_zero_result=ActionDispatchResult(
+                action="SetSpeedZero",
+                status="ok",
+                binding=NormalizedBinding(key="x", modifier=None),
+            )
+        )
+        watcher = FakeWatcher(
+            [
+                [{"event": "SupercruiseExit", "BodyType": "Station"}],
+                [],  # absorbed by prime poll() before the retry loop
+                [{"event": "DockingGranted", "LandingPad": 40}],
+                [{"event": "Docked", "StationName": "Pawelczyk Dock"}],
+            ]
+        )
+        time_values = iter([0.0, 0.0, 0.0, 0.1, 0.1, 0.2])
+        sleep_calls: list[float] = []
+
+        result = dock(
+            controls,
+            watcher,
+            wait_for_supercruise_exit=True,
+            auto_refuel=False,
+            max_retries=1,
+            request_timeout_s=10.0,
+            dock_timeout_s=60.0,
+            time_fn=lambda: next(time_values),
+            sleeper=sleep_calls.append,
+        )
+
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertEqual(result.trigger_event, {"event": "Docked", "StationName": "Pawelczyk Dock"})
+        self.assertEqual(result.details["request_event"], {"event": "DockingGranted", "LandingPad": 40})
+        self.assertEqual(result.details["supercruise_exit_event"], {"event": "SupercruiseExit", "BodyType": "Station"})
+        self.assertEqual(controls.calls[-1], {"action": "SetSpeedZero", "repeat": 2, "hold_s": 0.0})
+        self.assertEqual(sleep_calls, [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0])
+
+    def test_dock_can_skip_supercruise_exit_and_chain_refuel(self) -> None:
+        controls = FakeShipControls(
+            set_speed_zero_result=ActionDispatchResult(
+                action="UI_Down",
+                status="ok",
+                binding=NormalizedBinding(key="down", modifier=None),
+            )
+        )
+        watcher = FakeWatcher(
+            [
+                [],  # absorbed by prime poll() before the retry loop
+                [{"event": "DockingRequested"}],
+                [{"event": "Docked", "StationName": "Pawelczyk Dock"}],
+            ]
+        )
+        time_values = iter([0.0, 0.0, 0.1, 0.1])
+        sleep_calls: list[float] = []
+
+        result = dock(
+            controls,
+            watcher,
+            wait_for_supercruise_exit=False,
+            auto_refuel=True,
+            max_retries=1,
+            request_timeout_s=10.0,
+            dock_timeout_s=60.0,
+            settle_s=2.0,
+            time_fn=lambda: next(time_values),
+            sleeper=sleep_calls.append,
+        )
+
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertEqual(result.details["auto_refuel"], True)
+        self.assertEqual(result.details["followup_action"], "station_refuel_menu")
+        self.assertEqual(result.details["supercruise_exit_event"], None)
+        self.assertEqual(sleep_calls, [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 1.0, 2.0, 0.5, 0.5])
+        self.assertEqual(
+            controls.calls[-3:],
+            [
+                {"action": "UI_Up", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Select", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Down", "repeat": 1, "hold_s": 0.0},
+            ],
+        )

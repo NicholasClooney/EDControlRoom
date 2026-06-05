@@ -34,6 +34,23 @@ class SupportsStationMenuControls(Protocol):
         """Dispatch the UI_Down action."""
 
 
+class SupportsDockingControls(SupportsStationMenuControls, SupportsSetSpeedZero, Protocol):
+    def focus_left_panel(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        """Dispatch the FocusLeftPanel action."""
+
+    def ui_back(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        """Dispatch the UI_Back action."""
+
+    def cycle_next_panel(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        """Dispatch the CycleNextPanel action."""
+
+    def cycle_previous_panel(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        """Dispatch the CyclePreviousPanel action."""
+
+    def ui_right(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        """Dispatch the UI_Right action."""
+
+
 @dataclass(frozen=True)
 class RoutineResult:
     action: str
@@ -191,6 +208,14 @@ def _is_in_supercruise_event(event: dict[str, object]) -> bool:
     return event.get("event") in {"SupercruiseEntry", "FSDJump"}
 
 
+def _is_supercruise_exit_event(event: dict[str, object]) -> bool:
+    return event.get("event") == "SupercruiseExit"
+
+
+def _is_docking_started_event(event: dict[str, object]) -> bool:
+    return event.get("event") in {"DockingRequested", "DockingGranted"}
+
+
 def station_refuel_menu(
     controls: SupportsStationMenuControls,
     watcher: SupportsPollEvents,
@@ -231,6 +256,147 @@ def station_refuel_menu(
         sleeper=sleeper,
         trigger_event=docked_event,
         pre_wait_s=settle_s,
+    )
+
+
+def dock(
+    controls: SupportsDockingControls,
+    watcher: SupportsPollEvents,
+    *,
+    wait_for_supercruise_exit: bool = True,
+    auto_refuel: bool = False,
+    max_retries: int = 3,
+    request_timeout_s: float = 20.0,
+    dock_timeout_s: float = 120.0,
+    settle_s: float = 2.0,
+    time_fn: Callable[[], float] = monotonic,
+    sleeper: Callable[[float], None] = sleep,
+) -> RoutineResult:
+    if max_retries < 1:
+        raise ValueError("max_retries must be at least 1")
+    if request_timeout_s < 0:
+        raise ValueError("request_timeout_s must be non-negative")
+    if dock_timeout_s < 0:
+        raise ValueError("dock_timeout_s must be non-negative")
+    if settle_s < 0:
+        raise ValueError("settle_s must be non-negative")
+
+    supercruise_exit_event: dict[str, object] | None = None
+    if wait_for_supercruise_exit:
+        supercruise_exit_event = _wait_for_event(
+            watcher,
+            predicate=_is_supercruise_exit_event,
+            deadline=time_fn() + dock_timeout_s,
+            time_fn=time_fn,
+        )
+        if supercruise_exit_event is None:
+            return RoutineResult(
+                action="SupercruiseExit",
+                dispatch=ActionDispatchResult(
+                    action="SupercruiseExit",
+                    status="error",
+                    reason="supercruise exit was not observed before timeout",
+                ),
+                details={"phase": "wait_for_supercruise_exit", "dock_timeout_s": dock_timeout_s},
+            )
+
+    # Prime the watcher offset before the first request so that journal events
+    # written during docking_request_sequence are not missed. Without this,
+    # the first poll() sets the offset to end-of-file *after* the sequence
+    # completes, skipping DockingRequested/DockingGranted silently.
+    # When wait_for_supercruise_exit=True the supercruise _wait_for_event loop
+    # already primed the offset; this call is then a fast no-op.
+    watcher.poll()
+
+    request_event: dict[str, object] | None = None
+    zero_dispatch: ActionDispatchResult | None = None
+    for attempt in range(1, max_retries + 1):
+        request_dispatch = docking_request_sequence(controls, sleeper=sleeper)
+        if request_dispatch.status != "ok":
+            return RoutineResult(
+                action=request_dispatch.action,
+                dispatch=request_dispatch,
+                trigger_event=supercruise_exit_event,
+                details={"phase": "dispatch", "attempt": attempt, "max_retries": max_retries},
+            )
+
+        request_event = _wait_for_event(
+            watcher,
+            predicate=_is_docking_started_event,
+            deadline=time_fn() + request_timeout_s,
+            time_fn=time_fn,
+        )
+        if request_event is None:
+            continue
+
+        zero_dispatch = controls.set_speed_zero(repeat=2)
+        break
+
+    if request_event is None:
+        return RoutineResult(
+            action="DockingRequested",
+            dispatch=ActionDispatchResult(
+                action="DockingRequested",
+                status="error",
+                reason="docking request/grant was not observed before retry budget was exhausted",
+            ),
+            trigger_event=supercruise_exit_event,
+            details={"phase": "wait_for_docking_request", "attempts": max_retries},
+        )
+
+    docked_event = _wait_for_event(
+        watcher,
+        predicate=_is_docked_event,
+        deadline=time_fn() + dock_timeout_s,
+        time_fn=time_fn,
+    )
+    if docked_event is None:
+        return RoutineResult(
+            action="Docked",
+            dispatch=ActionDispatchResult(
+                action="Docked",
+                status="error",
+                reason="docked event was not observed before timeout",
+            ),
+            trigger_event=request_event,
+            details={"phase": "wait_for_docked", "dock_timeout_s": dock_timeout_s},
+        )
+
+    details = {
+        "supercruise_exit_event": supercruise_exit_event,
+        "request_event": request_event,
+        "docked_event": docked_event,
+        "auto_refuel": auto_refuel,
+    }
+    if not auto_refuel:
+        assert zero_dispatch is not None
+        return RoutineResult(
+            action="SetSpeedZero",
+            dispatch=zero_dispatch,
+            trigger_event=docked_event,
+            details=details,
+        )
+
+    if settle_s > 0:
+        sleeper(settle_s)
+
+    refuel_result = station_refuel_menu_sequence(
+        controls,
+        settle_s=0.5,
+        sleeper=sleeper,
+        trigger_event=docked_event,
+        pre_wait_s=settle_s,
+    )
+    return RoutineResult(
+        action=refuel_result.action,
+        dispatch=refuel_result.dispatch,
+        wait_s=refuel_result.wait_s,
+        trigger_event=refuel_result.trigger_event,
+        details={
+            **details,
+            "followup_action": "station_refuel_menu",
+            "followup_details": refuel_result.details,
+        },
     )
 
 
@@ -282,6 +448,43 @@ def station_refuel_menu_sequence(
             ],
         },
     )
+
+
+def docking_request_sequence(
+    controls: SupportsDockingControls,
+    *,
+    step_delay_s: float = 0.1,
+    post_request_delay_s: float = 1.0,
+    sleeper: Callable[[float], None] = sleep,
+) -> ActionDispatchResult:
+    if step_delay_s < 0:
+        raise ValueError("step_delay_s must be non-negative")
+    if post_request_delay_s < 0:
+        raise ValueError("post_request_delay_s must be non-negative")
+
+    steps = [
+        lambda: controls.ui_back(repeat=10),
+        controls.focus_left_panel,
+        controls.cycle_next_panel,
+        controls.cycle_next_panel,
+        controls.ui_right,
+        controls.ui_select,
+        controls.cycle_previous_panel,
+        controls.cycle_previous_panel,
+        controls.ui_back,
+    ]
+    last_dispatch: ActionDispatchResult | None = None
+    for step in steps:
+        dispatch = step()
+        if dispatch.status != "ok":
+            return dispatch
+        last_dispatch = dispatch
+        if step_delay_s > 0:
+            sleeper(step_delay_s)
+    if post_request_delay_s > 0:
+        sleeper(post_request_delay_s)
+    assert last_dispatch is not None
+    return last_dispatch
 
 
 def _is_docked_event(event: dict[str, object]) -> bool:
