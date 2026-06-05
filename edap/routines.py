@@ -35,6 +35,9 @@ class SupportsStationMenuControls(Protocol):
 
 
 class SupportsDockingControls(SupportsStationMenuControls, SupportsSetSpeedZero, Protocol):
+    def boost(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        """Dispatch the BoostButton action."""
+
     def focus_left_panel(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
         """Dispatch the FocusLeftPanel action."""
 
@@ -49,6 +52,9 @@ class SupportsDockingControls(SupportsStationMenuControls, SupportsSetSpeedZero,
 
     def ui_right(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
         """Dispatch the UI_Right action."""
+
+    def ui_left(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        """Dispatch the UI_Left action."""
 
 
 @dataclass(frozen=True)
@@ -234,6 +240,10 @@ def _is_docking_started_event(event: dict[str, object]) -> bool:
     return event.get("event") in {"DockingRequested", "DockingGranted"}
 
 
+def _is_docking_response_event(event: dict[str, object]) -> bool:
+    return event.get("event") in {"DockingRequested", "DockingGranted", "DockingDenied"}
+
+
 def station_refuel_menu(
     controls: SupportsStationMenuControls,
     watcher: SupportsPollEvents,
@@ -294,6 +304,8 @@ def dock(
     dock_timeout_s: float = 120.0,
     settle_s: float = 2.0,
     step_delay_s: float = 0.3,
+    boost_settle_s: float = 3.0,
+    deny_retry_delay_s: float = 5.0,
     time_fn: Callable[[], float] = monotonic,
     sleeper: Callable[[float], None] = sleep,
     progress_fn: Callable[[str], None] | None = None,
@@ -308,6 +320,10 @@ def dock(
         raise ValueError("settle_s must be non-negative")
     if step_delay_s < 0:
         raise ValueError("step_delay_s must be non-negative")
+    if boost_settle_s < 0:
+        raise ValueError("boost_settle_s must be non-negative")
+    if deny_retry_delay_s < 0:
+        raise ValueError("deny_retry_delay_s must be non-negative")
 
     supercruise_exit_event: dict[str, object] | None = None
     if wait_for_supercruise_exit:
@@ -332,6 +348,11 @@ def dock(
         if progress_fn is not None:
             system = supercruise_exit_event.get("StarSystem", "")
             progress_fn(f"SupercruiseExit: {system}" if system else "SupercruiseExit")
+        if progress_fn is not None:
+            progress_fn("Boosting toward station...")
+        controls.boost()
+        if boost_settle_s > 0:
+            sleeper(boost_settle_s)
 
     # Prime the watcher offset before the first request so that journal events
     # written during docking_request_sequence are not missed. Without this,
@@ -357,17 +378,25 @@ def dock(
 
         if progress_fn is not None:
             progress_fn("Waiting for docking response...")
-        request_event = _wait_for_event(
+        response_event = _wait_for_event(
             watcher,
-            predicate=_is_docking_started_event,
+            predicate=_is_docking_response_event,
             deadline=time_fn() + request_timeout_s,
             time_fn=time_fn,
         )
-        if request_event is None:
+        if response_event is None:
             if progress_fn is not None:
                 progress_fn("No docking response, retrying...")
             continue
 
+        if response_event.get("event") == "DockingDenied":
+            if progress_fn is not None:
+                reason = response_event.get("Reason", "")
+                progress_fn(f"DockingDenied: {reason} -- retrying in {deny_retry_delay_s:.0f}s...")
+            sleeper(deny_retry_delay_s)
+            continue
+
+        request_event = response_event
         if progress_fn is not None:
             evt = request_event.get("event", "")
             station = request_event.get("StationName", "")
@@ -518,6 +547,7 @@ def docking_request_sequence(
         controls.cycle_next_panel,
         controls.ui_right,
         controls.ui_select,
+        controls.ui_left,
         controls.cycle_previous_panel,
         controls.cycle_previous_panel,
         controls.ui_back,

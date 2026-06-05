@@ -402,6 +402,7 @@ class RunRoutineCliTests(unittest.TestCase):
             loaded.config,
             actions=[
                 "SetSpeedZero",
+                "BoostButton",
                 "FocusLeftPanel",
                 "UI_Back",
                 "CycleNextPanel",
@@ -409,6 +410,7 @@ class RunRoutineCliTests(unittest.TestCase):
                 "UI_Up",
                 "UI_Right",
                 "UI_Select",
+                "UI_Left",
                 "UI_Down",
             ],
         )

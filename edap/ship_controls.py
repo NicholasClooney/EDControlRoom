@@ -200,5 +200,8 @@ class ShipControls:
     def head_look_reset(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
         return self.dispatch_action("HeadLookReset", repeat=repeat, hold_s=hold_s)
 
+    def boost(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
+        return self.dispatch_action("BoostButton", repeat=repeat, hold_s=hold_s)
+
     def hyper_super_combination(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
         return self.dispatch_action("HyperSuperCombination", repeat=repeat, hold_s=hold_s)

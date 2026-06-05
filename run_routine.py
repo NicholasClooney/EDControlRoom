@@ -104,6 +104,10 @@ class ProgressShipControls:
         self._log("SetSpeedZero", repeat)
         return self._controls.set_speed_zero(repeat=repeat, hold_s=hold_s)
 
+    def boost(self, repeat: int = 1, hold_s: float | None = None):
+        self._log("BoostButton", repeat)
+        return self._controls.boost(repeat=repeat, hold_s=hold_s)
+
     def hyper_super_combination(self, repeat: int = 1, hold_s: float | None = None):
         self._log("HyperSuperCombination", repeat)
         return self._controls.hyper_super_combination(repeat=repeat, hold_s=hold_s)
@@ -127,6 +131,10 @@ class ProgressShipControls:
     def ui_right(self, repeat: int = 1, hold_s: float | None = None):
         self._log("UI_Right", repeat)
         return self._controls.ui_right(repeat=repeat, hold_s=hold_s)
+
+    def ui_left(self, repeat: int = 1, hold_s: float | None = None):
+        self._log("UI_Left", repeat)
+        return self._controls.ui_left(repeat=repeat, hold_s=hold_s)
 
     def ui_up(self, repeat: int = 1, hold_s: float | None = None):
         self._log("UI_Up", repeat)
@@ -231,6 +239,18 @@ def main() -> int:
         help="After Docked, run the station refuel menu sequence automatically",
     )
     parser.add_argument(
+        "--boost-settle-seconds",
+        type=float,
+        default=3.0,
+        help="Seconds to wait after boost on SupercruiseExit before sending the dock request",
+    )
+    parser.add_argument(
+        "--deny-retry-delay-seconds",
+        type=float,
+        default=5.0,
+        help="Seconds to wait after DockingDenied before retrying the dock request",
+    )
+    parser.add_argument(
         "--log-events",
         action="store_true",
         help="Log all watched journal events to a file while the routine runs",
@@ -289,6 +309,12 @@ def main() -> int:
     if args.request_timeout_seconds < 0:
         sys.stderr.write("Invalid routine request: --request-timeout-seconds must be non-negative\n")
         return 2
+    if args.boost_settle_seconds < 0:
+        sys.stderr.write("Invalid routine request: --boost-settle-seconds must be non-negative\n")
+        return 2
+    if args.deny_retry_delay_seconds < 0:
+        sys.stderr.write("Invalid routine request: --deny-retry-delay-seconds must be non-negative\n")
+        return 2
 
     routine_actions = ["SetSpeedZero"]
     if args.routine == ROUTINE_JUMP:
@@ -296,6 +322,7 @@ def main() -> int:
     elif args.routine == ROUTINE_DOCK:
         routine_actions = [
             "SetSpeedZero",
+            "BoostButton",
             "FocusLeftPanel",
             "UI_Back",
             "CycleNextPanel",
@@ -303,6 +330,7 @@ def main() -> int:
             "UI_Up",
             "UI_Right",
             "UI_Select",
+            "UI_Left",
             "UI_Down",
         ]
     elif args.routine == ROUTINE_STATION_REFUEL_MENU:
@@ -386,6 +414,7 @@ def main() -> int:
         _progress(f"  {_describe_binding(runtime.binding_lookup, 'SetSpeedZero')}")
     elif args.routine == ROUTINE_DOCK:
         actions = [
+            "BoostButton",
             "FocusLeftPanel",
             "UI_Back",
             "CycleNextPanel",
@@ -393,6 +422,7 @@ def main() -> int:
             "UI_Up",
             "UI_Right",
             "UI_Select",
+            "UI_Left",
             "SetSpeedZero",
         ]
         if args.auto_refuel:
@@ -434,6 +464,8 @@ def main() -> int:
                 dock_timeout_s=args.dock_timeout_seconds,
                 settle_s=args.settle_seconds,
                 step_delay_s=step_delay_seconds,
+                boost_settle_s=args.boost_settle_seconds,
+                deny_retry_delay_s=args.deny_retry_delay_seconds,
                 sleeper=logging_sleeper,
                 progress_fn=_progress,
             )
