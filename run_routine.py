@@ -9,7 +9,7 @@ from time import sleep
 
 from edap.binding_lookup import BindingLookup
 from edap.config import ConfigError, DEFAULT_CONFIG_PATH
-from edap.routines import auto_zero_throttle_on_arrival, jump, station_refuel_menu
+from edap.routines import auto_zero_throttle_on_arrival, dock, jump, station_refuel_menu
 from edap.runtime import build_runtime_context, load_config_with_fallback
 from edap.ship_controls import ShipControls
 from edap.state import JournalWatcher
@@ -17,8 +17,9 @@ from edap.state import JournalWatcher
 
 ROUTINE_AUTO_ZERO_THROTTLE_ON_ARRIVAL = "auto_zero_throttle_on_arrival"
 ROUTINE_JUMP = "jump"
+ROUTINE_DOCK = "dock"
 ROUTINE_STATION_REFUEL_MENU = "station_refuel_menu"
-SUPPORTED_ROUTINES = [ROUTINE_AUTO_ZERO_THROTTLE_ON_ARRIVAL, ROUTINE_JUMP, ROUTINE_STATION_REFUEL_MENU]
+SUPPORTED_ROUTINES = [ROUTINE_AUTO_ZERO_THROTTLE_ON_ARRIVAL, ROUTINE_JUMP, ROUTINE_DOCK, ROUTINE_STATION_REFUEL_MENU]
 DEFAULT_EVENT_LOG_PATH = Path("artifacts/run-routine-events.log")
 
 
@@ -148,6 +149,22 @@ def main() -> int:
         help="Maximum time to wait for a Docked event for station routines",
     )
     parser.add_argument(
+        "--request-timeout-seconds",
+        type=float,
+        default=20.0,
+        help="Maximum time to wait for a docking request or grant after sending the dock menu sequence",
+    )
+    parser.add_argument(
+        "--skip-supercruise-exit",
+        action="store_true",
+        help="Start the dock routine immediately instead of waiting for SupercruiseExit first",
+    )
+    parser.add_argument(
+        "--auto-refuel",
+        action="store_true",
+        help="After Docked, run the station refuel menu sequence automatically",
+    )
+    parser.add_argument(
         "--log-events",
         action="store_true",
         help="Log all watched journal events to a file while the routine runs",
@@ -189,10 +206,25 @@ def main() -> int:
     if args.dock_timeout_seconds < 0:
         sys.stderr.write("Invalid routine request: --dock-timeout-seconds must be non-negative\n")
         return 2
+    if args.request_timeout_seconds < 0:
+        sys.stderr.write("Invalid routine request: --request-timeout-seconds must be non-negative\n")
+        return 2
 
     routine_actions = ["SetSpeedZero"]
     if args.routine == ROUTINE_JUMP:
         routine_actions = ["SetSpeedZero", "HyperSuperCombination"]
+    elif args.routine == ROUTINE_DOCK:
+        routine_actions = [
+            "SetSpeedZero",
+            "FocusLeftPanel",
+            "UI_Back",
+            "CycleNextPanel",
+            "CyclePreviousPanel",
+            "UI_Up",
+            "UI_Right",
+            "UI_Select",
+            "UI_Down",
+        ]
     elif args.routine == ROUTINE_STATION_REFUEL_MENU:
         routine_actions = ["UI_Up", "UI_Select", "UI_Down"]
 
@@ -202,6 +234,7 @@ def main() -> int:
     routine_needs_journal = args.routine in {
         ROUTINE_AUTO_ZERO_THROTTLE_ON_ARRIVAL,
         ROUTINE_JUMP,
+        ROUTINE_DOCK,
         ROUTINE_STATION_REFUEL_MENU,
     }
     if routine_needs_journal and journal_dir is None:
@@ -253,6 +286,8 @@ def main() -> int:
         watch_target = "SupercruiseExit events"
         if args.routine == ROUTINE_JUMP:
             watch_target = "hyperspace jump events"
+        elif args.routine == ROUTINE_DOCK:
+            watch_target = "approach and docking events"
         elif args.routine == ROUTINE_STATION_REFUEL_MENU:
             watch_target = "Docked events"
         _progress(
@@ -261,15 +296,31 @@ def main() -> int:
         )
         if args.log_events:
             _progress(f"Logging raw journal events to {args.event_log_path}")
+    _progress("Bindings:")
     if args.routine == ROUTINE_AUTO_ZERO_THROTTLE_ON_ARRIVAL:
-        _progress(f"Dispatch binding: {_describe_binding(runtime.binding_lookup, 'SetSpeedZero')}")
+        _progress(f"  {_describe_binding(runtime.binding_lookup, 'SetSpeedZero')}")
     elif args.routine == ROUTINE_JUMP:
-        _progress(f"Dispatch binding: {_describe_binding(runtime.binding_lookup, 'HyperSuperCombination')}")
-        _progress(f"Follow-up binding: {_describe_binding(runtime.binding_lookup, 'SetSpeedZero')}")
+        _progress(f"  {_describe_binding(runtime.binding_lookup, 'HyperSuperCombination')}")
+        _progress(f"  {_describe_binding(runtime.binding_lookup, 'SetSpeedZero')}")
+    elif args.routine == ROUTINE_DOCK:
+        actions = [
+            "FocusLeftPanel",
+            "UI_Back",
+            "CycleNextPanel",
+            "CyclePreviousPanel",
+            "UI_Up",
+            "UI_Right",
+            "UI_Select",
+            "SetSpeedZero",
+        ]
+        if args.auto_refuel:
+            actions.append("UI_Down")
+        for action in actions:
+            _progress(f"  {_describe_binding(runtime.binding_lookup, action)}")
     elif args.routine == ROUTINE_STATION_REFUEL_MENU:
-        _progress(f"Dispatch binding: {_describe_binding(runtime.binding_lookup, 'UI_Up')}")
-        _progress(f"Dispatch binding: {_describe_binding(runtime.binding_lookup, 'UI_Select')}")
-        _progress(f"Dispatch binding: {_describe_binding(runtime.binding_lookup, 'UI_Down')}")
+        _progress(f"  {_describe_binding(runtime.binding_lookup, 'UI_Up')}")
+        _progress(f"  {_describe_binding(runtime.binding_lookup, 'UI_Select')}")
+        _progress(f"  {_describe_binding(runtime.binding_lookup, 'UI_Down')}")
 
     try:
         if args.routine == ROUTINE_AUTO_ZERO_THROTTLE_ON_ARRIVAL:
@@ -287,6 +338,17 @@ def main() -> int:
                 jump_hold_s=args.hold_seconds if args.hold_seconds > 0 else 1.0,
                 start_timeout_s=args.start_timeout_seconds,
                 completion_timeout_s=args.completion_timeout_seconds,
+            )
+        elif args.routine == ROUTINE_DOCK:
+            result = dock(
+                controls,
+                watcher,
+                wait_for_supercruise_exit=not args.skip_supercruise_exit,
+                auto_refuel=args.auto_refuel,
+                max_retries=args.max_retries,
+                request_timeout_s=args.request_timeout_seconds,
+                dock_timeout_s=args.dock_timeout_seconds,
+                settle_s=args.settle_seconds,
             )
         elif args.routine == ROUTINE_STATION_REFUEL_MENU:
             result = station_refuel_menu(
@@ -319,6 +381,9 @@ def main() -> int:
         "poll_interval_s": args.poll_interval_seconds,
         "settle_s": args.settle_seconds,
         "dock_timeout_s": args.dock_timeout_seconds,
+        "request_timeout_s": args.request_timeout_seconds,
+        "skip_supercruise_exit": args.skip_supercruise_exit,
+        "auto_refuel": args.auto_refuel,
         "event_log_path": args.event_log_path if args.log_events and routine_needs_journal else None,
         "result": {
             "action": result.action,

@@ -45,6 +45,38 @@ class _FakeControls:
 
         return _Result(self._result_payload)
 
+    def focus_left_panel(self, repeat: int = 1, hold_s: float = 0.0):
+        self.calls.append({"action": "FocusLeftPanel", "repeat": repeat, "hold_s": hold_s})
+        return self.set_speed_zero(repeat=repeat, hold_s=hold_s)
+
+    def ui_back(self, repeat: int = 1, hold_s: float = 0.0):
+        self.calls.append({"action": "UI_Back", "repeat": repeat, "hold_s": hold_s})
+        return self.set_speed_zero(repeat=repeat, hold_s=hold_s)
+
+    def cycle_next_panel(self, repeat: int = 1, hold_s: float = 0.0):
+        self.calls.append({"action": "CycleNextPanel", "repeat": repeat, "hold_s": hold_s})
+        return self.set_speed_zero(repeat=repeat, hold_s=hold_s)
+
+    def cycle_previous_panel(self, repeat: int = 1, hold_s: float = 0.0):
+        self.calls.append({"action": "CyclePreviousPanel", "repeat": repeat, "hold_s": hold_s})
+        return self.set_speed_zero(repeat=repeat, hold_s=hold_s)
+
+    def ui_up(self, repeat: int = 1, hold_s: float = 0.0):
+        self.calls.append({"action": "UI_Up", "repeat": repeat, "hold_s": hold_s})
+        return self.set_speed_zero(repeat=repeat, hold_s=hold_s)
+
+    def ui_right(self, repeat: int = 1, hold_s: float = 0.0):
+        self.calls.append({"action": "UI_Right", "repeat": repeat, "hold_s": hold_s})
+        return self.set_speed_zero(repeat=repeat, hold_s=hold_s)
+
+    def ui_select(self, repeat: int = 1, hold_s: float = 0.0):
+        self.calls.append({"action": "UI_Select", "repeat": repeat, "hold_s": hold_s})
+        return self.set_speed_zero(repeat=repeat, hold_s=hold_s)
+
+    def ui_down(self, repeat: int = 1, hold_s: float = 0.0):
+        self.calls.append({"action": "UI_Down", "repeat": repeat, "hold_s": hold_s})
+        return self.set_speed_zero(repeat=repeat, hold_s=hold_s)
+
 
 class RunRoutineCliTests(unittest.TestCase):
     def test_main_runs_auto_zero_routine_and_emits_json(self) -> None:
@@ -119,7 +151,7 @@ class RunRoutineCliTests(unittest.TestCase):
         self.assertEqual(payload["bindings_source"], "auto_detected")
         self.assertEqual(payload["result"]["trigger_event"]["event"], "SupercruiseExit")
         self.assertIn("Watching /tmp/Journal for SupercruiseExit events", stderr.getvalue())
-        self.assertIn("Dispatch binding: SetSpeedZero -> x", stderr.getvalue())
+        self.assertIn("  SetSpeedZero -> x", stderr.getvalue())
         self.assertIsNone(payload["event_log_path"])
 
     def test_main_runs_jump_routine_and_emits_json(self) -> None:
@@ -196,8 +228,8 @@ class RunRoutineCliTests(unittest.TestCase):
         self.assertEqual(payload["routine"], "jump")
         self.assertEqual(payload["result"]["trigger_event"]["event"], "FSDJump")
         self.assertEqual(payload["result"]["details"]["followup_action"], "SetSpeedZero")
-        self.assertIn("Dispatch binding: HyperSuperCombination -> left_shift+j", stderr.getvalue())
-        self.assertIn("Follow-up binding: SetSpeedZero -> x", stderr.getvalue())
+        self.assertIn("  HyperSuperCombination -> left_shift+j", stderr.getvalue())
+        self.assertIn("  SetSpeedZero -> x", stderr.getvalue())
         self.assertIsNone(payload["event_log_path"])
 
     def test_main_runs_station_refuel_menu_routine_and_emits_json(self) -> None:
@@ -273,10 +305,123 @@ class RunRoutineCliTests(unittest.TestCase):
         payload = json.loads(stdout.getvalue())
         self.assertEqual(payload["routine"], "station_refuel_menu")
         self.assertEqual(payload["journal_dir"], "/tmp/Journal")
-        self.assertIn("Dispatch binding: UI_Up -> up", stderr.getvalue())
-        self.assertIn("Dispatch binding: UI_Select -> space", stderr.getvalue())
-        self.assertIn("Dispatch binding: UI_Down -> down", stderr.getvalue())
+        self.assertIn("  UI_Up -> up", stderr.getvalue())
+        self.assertIn("  UI_Select -> space", stderr.getvalue())
+        self.assertIn("  UI_Down -> down", stderr.getvalue())
         self.assertIn("Watching /tmp/Journal for Docked events", stderr.getvalue())
+
+    def test_main_runs_dock_routine_and_emits_json(self) -> None:
+        fake_controls = _FakeControls({"action": "SetSpeedZero", "status": "ok"})
+        loaded = LoadedConfig(
+            config=load_config("config.example.toml"),
+            config_path="config.example.toml",
+            used_example_config_fallback=True,
+        )
+        runtime = type(
+            "_Runtime",
+            (),
+            {
+                "journal": type(
+                    "_Journal",
+                    (),
+                    {
+                        "effective_path": Path("/tmp/Journal"),
+                        "cli_source_status": staticmethod(lambda: "auto_detected"),
+                    },
+                )(),
+                "bindings": type(
+                    "_Bindings",
+                    (),
+                    {
+                        "effective_path": Path("/tmp/Custom.binds"),
+                        "cli_source_status": staticmethod(lambda: "auto_detected"),
+                    },
+                )(),
+                "input_controller": object(),
+                "binding_lookup": build_binding_lookup(
+                    bindings={
+                        "SetSpeedZero": Binding(key="X"),
+                        "FocusLeftPanel": Binding(key="1"),
+                        "UI_Back": Binding(key="Backspace"),
+                        "CycleNextPanel": Binding(key="E"),
+                        "CyclePreviousPanel": Binding(key="Q"),
+                        "UI_Up": Binding(key="UpArrow"),
+                        "UI_Right": Binding(key="RightArrow"),
+                        "UI_Select": Binding(key="Space"),
+                        "UI_Down": Binding(key="DownArrow"),
+                    },
+                    actions=[
+                        "SetSpeedZero",
+                        "FocusLeftPanel",
+                        "UI_Back",
+                        "CycleNextPanel",
+                        "CyclePreviousPanel",
+                        "UI_Up",
+                        "UI_Right",
+                        "UI_Select",
+                        "UI_Down",
+                    ],
+                ),
+            },
+        )()
+        fake_result = type(
+            "_RoutineResult",
+            (),
+            {
+                "action": "UI_Down",
+                "dispatch": fake_controls.set_speed_zero(),
+                "wait_s": 3.0,
+                "trigger_event": {"event": "Docked"},
+                "details": {"auto_refuel": True, "followup_action": "station_refuel_menu"},
+            },
+        )()
+
+        with patch("run_routine.load_config_with_fallback", return_value=loaded), patch(
+            "run_routine.build_runtime_context",
+            return_value=runtime,
+        ) as build_runtime_context_mock, patch(
+            "run_routine.ShipControls.from_binding_lookup",
+            return_value=fake_controls,
+        ), patch(
+            "run_routine.JournalWatcher",
+            return_value=type("_Watcher", (), {"watch": lambda self: iter(()), "poll": lambda self: []})(),
+        ), patch(
+            "run_routine.dock",
+            return_value=fake_result,
+        ) as dock_mock, patch("sys.stdout", new_callable=io.StringIO) as stdout, patch(
+            "sys.stderr", new_callable=io.StringIO
+        ) as stderr:
+            with patch(
+                "sys.argv",
+                ["run_routine.py", "--routine", "dock", "--skip-supercruise-exit", "--auto-refuel"],
+            ):
+                exit_code = run_routine.main()
+
+        self.assertEqual(exit_code, 0)
+        build_runtime_context_mock.assert_called_once_with(
+            loaded.config,
+            actions=[
+                "SetSpeedZero",
+                "FocusLeftPanel",
+                "UI_Back",
+                "CycleNextPanel",
+                "CyclePreviousPanel",
+                "UI_Up",
+                "UI_Right",
+                "UI_Select",
+                "UI_Down",
+            ],
+        )
+        dock_mock.assert_called_once()
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(payload["routine"], "dock")
+        self.assertEqual(payload["skip_supercruise_exit"], True)
+        self.assertEqual(payload["auto_refuel"], True)
+        self.assertEqual(payload["result"]["details"]["followup_action"], "station_refuel_menu")
+        self.assertIn("Watching /tmp/Journal for approach and docking events", stderr.getvalue())
+        self.assertIn("  FocusLeftPanel -> 1", stderr.getvalue())
+        self.assertIn("  CyclePreviousPanel -> q", stderr.getvalue())
+        self.assertIn("  UI_Down -> down", stderr.getvalue())
 
     def test_main_can_log_events_to_file(self) -> None:
         fake_controls = _FakeControls({"action": "SetSpeedZero", "status": "ok"})
