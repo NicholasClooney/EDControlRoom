@@ -60,7 +60,7 @@ The important caveat is that the real autopilot loop is still largely unported. 
 | Hotkey registration | Parked | `keyboard` lib doesn't work on macOS; likely future direction is a menu-bar app |
 | Legacy autopilot loop migration | Not ported | `dev_autopilot.py` remains the behavior reference; new `edap/` routines are still minimal |
 | Market data reading | Done | `scratch_market.py` — reads `Market.json` from journal dir, mirrors in-game layout (alphabetical categories, alphabetical items within each); `--raw` flat table with sort options |
-| Market buy/sell routine | Done (not live-validated) | `edap/routines.py` — `market_buy` / `market_sell` wired to `run_routine.py` with `--target` / `--amount` / `--step-delay-seconds`; all 3 open questions answered; station guard cross-references Market.json MarketID against last Docked journal event (3 retries, 10s apart); awaiting first live test run |
+| Market buy/sell routine | Done (not live-validated) | `edap/routines.py` — `market_buy` / `market_sell` wired to `run_routine.py`; sell list filtered by `DemandBracket > 0` (matches game); sell skips quantity input (game pre-fills full cargo); `UI_Back x2` after trade to return to station menu; station guard with `--skip-station-check` bypass; `--target` / `--amount` / `--step-delay-seconds` flags |
 
 ## Unverified on macOS / CrossOver
 
@@ -97,7 +97,7 @@ These are not scheduled yet but worth capturing for planning.
 
 - Next task in 0003: `undock` is live-validated. `refuel` is the only remaining routine; it remains intentionally deferred.
 - `refuel` is intentionally deferred for now.
-- Next task for 0005: live-validate `market_buy` and `market_sell` with `--step-delay-seconds 2` (slow run) to confirm UI path and navigation counts. First test: `--routine market_buy --target Aluminium --amount MAX --step-delay-seconds 2 --delay-seconds 5`.
+- Next task for 0005: live-validate `market_buy` and `market_sell`. Navigation count bug fixed (sell list was using `Demand > 0`; corrected to `DemandBracket > 0`). First full test: `--routine market_sell --target Aluminium --amount MAX --step-delay-seconds 1 --delay-seconds 5`.
 - Next task in 0002: re-bake `templates/compass.png` from a live capture. Run `uv run python3 scratch_cv.py --config config.toml --save-raw /tmp/cv-raw.png`, then crop the compass from the raw frame.
 - Destination template needs a supercruise test before deciding whether it also needs re-baking.
 - Then: use plan 0004 to measure capture-loop performance and journal latency.
