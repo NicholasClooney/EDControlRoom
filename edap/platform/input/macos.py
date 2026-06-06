@@ -158,12 +158,22 @@ class MacOSInputController(InputController):
 
     def type_text(self, text: str, char_delay_s: float = 0.05) -> None:
         _SPECIAL: dict[str, str] = {"\n": "enter", "\r": "return", "\t": "tab", "\x1b": "esc"}
+        # Characters that are the shifted variant of a base key.
+        _SHIFTED: dict[str, str] = {
+            "!": "1", "@": "2", "#": "3", "$": "4", "%": "5",
+            "^": "6", "&": "7", "*": "8", "(": "9", ")": "0",
+            "_": "-", "+": "=", "{": "[", "}": "]", "|": "\\",
+            ":": ";", '"': "'", "<": ",", ">": ".", "?": "/", "~": "`",
+        }
         for char in text:
             if char in _SPECIAL:
                 self.tap_key(_SPECIAL[char])
-            else:
-                self._poster(0, True, 0, char)
-                self._poster(0, False, 0, char)
+            elif char == " ":
+                self.tap_key("space")
+            elif char.lower() in KEY_CODES:
+                self.tap_key(char.lower(), modifier="left_shift" if char.isupper() else None)
+            elif char in _SHIFTED:
+                self.tap_key(_SHIFTED[char], modifier="left_shift")
             if char_delay_s > 0:
                 self._sleeper(char_delay_s)
 
