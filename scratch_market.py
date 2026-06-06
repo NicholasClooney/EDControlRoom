@@ -53,25 +53,29 @@ def _ingame_display(items: list[dict], filter_term: str | None) -> None:
         if demand > 0:
             sell_groups.setdefault(category, []).append((name, demand, item.get("SellPrice", 0)))
 
-    all_names = [n for grp in (buy_groups, sell_groups) for items in grp.values() for n, _, _ in items]
+    all_names = [n for grp in (buy_groups, sell_groups) for it in grp.values() for n, _, _ in it]
     col = max((len(n) for n in all_names), default=10)
     col = max(col, 10)
 
-    def _section(title: str, groups: dict, value_hdr: str, price_hdr: str) -> None:
-        print(title)
-        print(f"  {'GOODS':<{col}}  {value_hdr:>10}  {price_hdr:>10}")
-        print(f"  {'─' * (col + 26)}")
+    def _render(title: str, groups: dict, value_hdr: str, price_hdr: str) -> list[str]:
+        lines = [title, f"  {'GOODS':<{col}}  {value_hdr:>10}  {price_hdr:>10}", f"  {'─' * (col + 26)}"]
         if not groups:
-            print("  (none)")
+            lines.append("  (none)")
         else:
             for cat in sorted(groups):
-                print(f"  {cat}")
+                lines.append(f"  {cat}")
                 for name, value, price in sorted(groups[cat], key=lambda r: r[0].lower()):
-                    print(f"    {name:<{col}}  {value:>10,}  {price:>8,} CR")
-        print()
+                    lines.append(f"    {name:<{col}}  {value:>10,}  {price:>8,} CR")
+        return lines
 
-    _section("BUY FROM MARKET", buy_groups, "SUPPLY", "BUY")
-    _section("SELL TO MARKET", sell_groups, "DEMAND", "SELL")
+    buy_lines = _render("BUY FROM MARKET", buy_groups, "SUPPLY", "BUY")
+    sell_lines = _render("SELL TO MARKET", sell_groups, "DEMAND", "SELL")
+
+    left_w = max((len(l) for l in buy_lines), default=0)
+    for i in range(max(len(buy_lines), len(sell_lines))):
+        left = buy_lines[i] if i < len(buy_lines) else ""
+        right = sell_lines[i] if i < len(sell_lines) else ""
+        print(f"{left:<{left_w}}  │  {right}")
 
 
 def _raw_display(items: list[dict], filter_term: str | None, sort: str | None) -> None:
