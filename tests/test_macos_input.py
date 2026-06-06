@@ -127,3 +127,54 @@ class MacOSInputControllerTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             controller.tap_key("a", modifier="weird")
+
+    def test_type_text_uses_real_keycodes(self) -> None:
+        controller, backend = _build()
+
+        controller.type_text("Sol", char_delay_s=0.0)
+
+        shift_flags = MODIFIER_FLAGS["shift"]
+        shift_code = KEY_CODES["left_shift"]
+        s_code = KEY_CODES["s"]
+        o_code = KEY_CODES["o"]
+        l_code = KEY_CODES["l"]
+        self.assertEqual(
+            backend.events,
+            [
+                # "S" — shift + s
+                ("down", shift_code, shift_flags, None),
+                ("down", s_code, shift_flags, "s"),
+                ("up", s_code, shift_flags, "s"),
+                ("up", shift_code, 0, None),
+                # "o"
+                ("down", o_code, 0, "o"),
+                ("up", o_code, 0, "o"),
+                # "l"
+                ("down", l_code, 0, "l"),
+                ("up", l_code, 0, "l"),
+            ],
+        )
+
+    def test_type_text_space_and_digit(self) -> None:
+        controller, backend = _build()
+
+        controller.type_text("A 1", char_delay_s=0.0)
+
+        shift_flags = MODIFIER_FLAGS["shift"]
+        shift_code = KEY_CODES["left_shift"]
+        self.assertEqual(
+            backend.events,
+            [
+                # "A" — shift + a
+                ("down", shift_code, shift_flags, None),
+                ("down", KEY_CODES["a"], shift_flags, "a"),
+                ("up", KEY_CODES["a"], shift_flags, "a"),
+                ("up", shift_code, 0, None),
+                # " "
+                ("down", KEY_CODES["space"], 0, None),
+                ("up", KEY_CODES["space"], 0, None),
+                # "1"
+                ("down", KEY_CODES["1"], 0, "1"),
+                ("up", KEY_CODES["1"], 0, "1"),
+            ],
+        )
