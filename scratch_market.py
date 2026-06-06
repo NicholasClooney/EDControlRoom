@@ -2,24 +2,25 @@
 Market.json probe for Elite Dangerous macOS + CrossOver.
 
 Reads the Market.json file Elite writes to the journal directory whenever
-the player opens the commodities market screen in-game. Displays a formatted
-table of all commodities with buy/sell prices, stock, and demand.
+the player opens the commodities market screen in-game.
+
+Default display mirrors the in-game layout: BUY section (items with stock)
+then SELL section (items with demand), each grouped by category alphabetically
+with items sorted alphabetically within each category.
 
 Open the market screen in-game first, then run this.
 
 Usage:
     uv run python3 scratch_market.py --config config.toml
     uv run python3 scratch_market.py --config config.toml --filter gold
-    uv run python3 scratch_market.py --config config.toml --sort buy
-    uv run python3 scratch_market.py --config config.toml --sort alphabetical
-    uv run python3 scratch_market.py --config config.toml --in-stock
+    uv run python3 scratch_market.py --config config.toml --raw
+    uv run python3 scratch_market.py --config config.toml --raw --sort sell
 """
 from __future__ import annotations
 
 import argparse
 import json
 import sys
-from pathlib import Path
 
 from edap.runtime import build_runtime_context, load_config_with_fallback
 
@@ -34,18 +35,105 @@ def _localised(item: dict, key: str) -> str:
     return item.get(f"{key}_Localised") or item.get(key, "")
 
 
+def _ingame_display(items: list[dict], filter_term: str | None) -> None:
+    term = filter_term.lower() if filter_term else None
+
+    buy_groups: dict[str, list[tuple[str, int, int]]] = {}
+    sell_groups: dict[str, list[tuple[str, int, int]]] = {}
+
+    for item in items:
+        name = _localised(item, "Name")
+        category = _localised(item, "Category")
+        if term and term not in name.lower() and term not in category.lower():
+            continue
+        stock = item.get("Stock", 0)
+        demand = item.get("Demand", 0)
+        if stock > 0:
+            buy_groups.setdefault(category, []).append((name, stock, item.get("BuyPrice", 0)))
+        if demand > 0:
+            sell_groups.setdefault(category, []).append((name, demand, item.get("SellPrice", 0)))
+
+    all_names = [n for grp in (buy_groups, sell_groups) for items in grp.values() for n, _, _ in items]
+    col = max((len(n) for n in all_names), default=10)
+    col = max(col, 10)
+
+    def _section(title: str, groups: dict, value_hdr: str, price_hdr: str) -> None:
+        print(title)
+        print(f"  {'GOODS':<{col}}  {value_hdr:>10}  {price_hdr:>10}")
+        print(f"  {'─' * (col + 26)}")
+        if not groups:
+            print("  (none)")
+        else:
+            for cat in sorted(groups):
+                print(f"  {cat}")
+                for name, value, price in sorted(groups[cat], key=lambda r: r[0].lower()):
+                    print(f"    {name:<{col}}  {value:>10,}  {price:>8,} CR")
+        print()
+
+    _section("BUY FROM MARKET", buy_groups, "SUPPLY", "BUY")
+    _section("SELL TO MARKET", sell_groups, "DEMAND", "SELL")
+
+
+def _raw_display(items: list[dict], filter_term: str | None, sort: str | None) -> None:
+    term = filter_term.lower() if filter_term else None
+    rows = []
+    for item in items:
+        name = _localised(item, "Name")
+        category = _localised(item, "Category")
+        if term and term not in name.lower() and term not in category.lower():
+            continue
+        rows.append((
+            name, category,
+            item.get("BuyPrice", 0), item.get("SellPrice", 0),
+            item.get("Stock", 0), item.get("StockBracket", 0),
+            item.get("Demand", 0), item.get("DemandBracket", 0),
+        ))
+
+    if sort is not None:
+        key = {
+            "alphabetical": lambda r: r[0].lower(),
+            "category": lambda r: (r[1].lower(), r[0].lower()),
+            "buy": lambda r: (-r[2], r[0].lower()),
+            "sell": lambda r: (-r[3], r[0].lower()),
+            "stock": lambda r: (-r[4], r[0].lower()),
+            "demand": lambda r: (-r[6], r[0].lower()),
+        }[sort]
+        rows.sort(key=key)
+
+    if not rows:
+        print("No items match.")
+        return
+
+    col_name = max((len(r[0]) for r in rows), default=10)
+    col_cat = max((len(r[1]) for r in rows), default=8)
+    col_name = max(col_name, 10)
+    col_cat = max(col_cat, 8)
+
+    hdr = (
+        f"{'Commodity':<{col_name}}  {'Category':<{col_cat}}"
+        f"  {'Buy':>8}  {'Sell':>8}  {'Stock':>8}  {'Stk':>4}  {'Demand':>8}  {'Dem':>4}"
+    )
+    print(hdr)
+    print("-" * len(hdr))
+    for name, cat, buy, sell, stock, sb, demand, db in rows:
+        print(
+            f"{name:<{col_name}}  {cat:<{col_cat}}"
+            f"  {buy:>8,}  {sell:>8,}  {stock:>8,}  {_bracket(sb):>4}  {demand:>8,}  {_bracket(db):>4}"
+        )
+    print(f"\n{len(rows)} item(s)")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Read and display Market.json from the ED journal directory")
     parser.add_argument("--config", default="config.toml")
-    parser.add_argument("--filter", metavar="TERM", help="case-insensitive substring filter on commodity name")
+    parser.add_argument("--filter", metavar="TERM", help="case-insensitive substring filter on name or category")
+    parser.add_argument("--raw", action="store_true", help="flat table of all items instead of in-game layout")
     parser.add_argument(
         "--sort",
-        choices=["alphabetical", "buy", "sell", "stock", "demand", "category"],
+        choices=["alphabetical", "category", "buy", "sell", "stock", "demand"],
         default=None,
-        help="sort column (default: Market.json order)",
+        help="sort for --raw mode (default: Market.json order)",
     )
-    parser.add_argument("--in-stock", action="store_true", help="only show items with stock > 0")
-    parser.add_argument("--wanted", action="store_true", help="only show items with demand > 0")
     args = parser.parse_args()
 
     loaded = load_config_with_fallback(args.config)
@@ -81,66 +169,10 @@ def main() -> None:
     print(f"Items:     {len(items)}")
     print()
 
-    term = args.filter.lower() if args.filter else None
-    rows = []
-    for item in items:
-        name = _localised(item, "Name")
-        category = _localised(item, "Category")
-        buy = item.get("BuyPrice", 0)
-        sell = item.get("SellPrice", 0)
-        stock = item.get("Stock", 0)
-        stock_bracket = item.get("StockBracket", 0)
-        demand = item.get("Demand", 0)
-        demand_bracket = item.get("DemandBracket", 0)
-
-        if term and term not in name.lower() and term not in category.lower():
-            continue
-        if args.in_stock and stock == 0:
-            continue
-        if args.wanted and demand == 0:
-            continue
-
-        rows.append((name, category, buy, sell, stock, stock_bracket, demand, demand_bracket))
-
-    if args.sort is not None:
-        sort_key = {
-            "alphabetical": lambda r: r[0].lower(),
-            "category": lambda r: (r[1].lower(), r[0].lower()),
-            "buy": lambda r: (-r[2], r[0].lower()),
-            "sell": lambda r: (-r[3], r[0].lower()),
-            "stock": lambda r: (-r[4], r[0].lower()),
-            "demand": lambda r: (-r[6], r[0].lower()),
-        }[args.sort]
-        rows.sort(key=sort_key)
-
-    if not rows:
-        print("No items match the current filters.")
-        return
-
-    col_name = max(len(r[0]) for r in rows)
-    col_cat = max(len(r[1]) for r in rows)
-    col_name = max(col_name, 10)
-    col_cat = max(col_cat, 8)
-
-    header = (
-        f"{'Commodity':<{col_name}}  {'Category':<{col_cat}}"
-        f"  {'Buy':>8}  {'Sell':>8}  {'Stock':>8}  {'Stk':>4}  {'Demand':>8}  {'Dem':>4}"
-    )
-    print(header)
-    print("-" * len(header))
-
-    for name, category, buy, sell, stock, sb, demand, db in rows:
-        buy_s = f"{buy:,}" if buy > 0 else "-"
-        sell_s = f"{sell:,}" if sell > 0 else "-"
-        stock_s = f"{stock:,}" if stock > 0 else "-"
-        demand_s = f"{demand:,}" if demand > 0 else "-"
-        print(
-            f"{name:<{col_name}}  {category:<{col_cat}}"
-            f"  {buy_s:>8}  {sell_s:>8}  {stock_s:>8}  {_bracket(sb):>4}  {demand_s:>8}  {_bracket(db):>4}"
-        )
-
-    print()
-    print(f"{len(rows)} item(s) shown")
+    if args.raw:
+        _raw_display(items, args.filter, args.sort)
+    else:
+        _ingame_display(items, args.filter)
 
 
 if __name__ == "__main__":
