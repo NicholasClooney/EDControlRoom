@@ -7,6 +7,7 @@ from typing import Callable
 
 from edap.routines._base import RoutineResult, SupportsHaulControls, SupportsPollEvents
 from edap.routines.docking import dock, undock
+from edap.routines.galaxy_map import set_gal_map_destination
 from edap.routines.market import market_buy, market_sell
 
 
@@ -37,6 +38,8 @@ def haul_loop(
     commodity: str,
     sell_station: str = "",
     buy_station: str = "",
+    sell_system: str = "",
+    buy_system: str = "",
     iterations: int = 0,
     step_delay_s: float = 1.0,
     max_hold_s: float = 10.0,
@@ -119,6 +122,17 @@ def haul_loop(
                 progress_fn(f"Undock from sell station failed: {result.dispatch.reason}")
             return result
 
+        if buy_system:
+            if progress_fn is not None:
+                progress_fn(f"Setting galaxy map destination: {buy_system}...")
+            set_gal_map_destination(
+                controls,
+                destination=buy_system,
+                journal_dir=journal_dir,
+                step_delay_s=step_delay_s,
+                progress_fn=progress_fn,
+            )
+
         # Phase 3: wait for supercruise exit + dock at buy station
         if progress_fn is not None:
             progress_fn(f"Waiting for drop near buy station{buy_label}...")
@@ -180,6 +194,17 @@ def haul_loop(
             if progress_fn is not None:
                 progress_fn(f"Undock from buy station failed: {result.dispatch.reason}")
             return result
+
+        if sell_system:
+            if progress_fn is not None:
+                progress_fn(f"Setting galaxy map destination: {sell_system}...")
+            set_gal_map_destination(
+                controls,
+                destination=sell_system,
+                journal_dir=journal_dir,
+                step_delay_s=step_delay_s,
+                progress_fn=progress_fn,
+            )
 
         # Phase 6: wait for supercruise exit + dock at sell station + auto-refuel
         if progress_fn is not None:

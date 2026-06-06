@@ -716,7 +716,7 @@ class ControlRoomApp(App[None]):
         if not self._check_routine_ready():
             return
         commodity = rest.strip()
-        self._haul_params = {"commodity": commodity, "buy_station": "", "sell_station": ""}
+        self._haul_params = {"commodity": commodity, "buy_station": "", "sell_station": "", "sell_system": "", "buy_system": ""}
         if not commodity:
             self._haul_prompt_step = "commodity"
             self._log("Haul loop setup — enter parameters below:")
@@ -755,6 +755,25 @@ class ControlRoomApp(App[None]):
                 self._log(f"  Sell station: [cyan]{escape(value.strip())}[/]")
             else:
                 self._log(f"  Sell station: [dim](current station)[/]")
+            self._haul_prompt_step = "sell_system"
+            current_system = self._ship.system or "current system"
+            self._log(f"[dim]Sell system? (Enter to use {escape(current_system)})[/]")
+            self.query_one("#cmd", Input).placeholder = f"sell system (Enter = {current_system})..."
+        elif self._haul_prompt_step == "sell_system":
+            self._haul_params["sell_system"] = value.strip()
+            if value.strip():
+                self._log(f"  Sell system: [cyan]{escape(value.strip())}[/]")
+            else:
+                self._log(f"  Sell system: [dim](current system)[/]")
+            self._haul_prompt_step = "buy_system"
+            self._log("[dim]Buy system? (press Enter to skip)[/]")
+            self.query_one("#cmd", Input).placeholder = "buy system (Enter to skip)..."
+        elif self._haul_prompt_step == "buy_system":
+            self._haul_params["buy_system"] = value.strip()
+            if value.strip():
+                self._log(f"  Buy system: [cyan]{escape(value.strip())}[/]")
+            else:
+                self._log("  Buy system: [dim](none)[/]")
             self._haul_prompt_step = ""
             self.query_one("#cmd", Input).placeholder = _DEFAULT_PLACEHOLDER
             self._dispatch_haul_loop()
@@ -763,6 +782,8 @@ class ControlRoomApp(App[None]):
         commodity = self._haul_params.get("commodity", "")
         buy_station = self._haul_params.get("buy_station", "")
         sell_station = self._haul_params.get("sell_station", "")
+        sell_system = self._haul_params.get("sell_system", "")
+        buy_system = self._haul_params.get("buy_system", "")
 
         if self._ship.status != "in_station":
             self._log("[red]Haul loop requires you to be docked at the sell station before starting.[/]")
@@ -779,6 +800,10 @@ class ControlRoomApp(App[None]):
                     f"haul loop expects you to start at the sell station.[/]"
                 )
 
+        if not sell_system and self._ship.system:
+            sell_system = self._ship.system
+            self._log(f"[dim]Sell system defaulting to current system: [cyan]{escape(sell_system)}[/][/]")
+
         progress = self._make_progress()
         controls = self._make_controls(progress)
         step_delay = self._config.controls.step_delay_seconds
@@ -790,6 +815,10 @@ class ControlRoomApp(App[None]):
             label_parts.append(f"buy @ [cyan]{escape(buy_station)}[/]")
         if sell_station:
             label_parts.append(f"sell @ [cyan]{escape(sell_station)}[/]")
+        if buy_system:
+            label_parts.append(f"buy sys: [cyan]{escape(buy_system)}[/]")
+        if sell_system:
+            label_parts.append(f"sell sys: [cyan]{escape(sell_system)}[/]")
         self._log(f"Starting haul loop: {', '.join(label_parts)} (infinite)...")
         self._routine_active = True
 
@@ -800,6 +829,8 @@ class ControlRoomApp(App[None]):
             commodity=commodity,
             buy_station=buy_station,
             sell_station=sell_station,
+            sell_system=sell_system,
+            buy_system=buy_system,
             step_delay_s=step_delay,
             progress_fn=progress,
         ))

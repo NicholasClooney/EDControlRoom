@@ -107,7 +107,7 @@ class SupportsGalaxyMapControls(Protocol):
         """Type a string of text character by character."""
 
 
-class SupportsHaulControls(SupportsDockingControls, SupportsUndockControls, SupportsMarketControls, Protocol):
+class SupportsHaulControls(SupportsDockingControls, SupportsUndockControls, SupportsMarketControls, SupportsGalaxyMapControls, Protocol):
     """Combined protocol for all controls needed in the haul loop."""
 
 
