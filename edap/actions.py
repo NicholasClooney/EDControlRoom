@@ -51,6 +51,9 @@ class ActionDispatcher:
             hold_s=hold_s,
         )
 
+    def type_text(self, text: str, char_delay_s: float = 0.05) -> None:
+        self._input_controller.type_text(text, char_delay_s=char_delay_s)
+
     def _result_from_lookup(
         self,
         resolved: BindingLookupResult,

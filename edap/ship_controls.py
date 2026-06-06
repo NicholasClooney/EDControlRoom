@@ -26,6 +26,8 @@ DEFAULT_SHIP_CONTROL_ACTIONS = [
     "RollLeftButton",
     "RollRightButton",
     "UI_Select",
+    "GalaxyMapOpen",
+    "CamZoomIn",
 ]
 
 CONTINUOUS_ACTIONS = {
@@ -205,3 +207,12 @@ class ShipControls:
 
     def hyper_super_combination(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
         return self.dispatch_action("HyperSuperCombination", repeat=repeat, hold_s=hold_s)
+
+    def galaxy_map_open(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
+        return self.dispatch_action("GalaxyMapOpen", repeat=repeat, hold_s=hold_s)
+
+    def cam_zoom_in(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
+        return self.dispatch_action("CamZoomIn", repeat=repeat, hold_s=hold_s)
+
+    def type_text(self, text: str, char_delay_s: float = 0.05) -> None:
+        self._dispatcher.type_text(text, char_delay_s=char_delay_s)

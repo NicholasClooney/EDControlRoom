@@ -129,6 +129,17 @@ class MacOSInputController(InputController):
             self._sleeper(hold_s)
         self._poster(keycode, False, flags, unicode_char)
 
+    def type_text(self, text: str, char_delay_s: float = 0.05) -> None:
+        _SPECIAL: dict[str, str] = {"\n": "enter", "\r": "return", "\t": "tab", "\x1b": "esc"}
+        for char in text:
+            if char in _SPECIAL:
+                self.tap_key(_SPECIAL[char])
+            else:
+                self._poster(0, True, 0, char)
+                self._poster(0, False, 0, char)
+            if char_delay_s > 0:
+                self._sleeper(char_delay_s)
+
     def _resolve(self, key: str, modifier: str | None) -> tuple[int, int, str | None]:
         normalized = key.lower()
         if normalized not in KEY_CODES:

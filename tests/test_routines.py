@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
 from edap.actions import ActionDispatchResult
 from edap.binding_lookup import NormalizedBinding
@@ -10,6 +13,7 @@ from edap.routines import (
     dock,
     docking_request_sequence,
     jump,
+    set_gal_map_destination,
     set_speed_zero_then_wait,
     station_refuel_menu,
     station_refuel_menu_sequence,
@@ -74,6 +78,17 @@ class FakeShipControls:
     def ui_left(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
         self.calls.append({"action": "UI_Left", "repeat": repeat, "hold_s": hold_s})
         return self._set_speed_zero_result
+
+    def galaxy_map_open(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        self.calls.append({"action": "GalaxyMapOpen", "repeat": repeat, "hold_s": hold_s})
+        return self._set_speed_zero_result
+
+    def cam_zoom_in(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        self.calls.append({"action": "CamZoomIn", "repeat": repeat, "hold_s": hold_s})
+        return self._set_speed_zero_result
+
+    def type_text(self, text: str) -> None:
+        self.calls.append({"action": "type_text", "text": text})
 
 
 class FakeWatcher:
@@ -513,3 +528,201 @@ class RoutinesTests(unittest.TestCase):
                 {"action": "UI_Down", "repeat": 1, "hold_s": 0.0},
             ],
         )
+
+
+_OK = ActionDispatchResult(action="ok", status="ok", binding=NormalizedBinding(key="x", modifier=None))
+
+
+def _make_gal_map_controls() -> FakeShipControls:
+    return FakeShipControls(set_speed_zero_result=_OK)
+
+
+def _write_navroute(journal_dir: Path, system: str) -> None:
+    navroute = {"Route": [{"StarSystem": "Sol"}, {"StarSystem": system}]}
+    (journal_dir / "NavRoute.json").write_text(json.dumps(navroute), encoding="utf-8")
+
+
+class GalMapDestinationTests(unittest.TestCase):
+    def _run(
+        self,
+        controls: FakeShipControls,
+        destination: str,
+        journal_dir: Path,
+        open_settle_s: float = 0.0,
+        search_settle_s: float = 0.0,
+        plot_settle_s: float = 0.0,
+        step_delay_s: float = 0.0,
+    ) -> RoutineResult:
+        return set_gal_map_destination(
+            controls,
+            destination=destination,
+            journal_dir=journal_dir,
+            open_settle_s=open_settle_s,
+            search_settle_s=search_settle_s,
+            plot_settle_s=plot_settle_s,
+            step_delay_s=step_delay_s,
+            sleeper=lambda _: None,
+        )
+
+    def test_happy_path_plots_and_closes(self) -> None:
+        controls = _make_gal_map_controls()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            journal_dir = Path(tmpdir)
+            _write_navroute(journal_dir, "Colonia")
+
+            result = self._run(controls, "Colonia", journal_dir)
+
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertEqual(result.details["destination"], "Colonia")
+        self.assertEqual(result.details["actual"], "Colonia")
+        self.assertEqual(result.details["attempts"], 1)
+
+        actions = [c["action"] for c in controls.calls]
+        self.assertEqual(actions[0], "GalaxyMapOpen")
+        self.assertIn("UI_Up", actions)
+        self.assertIn("CamZoomIn", actions)
+        self.assertEqual(actions[-1], "GalaxyMapOpen")
+
+    def test_types_destination_then_enter(self) -> None:
+        controls = _make_gal_map_controls()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            journal_dir = Path(tmpdir)
+            _write_navroute(journal_dir, "Sagittarius A*")
+
+            self._run(controls, "Sagittarius A*", journal_dir)
+
+        text_calls = [c for c in controls.calls if c["action"] == "type_text"]
+        texts = [c["text"] for c in text_calls]
+        self.assertIn("Sagittarius A*", texts)
+        self.assertIn("\n", texts)
+
+    def test_first_result_sequence(self) -> None:
+        controls = _make_gal_map_controls()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            journal_dir = Path(tmpdir)
+            _write_navroute(journal_dir, "Sol")
+
+            self._run(controls, "Sol", journal_dir)
+
+        actions = [c["action"] for c in controls.calls]
+        # After search: UI_Right then UI_Select before CamZoomIn
+        cam_idx = actions.index("CamZoomIn")
+        self.assertEqual(actions[cam_idx - 1], "UI_Select")
+        self.assertEqual(actions[cam_idx - 2], "UI_Right")
+
+    def test_retry_on_mismatch_uses_ui_down(self) -> None:
+        controls = _make_gal_map_controls()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            journal_dir = Path(tmpdir)
+            # NavRoute always points to wrong system -- all attempts will fail
+            _write_navroute(journal_dir, "Wrong System")
+
+            result = set_gal_map_destination(
+                controls,
+                destination="Target",
+                journal_dir=journal_dir,
+                open_settle_s=0.0,
+                search_settle_s=0.0,
+                plot_settle_s=0.0,
+                step_delay_s=0.0,
+                max_results=3,
+                sleeper=lambda _: None,
+            )
+
+        self.assertEqual(result.dispatch.status, "error")
+        # Should have tried UI_Down on attempts 2 and 3
+        down_calls = [c for c in controls.calls if c["action"] == "UI_Down"]
+        self.assertEqual(len(down_calls), 2)
+
+    def test_closes_map_on_failure(self) -> None:
+        controls = _make_gal_map_controls()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            journal_dir = Path(tmpdir)
+            _write_navroute(journal_dir, "Nope")
+
+            set_gal_map_destination(
+                controls,
+                destination="Somewhere",
+                journal_dir=journal_dir,
+                open_settle_s=0.0,
+                search_settle_s=0.0,
+                plot_settle_s=0.0,
+                step_delay_s=0.0,
+                max_results=1,
+                sleeper=lambda _: None,
+            )
+
+        # Last action should be GalaxyMapOpen (close)
+        actions = [c["action"] for c in controls.calls]
+        self.assertEqual(actions[-1], "GalaxyMapOpen")
+
+    def test_case_insensitive_match(self) -> None:
+        controls = _make_gal_map_controls()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            journal_dir = Path(tmpdir)
+            _write_navroute(journal_dir, "COLONIA")
+
+            result = self._run(controls, "colonia", journal_dir)
+
+        self.assertEqual(result.dispatch.status, "ok")
+
+    def test_missing_navroute_counts_as_mismatch(self) -> None:
+        controls = _make_gal_map_controls()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            journal_dir = Path(tmpdir)
+            # No NavRoute.json written
+
+            result = set_gal_map_destination(
+                controls,
+                destination="Sol",
+                journal_dir=journal_dir,
+                open_settle_s=0.0,
+                search_settle_s=0.0,
+                plot_settle_s=0.0,
+                step_delay_s=0.0,
+                max_results=1,
+                sleeper=lambda _: None,
+            )
+
+        self.assertEqual(result.dispatch.status, "error")
+
+    def test_rejects_max_results_zero(self) -> None:
+        controls = _make_gal_map_controls()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaises(ValueError):
+                set_gal_map_destination(
+                    controls,
+                    destination="Sol",
+                    journal_dir=Path(tmpdir),
+                    max_results=0,
+                    sleeper=lambda _: None,
+                )
+
+    def test_open_check_fn_polled_until_true(self) -> None:
+        controls = _make_gal_map_controls()
+        call_count = 0
+
+        def check_fn() -> bool:
+            nonlocal call_count
+            call_count += 1
+            return call_count >= 3
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            journal_dir = Path(tmpdir)
+            _write_navroute(journal_dir, "Sol")
+            t = [0.0]
+
+            set_gal_map_destination(
+                controls,
+                destination="Sol",
+                journal_dir=journal_dir,
+                open_check_fn=check_fn,
+                open_timeout_s=100.0,
+                step_delay_s=0.0,
+                search_settle_s=0.0,
+                plot_settle_s=0.0,
+                sleeper=lambda _: None,
+                time_fn=lambda: t[0],
+            )
+
+        self.assertGreaterEqual(call_count, 3)

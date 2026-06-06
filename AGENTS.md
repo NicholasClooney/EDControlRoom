@@ -23,6 +23,12 @@ See [docs/STATUS.md](docs/STATUS.md) for the current port status, what is stubbe
 - Update `docs/STATUS.md` at the end of any session that changes project understanding, port status, completed work, open gaps, or recommended next steps.
 - Keep it concise and current so the next agent can resume from it directly.
 
+## Testing
+
+- Use `python -m unittest` to run tests, not pytest.
+- Run a single file: `python -m unittest tests/test_foo.py`
+- Run all tests: `python -m unittest discover -s tests`
+
 ## Working Rules
 
 - Keep platform-specific code isolated behind interfaces.

@@ -10,7 +10,7 @@ from time import sleep
 from edap.binding_lookup import BindingLookup
 from edap.config import ConfigError, DEFAULT_CONFIG_PATH
 from edap.progress_controls import ProgressShipControls
-from edap.routines import auto_zero_throttle_on_arrival, dock, haul_loop, jump, market_buy, market_sell, station_refuel_menu, undock
+from edap.routines import auto_zero_throttle_on_arrival, dock, haul_loop, jump, market_buy, market_sell, set_gal_map_destination, station_refuel_menu, undock
 from edap.runtime import build_runtime_context, load_config_with_fallback
 from edap.ship_controls import ShipControls
 from edap.state import JournalWatcher
@@ -24,6 +24,7 @@ ROUTINE_UNDOCK = "undock"
 ROUTINE_MARKET_BUY = "market_buy"
 ROUTINE_MARKET_SELL = "market_sell"
 ROUTINE_HAUL_LOOP = "haul_loop"
+ROUTINE_SET_GAL_MAP_DESTINATION = "set_gal_map_destination"
 SUPPORTED_ROUTINES = [
     ROUTINE_AUTO_ZERO_THROTTLE_ON_ARRIVAL,
     ROUTINE_JUMP,
@@ -33,6 +34,7 @@ SUPPORTED_ROUTINES = [
     ROUTINE_MARKET_BUY,
     ROUTINE_MARKET_SELL,
     ROUTINE_HAUL_LOOP,
+    ROUTINE_SET_GAL_MAP_DESTINATION,
 ]
 DEFAULT_EVENT_LOG_PATH = Path("artifacts/run-routine-events.log")
 
@@ -256,6 +258,36 @@ def main() -> int:
         help="Number of haul loop iterations (0 = run until interrupted)",
     )
     parser.add_argument(
+        "--destination",
+        metavar="SYSTEM",
+        default="",
+        help="Destination system name for set_gal_map_destination",
+    )
+    parser.add_argument(
+        "--open-settle-seconds",
+        type=float,
+        default=3.0,
+        help="Seconds to wait for the galaxy map to open before interacting (default 3)",
+    )
+    parser.add_argument(
+        "--search-settle-seconds",
+        type=float,
+        default=2.0,
+        help="Seconds to wait after submitting a search before selecting results (default 2)",
+    )
+    parser.add_argument(
+        "--plot-settle-seconds",
+        type=float,
+        default=2.0,
+        help="Seconds to wait after plotting before verifying NavRoute (default 2)",
+    )
+    parser.add_argument(
+        "--max-results",
+        type=int,
+        default=5,
+        help="Maximum number of search results to try before giving up (default 5)",
+    )
+    parser.add_argument(
         "--log-events",
         action="store_true",
         help="Log all watched journal events to a file while the routine runs",
@@ -357,6 +389,14 @@ def main() -> int:
             sys.stderr.write("--iterations must be non-negative (0 = infinite)\n")
             return 2
 
+    if args.routine == ROUTINE_SET_GAL_MAP_DESTINATION:
+        if not args.destination:
+            sys.stderr.write("--destination is required for set_gal_map_destination\n")
+            return 2
+        if args.max_results < 1:
+            sys.stderr.write("--max-results must be at least 1\n")
+            return 2
+
     routine_actions = ["SetSpeedZero"]
     if args.routine == ROUTINE_JUMP:
         routine_actions = ["SetSpeedZero", "HyperSuperCombination"]
@@ -386,6 +426,8 @@ def main() -> int:
             "UI_Back", "UI_Up", "UI_Down", "UI_Select", "UI_Left", "UI_Right",
             "CycleNextPanel", "CyclePreviousPanel", "HeadLookReset",
         ]
+    elif args.routine == ROUTINE_SET_GAL_MAP_DESTINATION:
+        routine_actions = ["GalaxyMapOpen", "UI_Up", "UI_Select", "UI_Right", "UI_Down", "CamZoomIn"]
 
     runtime = build_runtime_context(loaded.config, actions=routine_actions)
     journal_dir = runtime.journal.effective_path
@@ -399,6 +441,7 @@ def main() -> int:
         ROUTINE_MARKET_BUY,
         ROUTINE_MARKET_SELL,
         ROUTINE_HAUL_LOOP,
+        ROUTINE_SET_GAL_MAP_DESTINATION,
     }
     if routine_needs_journal and journal_dir is None:
         sys.stderr.write(
@@ -508,6 +551,10 @@ def main() -> int:
         _progress(f"  Sell station{sell_label} -> buy {args.target} (MAX) -> sell station{sell_label}")
         for action in ["SetSpeedZero", "BoostButton", "FocusLeftPanel", "UI_Back", "UI_Up", "UI_Down", "UI_Select", "UI_Left", "UI_Right", "CycleNextPanel", "CyclePreviousPanel", "HeadLookReset"]:
             _progress(f"  {_describe_binding(runtime.binding_lookup, action)}")
+    elif args.routine == ROUTINE_SET_GAL_MAP_DESTINATION:
+        _progress(f"Destination: {args.destination!r}")
+        for action in ["GalaxyMapOpen", "UI_Up", "UI_Select", "UI_Right", "UI_Down", "CamZoomIn"]:
+            _progress(f"  {_describe_binding(runtime.binding_lookup, action)}")
 
     try:
         if args.routine == ROUTINE_AUTO_ZERO_THROTTLE_ON_ARRIVAL:
@@ -609,6 +656,19 @@ def main() -> int:
                 boost_settle_s=args.boost_settle_seconds,
                 deny_retry_delay_s=args.deny_retry_delay_seconds,
                 max_dock_retries=args.max_retries,
+                sleeper=logging_sleeper,
+                progress_fn=_progress,
+            )
+        elif args.routine == ROUTINE_SET_GAL_MAP_DESTINATION:
+            result = set_gal_map_destination(
+                logging_controls,
+                destination=args.destination,
+                journal_dir=journal_dir,
+                open_settle_s=args.open_settle_seconds,
+                search_settle_s=args.search_settle_seconds,
+                plot_settle_s=args.plot_settle_seconds,
+                step_delay_s=step_delay_seconds,
+                max_results=args.max_results,
                 sleeper=logging_sleeper,
                 progress_fn=_progress,
             )

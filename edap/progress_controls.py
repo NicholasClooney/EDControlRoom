@@ -83,3 +83,16 @@ class ProgressShipControls:
     def head_look_reset(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
         self._log("HeadLookReset", repeat)
         return self._controls.head_look_reset(repeat=repeat, hold_s=hold_s)
+
+    def galaxy_map_open(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
+        self._log("GalaxyMapOpen", repeat)
+        return self._controls.galaxy_map_open(repeat=repeat, hold_s=hold_s)
+
+    def cam_zoom_in(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
+        self._log("CamZoomIn", repeat)
+        return self._controls.cam_zoom_in(repeat=repeat, hold_s=hold_s)
+
+    def type_text(self, text: str) -> None:
+        if self._verbose:
+            self._progress(f"  type_text: {text!r}")
+        self._controls.type_text(text)

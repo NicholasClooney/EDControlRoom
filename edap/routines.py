@@ -952,6 +952,29 @@ def _market_trade(
     )
 
 
+class SupportsGalaxyMapControls(Protocol):
+    def galaxy_map_open(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        """Dispatch the GalaxyMapOpen action."""
+
+    def ui_up(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        """Dispatch the UI_Up action."""
+
+    def ui_select(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        """Dispatch the UI_Select action."""
+
+    def ui_right(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        """Dispatch the UI_Right action."""
+
+    def ui_down(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        """Dispatch the UI_Down action."""
+
+    def cam_zoom_in(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        """Dispatch the CamZoomIn action."""
+
+    def type_text(self, text: str) -> None:
+        """Type a string of text character by character."""
+
+
 class SupportsHaulControls(SupportsDockingControls, SupportsUndockControls, SupportsMarketControls, Protocol):
     """Combined protocol for all controls needed in the haul loop."""
 
@@ -1156,6 +1179,177 @@ def haul_loop(
 
     assert last_result is not None
     return last_result
+
+
+def _read_navroute_destination(journal_dir: Path) -> str | None:
+    navroute_path = journal_dir / "NavRoute.json"
+    try:
+        with navroute_path.open() as fh:
+            data = json.load(fh)
+        route = data.get("Route", [])
+        if route:
+            return str(route[-1].get("StarSystem", ""))
+        return None
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def set_gal_map_destination(
+    controls: SupportsGalaxyMapControls,
+    *,
+    destination: str,
+    journal_dir: Path,
+    open_check_fn: Callable[[], bool] | None = None,
+    open_timeout_s: float = 10.0,
+    open_settle_s: float = 3.0,
+    search_settle_s: float = 2.0,
+    plot_settle_s: float = 2.0,
+    step_delay_s: float = 0.5,
+    zoom_select_hold_s: float = 0.75,
+    max_results: int = 5,
+    time_fn: Callable[[], float] = monotonic,
+    sleeper: Callable[[float], None] = sleep,
+    progress_fn: Callable[[str], None] | None = None,
+) -> RoutineResult:
+    """Odyssey galaxy map flow: open map, search by name, plot route, verify NavRoute."""
+    if max_results < 1:
+        raise ValueError("max_results must be at least 1")
+
+    def _err(action: str, reason: str, phase: str, **extra: object) -> RoutineResult:
+        return RoutineResult(
+            action=action,
+            dispatch=ActionDispatchResult(action=action, status="error", reason=reason),
+            details={"phase": phase, **extra},
+        )
+
+    # Step 1: open the galaxy map
+    if progress_fn is not None:
+        progress_fn("Opening galaxy map...")
+    dispatch = controls.galaxy_map_open()
+    if dispatch.status != "ok":
+        return RoutineResult(action="GalaxyMapOpen", dispatch=dispatch, details={"phase": "open"})
+
+    # Step 2: wait for map to be ready (OCR check or fixed settle)
+    if open_check_fn is not None:
+        if progress_fn is not None:
+            progress_fn("Waiting for galaxy map (CARTOGRAPHICS check)...")
+        deadline = time_fn() + open_timeout_s
+        while time_fn() < deadline:
+            if open_check_fn():
+                break
+            sleeper(0.5)
+        else:
+            if progress_fn is not None:
+                progress_fn("Galaxy map open check timed out, proceeding anyway...")
+    elif open_settle_s > 0:
+        sleeper(open_settle_s)
+
+    # Step 3: navigate to search field (UI_Up + UI_Select)
+    if progress_fn is not None:
+        progress_fn("Navigating to search field...")
+    dispatch = controls.ui_up()
+    if dispatch.status != "ok":
+        return RoutineResult(action="UI_Up", dispatch=dispatch, details={"phase": "navigate_to_search"})
+    if step_delay_s > 0:
+        sleeper(step_delay_s)
+
+    dispatch = controls.ui_select()
+    if dispatch.status != "ok":
+        return RoutineResult(action="UI_Select", dispatch=dispatch, details={"phase": "navigate_to_search"})
+    if step_delay_s > 0:
+        sleeper(step_delay_s)
+
+    # Step 4: type destination + Enter to commit search
+    if progress_fn is not None:
+        progress_fn(f"Typing destination: {destination!r}")
+    controls.type_text(destination)
+    if step_delay_s > 0:
+        sleeper(step_delay_s)
+
+    if progress_fn is not None:
+        progress_fn("Committing search (Enter)...")
+    controls.type_text("\n")
+    if search_settle_s > 0:
+        sleeper(search_settle_s)
+
+    # Steps 5-6: select results and verify, retrying on mismatch
+    last_plot_dispatch: ActionDispatchResult | None = None
+    for attempt in range(1, max_results + 1):
+        if attempt == 1:
+            # UI_Right highlights the search button; UI_Select picks the first result
+            if progress_fn is not None:
+                progress_fn("Selecting first search result...")
+            dispatch = controls.ui_right()
+            if dispatch.status != "ok":
+                return RoutineResult(action="UI_Right", dispatch=dispatch, details={"phase": "select_result", "attempt": attempt})
+            if step_delay_s > 0:
+                sleeper(step_delay_s)
+
+            dispatch = controls.ui_select()
+            if dispatch.status != "ok":
+                return RoutineResult(action="UI_Select", dispatch=dispatch, details={"phase": "select_result", "attempt": attempt})
+            if step_delay_s > 0:
+                sleeper(step_delay_s)
+        else:
+            # Navigate to the next result in the list
+            if progress_fn is not None:
+                progress_fn(f"Trying next result (attempt {attempt}/{max_results})...")
+            dispatch = controls.ui_down()
+            if dispatch.status != "ok":
+                return RoutineResult(action="UI_Down", dispatch=dispatch, details={"phase": "next_result", "attempt": attempt})
+            if step_delay_s > 0:
+                sleeper(step_delay_s)
+
+            dispatch = controls.ui_select()
+            if dispatch.status != "ok":
+                return RoutineResult(action="UI_Select", dispatch=dispatch, details={"phase": "next_result", "attempt": attempt})
+            if step_delay_s > 0:
+                sleeper(step_delay_s)
+
+        # CamZoomIn + UI_Select held to plot the route
+        if progress_fn is not None:
+            progress_fn("Plotting route (CamZoomIn + UI_Select)...")
+        dispatch = controls.cam_zoom_in()
+        if dispatch.status != "ok":
+            return RoutineResult(action="CamZoomIn", dispatch=dispatch, details={"phase": "plot_route", "attempt": attempt})
+        if step_delay_s > 0:
+            sleeper(step_delay_s)
+
+        last_plot_dispatch = controls.ui_select(hold_s=zoom_select_hold_s)
+        if last_plot_dispatch.status != "ok":
+            return RoutineResult(action="UI_Select", dispatch=last_plot_dispatch, details={"phase": "plot_route", "attempt": attempt})
+        if plot_settle_s > 0:
+            sleeper(plot_settle_s)
+
+        # Verify NavRoute.json destination matches
+        actual = _read_navroute_destination(journal_dir)
+        if actual is not None and actual.lower() == destination.lower():
+            if progress_fn is not None:
+                progress_fn(f"Route set to {actual!r}")
+            # Step 7: close the galaxy map
+            if progress_fn is not None:
+                progress_fn("Closing galaxy map...")
+            controls.galaxy_map_open()
+            assert last_plot_dispatch is not None
+            return RoutineResult(
+                action="GalaxyMapOpen",
+                dispatch=last_plot_dispatch,
+                details={"destination": destination, "actual": actual, "attempts": attempt},
+            )
+
+        if progress_fn is not None:
+            got = actual or "unknown"
+            progress_fn(f"Route mismatch: expected {destination!r}, got {got!r}")
+
+    # Exhausted all results -- close map and return error
+    controls.galaxy_map_open()
+    return _err(
+        "GalaxyMapOpen",
+        f"could not set route to {destination!r} after {max_results} result(s)",
+        "verify_route",
+        destination=destination,
+        max_results=max_results,
+    )
 
 
 def undock(
