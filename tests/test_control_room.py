@@ -29,6 +29,8 @@ def _make_config(journal_dir: Path) -> AppConfig:
             step_delay_seconds=0.3,
             galaxy_map_settle_seconds=2.0,
             haul_dock_timeout_seconds=600.0,
+            undock_timeout_seconds=30.0,
+            undock_in_space_timeout_seconds=180.0,
         ),
         screen=ScreenConfig(
             resolution_width=1920,

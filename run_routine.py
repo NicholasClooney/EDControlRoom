@@ -209,8 +209,14 @@ def main() -> int:
     parser.add_argument(
         "--undock-timeout-seconds",
         type=float,
-        default=30.0,
-        help="Maximum time to wait for Undocked event after sending the launch command",
+        default=None,
+        help="Maximum time to wait for Undocked event after sending the launch command (overrides config)",
+    )
+    parser.add_argument(
+        "--in-space-timeout-seconds",
+        type=float,
+        default=None,
+        help="Maximum time to wait after Undocked for in-space confirmation (overrides config)",
     )
     parser.add_argument(
         "--target",
@@ -352,8 +358,11 @@ def main() -> int:
     if args.deny_retry_delay_seconds < 0:
         sys.stderr.write("Invalid routine request: --deny-retry-delay-seconds must be non-negative\n")
         return 2
-    if args.undock_timeout_seconds < 0:
+    if args.undock_timeout_seconds is not None and args.undock_timeout_seconds < 0:
         sys.stderr.write("Invalid routine request: --undock-timeout-seconds must be non-negative\n")
+        return 2
+    if args.in_space_timeout_seconds is not None and args.in_space_timeout_seconds < 0:
+        sys.stderr.write("Invalid routine request: --in-space-timeout-seconds must be non-negative\n")
         return 2
     if args.max_hold_seconds < 0:
         sys.stderr.write("Invalid routine request: --max-hold-seconds must be non-negative\n")
@@ -414,7 +423,7 @@ def main() -> int:
     elif args.routine == ROUTINE_STATION_REFUEL_MENU:
         routine_actions = ["UI_Up", "UI_Select", "UI_Down"]
     elif args.routine == ROUTINE_UNDOCK:
-        routine_actions = ["UI_Back", "HeadLookReset", "UI_Down", "UI_Select"]
+        routine_actions = ["UI_Back", "HeadLookReset", "UI_Down", "UI_Select", "SetSpeed100", "BoostButton"]
     elif args.routine in {ROUTINE_MARKET_BUY, ROUTINE_MARKET_SELL}:
         routine_actions = ["UI_Select", "UI_Down", "UI_Right", "UI_Back"]
     elif args.routine == ROUTINE_HAUL_LOOP:
@@ -438,6 +447,16 @@ def main() -> int:
             if args.routine == ROUTINE_HAUL_LOOP
             else 120.0
         )
+    )
+    undock_timeout_seconds = (
+        args.undock_timeout_seconds
+        if args.undock_timeout_seconds is not None
+        else loaded.config.controls.undock_timeout_seconds
+    )
+    in_space_timeout_seconds = (
+        args.in_space_timeout_seconds
+        if args.in_space_timeout_seconds is not None
+        else loaded.config.controls.undock_in_space_timeout_seconds
     )
     journal_dir = runtime.journal.effective_path
     journal_source = runtime.journal.cli_source_status()
@@ -508,7 +527,7 @@ def main() -> int:
         elif args.routine == ROUTINE_STATION_REFUEL_MENU:
             watch_target = "Docked events"
         elif args.routine == ROUTINE_UNDOCK:
-            watch_target = "Undocked events"
+            watch_target = "Undocked and in-space confirmation events"
         elif args.routine in {ROUTINE_MARKET_BUY, ROUTINE_MARKET_SELL}:
             watch_target = "MarketBuy/MarketSell events"
         elif args.routine == ROUTINE_HAUL_LOOP:
@@ -547,7 +566,7 @@ def main() -> int:
         _progress(f"  {_describe_binding(runtime.binding_lookup, 'UI_Select')}")
         _progress(f"  {_describe_binding(runtime.binding_lookup, 'UI_Down')}")
     elif args.routine == ROUTINE_UNDOCK:
-        for action in ["UI_Back", "HeadLookReset", "UI_Down", "UI_Select"]:
+        for action in ["UI_Back", "HeadLookReset", "UI_Down", "UI_Select", "SetSpeed100", "BoostButton"]:
             _progress(f"  {_describe_binding(runtime.binding_lookup, action)}")
     elif args.routine in {ROUTINE_MARKET_BUY, ROUTINE_MARKET_SELL}:
         for action in ["UI_Select", "UI_Down", "UI_Right", "UI_Back"]:
@@ -614,7 +633,8 @@ def main() -> int:
             result = undock(
                 logging_controls,
                 watcher,
-                undock_timeout_s=args.undock_timeout_seconds,
+                undock_timeout_s=undock_timeout_seconds,
+                in_space_timeout_s=in_space_timeout_seconds,
                 step_delay_s=step_delay_seconds,
                 sleeper=logging_sleeper,
                 progress_fn=_progress,
@@ -660,7 +680,8 @@ def main() -> int:
                 max_hold_s=args.max_hold_seconds,
                 dock_timeout_s=dock_timeout_seconds,
                 request_timeout_s=args.request_timeout_seconds,
-                undock_timeout_s=args.undock_timeout_seconds,
+                undock_timeout_s=undock_timeout_seconds,
+                undock_in_space_timeout_s=in_space_timeout_seconds,
                 trade_timeout_s=args.trade_timeout_seconds,
                 settle_s=args.settle_seconds,
                 galaxy_map_settle_s=(
@@ -720,6 +741,8 @@ def main() -> int:
             "settle_s": args.settle_seconds,
             "dock_timeout_s": dock_timeout_seconds,
             "request_timeout_s": args.request_timeout_seconds,
+            "undock_timeout_s": undock_timeout_seconds,
+            "in_space_timeout_s": in_space_timeout_seconds,
             "skip_supercruise_exit": args.skip_supercruise_exit,
             "auto_refuel": args.auto_refuel,
             "event_log_path": args.event_log_path if args.log_events and routine_needs_journal else None,

@@ -46,6 +46,7 @@ def haul_loop(
     dock_timeout_s: float = 600.0,
     request_timeout_s: float = 20.0,
     undock_timeout_s: float = 30.0,
+    undock_in_space_timeout_s: float = 180.0,
     trade_timeout_s: float = 30.0,
     settle_s: float = 2.0,
     galaxy_map_settle_s: float = 2.0,
@@ -112,6 +113,7 @@ def haul_loop(
         result = undock(
             controls, watcher,
             undock_timeout_s=undock_timeout_s,
+            in_space_timeout_s=undock_in_space_timeout_s,
             step_delay_s=step_delay_s,
             time_fn=time_fn,
             sleeper=sleeper,
@@ -186,6 +188,7 @@ def haul_loop(
         result = undock(
             controls, watcher,
             undock_timeout_s=undock_timeout_s,
+            in_space_timeout_s=undock_in_space_timeout_s,
             step_delay_s=step_delay_s,
             time_fn=time_fn,
             sleeper=sleeper,

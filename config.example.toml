@@ -17,6 +17,10 @@ step_delay_seconds = 0.3
 galaxy_map_settle_seconds = 2.0
 # Default docking timeout for haul-loop station arrivals.
 haul_dock_timeout_seconds = 600.0
+# Default time to wait for the launch command to produce an Undocked event.
+undock_timeout_seconds = 30.0
+# Default time to wait after Undocked for a stricter in-space confirmation event.
+undock_in_space_timeout_seconds = 180.0
 
 [screen]
 resolution_width = 1920
