@@ -2,7 +2,7 @@
 
 _This is the maintained status document for the repo. Update it at the end of each session when project understanding, port status, or next steps change. Keep it current over time rather than treating it as a frozen checkpoint._
 
-Last updated: 2026-06-06 (session 7)
+Last updated: 2026-06-06 (session 8)
 
 ## Where We Are
 
@@ -44,7 +44,7 @@ The important caveat is that the real autopilot loop is still largely unported. 
 | Journal parsing | Done | `edap/state.py` — tested against real journals |
 | Bindings XML parsing | Done | `edap/bindings.py`, `edap/binding_lookup.py` |
 | Action dispatch | Done | `edap/actions.py`, `edap/ship_controls.py` — 0.1s dwell floor, 0.2s continuous default |
-| macOS input backend | Done | `edap/platform/input/macos.py` — Quartz CGEvent, modifier combos work |
+| macOS input backend | Done | `edap/platform/input/macos.py` — Quartz CGEvent, modifier combos work; modifier key is now explicitly pressed/released to prevent flag bleed-through to subsequent keypresses |
 | Screen capture (one-shot) | Done | `edap/platform/screen/macos.py`, `edap/capture.py` — normalized regions |
 | Config loading | Done | `edap/config.py`, `config.example.toml` |
 | Runtime context assembly | Done | `edap/runtime.py` — config fallback, path resolution, optional binding lookup, platform adapter wiring |

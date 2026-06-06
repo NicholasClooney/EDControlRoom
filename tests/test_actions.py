@@ -89,9 +89,13 @@ class ActionDispatcherTests(unittest.TestCase):
         self.assertEqual(
             events,
             [
-                ("down", shift_flags),
-                ("up", shift_flags),
-                ("down", control_flags),
-                ("up", control_flags),
+                ("down", shift_flags),   # left_shift keydown
+                ("down", shift_flags),   # a keydown
+                ("up", shift_flags),     # a keyup
+                ("up", 0),               # left_shift keyup
+                ("down", control_flags), # right_control keydown
+                ("down", control_flags), # a keydown
+                ("up", control_flags),   # a keyup
+                ("up", 0),               # right_control keyup
             ],
         )

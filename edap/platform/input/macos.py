@@ -85,6 +85,28 @@ MODIFIER_FLAGS: dict[str, int] = {
     "right_command": kCGEventFlagMaskCommand,
 }
 
+# Maps modifier names to the physical key code to press/release.
+# Generic names (shift, ctrl, etc.) map to the left-hand variant.
+MODIFIER_KEYCODES: dict[str, int] = {
+    "shift": KEY_CODES["left_shift"],
+    "left_shift": KEY_CODES["left_shift"],
+    "right_shift": KEY_CODES["right_shift"],
+    "control": KEY_CODES["left_control"],
+    "ctrl": KEY_CODES["left_control"],
+    "left_control": KEY_CODES["left_control"],
+    "right_control": KEY_CODES["right_control"],
+    "option": KEY_CODES["left_option"],
+    "alt": KEY_CODES["left_option"],
+    "left_option": KEY_CODES["left_option"],
+    "right_option": KEY_CODES["right_option"],
+    "left_alt": KEY_CODES["left_option"],
+    "right_alt": KEY_CODES["right_option"],
+    "command": KEY_CODES["left_command"],
+    "cmd": KEY_CODES["left_command"],
+    "left_command": KEY_CODES["left_command"],
+    "right_command": KEY_CODES["right_command"],
+}
+
 
 PosterFn = Callable[[int, bool, int, "str | None"], None]
 SleeperFn = Callable[[float], None]
@@ -124,10 +146,15 @@ class MacOSInputController(InputController):
 
     def tap_key(self, key: str, modifier: str | None = None, hold_s: float = 0.0) -> None:
         keycode, flags, unicode_char = self._resolve(key, modifier)
+        mod_keycode = MODIFIER_KEYCODES.get(modifier.lower()) if modifier else None
+        if mod_keycode is not None:
+            self._poster(mod_keycode, True, flags, None)
         self._poster(keycode, True, flags, unicode_char)
         if hold_s > 0:
             self._sleeper(hold_s)
         self._poster(keycode, False, flags, unicode_char)
+        if mod_keycode is not None:
+            self._poster(mod_keycode, False, 0, None)
 
     def type_text(self, text: str, char_delay_s: float = 0.05) -> None:
         _SPECIAL: dict[str, str] = {"\n": "enter", "\r": "return", "\t": "tab", "\x1b": "esc"}

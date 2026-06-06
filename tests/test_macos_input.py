@@ -59,12 +59,15 @@ class MacOSInputControllerTests(unittest.TestCase):
 
         flags = MODIFIER_FLAGS["control"]
         self.assertNotEqual(flags, 0)
+        ctrl_code = KEY_CODES["left_control"]
         self.assertEqual(
             backend.events,
             [
+                ("down", ctrl_code, flags, None),
                 ("down", KEY_CODES["x"], flags, "x"),
                 ("sleep", 0.05),
                 ("up", KEY_CODES["x"], flags, "x"),
+                ("up", ctrl_code, 0, None),
             ],
         )
 
