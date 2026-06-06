@@ -266,8 +266,8 @@ def main() -> int:
     parser.add_argument(
         "--open-settle-seconds",
         type=float,
-        default=3.0,
-        help="Seconds to wait for the galaxy map to open before interacting (default 3)",
+        default=5.0,
+        help="Seconds to wait for the galaxy map to open before interacting (default 5)",
     )
     parser.add_argument(
         "--search-settle-seconds",
@@ -276,10 +276,10 @@ def main() -> int:
         help="Seconds to wait after submitting a search before selecting results (default 2)",
     )
     parser.add_argument(
-        "--plot-settle-seconds",
+        "--galaxy-map-settle-seconds",
         type=float,
-        default=2.0,
-        help="Seconds to wait after plotting before verifying NavRoute (default 2)",
+        default=None,
+        help="Seconds to wait after picking a search result and after plotting before continuing (overrides config; default 2)",
     )
     parser.add_argument(
         "--select-hold-seconds",
@@ -654,6 +654,11 @@ def main() -> int:
                 undock_timeout_s=args.undock_timeout_seconds,
                 trade_timeout_s=args.trade_timeout_seconds,
                 settle_s=args.settle_seconds,
+                galaxy_map_settle_s=(
+                    args.galaxy_map_settle_seconds
+                    if args.galaxy_map_settle_seconds is not None
+                    else loaded.config.controls.galaxy_map_settle_seconds
+                ),
                 boost_settle_s=args.boost_settle_seconds,
                 deny_retry_delay_s=args.deny_retry_delay_seconds,
                 max_dock_retries=args.max_retries,
@@ -667,7 +672,11 @@ def main() -> int:
                 journal_dir=journal_dir,
                 open_settle_s=args.open_settle_seconds,
                 search_settle_s=args.search_settle_seconds,
-                plot_settle_s=args.plot_settle_seconds,
+                map_settle_s=(
+                    args.galaxy_map_settle_seconds
+                    if args.galaxy_map_settle_seconds is not None
+                    else loaded.config.controls.galaxy_map_settle_seconds
+                ),
                 step_delay_s=step_delay_seconds,
                 select_hold_s=args.select_hold_seconds,
                 sleeper=logging_sleeper,

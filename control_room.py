@@ -68,6 +68,8 @@ _ALL_ROUTINE_ACTIONS = [
     "GalaxyMapOpen", "CamZoomIn",
 ]
 
+_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | dock | undock | buy <item> [N] | sell [item] | haul [commodity] | dest <system> | market ... | q"
+
 
 # ── State ──────────────────────────────────────────────────────────────────────
 
@@ -162,13 +164,13 @@ _COMMANDS: list[_CommandHelp] = [
         name="haul",
         usage="haul [commodity]",
         summary="Run the community haul loop, prompting for missing stations and systems.",
-        detail="Starts the sell-undock-travel-buy-undock-travel cycle for one commodity. If you omit values, control room prompts for the missing haul parameters before launching the loop.",
+        detail="Starts the sell-undock-travel-buy-undock-travel cycle for one commodity. Control room prompts for the missing haul parameters before launching the loop, including the galaxy-map settle delay used by route plotting.",
     ),
     _CommandHelp(
         name="dest",
         usage="dest <system>",
         summary="Open the galaxy map and plot a route to a named system.",
-        detail="Opens the galaxy map, types the destination into search, plots the route, verifies NavRoute.json, and closes the map again.",
+        detail="Opens the galaxy map, types the destination into search, plots the route, verifies NavRoute.json, and closes the map again. Control room also prompts for the galaxy-map settle delay, with Enter accepting the configured default.",
         aliases=("set_dest",),
     ),
     _CommandHelp(
@@ -304,7 +306,8 @@ class ControlRoomApp(App[None]):
         self._routine_active = False
         self._verbose_controls: bool = False
         self._haul_params: dict[str, str] = {}
-        self._haul_prompt_step: str = ""  # "commodity" | "buy_station" | "sell_station" | ""
+        self._haul_prompt_step: str = ""  # "commodity" | "buy_station" | "sell_station" | "sell_system" | "buy_system" | "galaxy_map_settle"
+        self._dest_prompt_destination: str = ""
         self._history: list[str] = []
         self._history_pos: int = 0  # len(_history) means "not browsing"
         self._history_draft: str = ""  # saved draft while navigating history
@@ -320,7 +323,7 @@ class ControlRoomApp(App[None]):
                 yield Static(id="status")
                 yield RichLog(id="activity", markup=True, highlight=True, wrap=True)
             yield Static(id="market")
-        yield Input(placeholder="commands | help dock | dock | undock | buy <item> [N] | sell [item] | haul [commodity] | dest <system> | market ... | q", id="cmd")
+        yield Input(placeholder=_DEFAULT_COMMAND_PLACEHOLDER, id="cmd")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -741,6 +744,18 @@ class ControlRoomApp(App[None]):
         if not destination:
             self._log("[red]Usage: dest <system name>[/]")
             return
+        self._dest_prompt_destination = destination
+        default_settle = self._config.controls.galaxy_map_settle_seconds
+        self._log(f"Destination: [bold]{escape(destination)}[/]")
+        self._log(
+            f"[dim]Galaxy-map settle seconds? "
+            f"(Enter = {default_settle:.1f})[/]"
+        )
+        self.query_one("#cmd", Input).placeholder = (
+            f"galaxy map settle seconds (Enter = {default_settle:.1f})..."
+        )
+
+    def _dispatch_dest(self, destination: str, galaxy_map_settle: float) -> None:
         progress = self._make_progress()
         controls = self._make_controls(progress)
         sleeper = self._make_sleeper()
@@ -748,12 +763,16 @@ class ControlRoomApp(App[None]):
         journal_dir = self._journal_dir
 
         self._routine_active = True
-        self._log(f"Setting galaxy map destination: [bold]{escape(destination)}[/]...")
+        self._log(
+            f"Setting galaxy map destination: [bold]{escape(destination)}[/] "
+            f"[dim](settle {galaxy_map_settle:.1f}s)[/]"
+        )
         self._routine_worker = self._run_in_thread(lambda: set_gal_map_destination(
             controls,
             destination=destination,
             journal_dir=journal_dir,
             step_delay_s=step_delay,
+            map_settle_s=galaxy_map_settle,
             sleeper=sleeper,
             progress_fn=progress,
         ))
@@ -880,7 +899,14 @@ class ControlRoomApp(App[None]):
         if not self._check_routine_ready():
             return
         commodity = rest.strip()
-        self._haul_params = {"commodity": commodity, "buy_station": "", "sell_station": "", "sell_system": "", "buy_system": ""}
+        self._haul_params = {
+            "commodity": commodity,
+            "buy_station": "",
+            "sell_station": "",
+            "sell_system": "",
+            "buy_system": "",
+            "galaxy_map_settle": "",
+        }
         if not commodity:
             self._haul_prompt_step = "commodity"
             self._log("Haul loop setup — enter parameters below:")
@@ -893,7 +919,6 @@ class ControlRoomApp(App[None]):
             self.query_one("#cmd", Input).placeholder = "buy station (Enter to skip)..."
 
     def _handle_haul_prompt(self, value: str) -> None:
-        _DEFAULT_PLACEHOLDER = "commands | help dock | dock | undock | buy <item> [N] | sell [item] | haul [commodity] | dest <system> | market ... | q"
         if self._haul_prompt_step == "commodity":
             if not value.strip():
                 self._log("[red]Commodity is required — enter a commodity name.[/]")
@@ -938,8 +963,27 @@ class ControlRoomApp(App[None]):
                 self._log(f"  Buy system: [cyan]{escape(value.strip())}[/]")
             else:
                 self._log("  Buy system: [dim](none)[/]")
+            default_settle = self._config.controls.galaxy_map_settle_seconds
+            self._haul_prompt_step = "galaxy_map_settle"
+            self._log(
+                f"[dim]Galaxy-map settle seconds? "
+                f"(Enter = {default_settle:.1f})[/]"
+            )
+            self.query_one("#cmd", Input).placeholder = (
+                f"galaxy map settle seconds (Enter = {default_settle:.1f})..."
+            )
+        elif self._haul_prompt_step == "galaxy_map_settle":
+            parsed = self._parse_optional_nonnegative_float(
+                value,
+                default=self._config.controls.galaxy_map_settle_seconds,
+                label="Galaxy-map settle seconds",
+            )
+            if parsed is None:
+                return
+            self._haul_params["galaxy_map_settle"] = str(parsed)
+            self._log(f"  Galaxy-map settle: [cyan]{parsed:.1f}s[/]")
             self._haul_prompt_step = ""
-            self.query_one("#cmd", Input).placeholder = _DEFAULT_PLACEHOLDER
+            self.query_one("#cmd", Input).placeholder = _DEFAULT_COMMAND_PLACEHOLDER
             self._dispatch_haul_loop()
 
     def _dispatch_haul_loop(self) -> None:
@@ -948,6 +992,7 @@ class ControlRoomApp(App[None]):
         sell_station = self._haul_params.get("sell_station", "")
         sell_system = self._haul_params.get("sell_system", "")
         buy_system = self._haul_params.get("buy_system", "")
+        galaxy_map_settle_raw = self._haul_params.get("galaxy_map_settle", "")
 
         if self._ship.status != "in_station":
             self._log("[red]Haul loop requires you to be docked at the sell station before starting.[/]")
@@ -972,6 +1017,11 @@ class ControlRoomApp(App[None]):
         controls = self._make_controls(progress)
         sleeper = self._make_sleeper()
         step_delay = self._config.controls.step_delay_seconds
+        galaxy_map_settle = (
+            float(galaxy_map_settle_raw)
+            if galaxy_map_settle_raw
+            else self._config.controls.galaxy_map_settle_seconds
+        )
         journal_dir = self._journal_dir
         watcher = self._make_watcher()
 
@@ -984,6 +1034,7 @@ class ControlRoomApp(App[None]):
             label_parts.append(f"buy sys: [cyan]{escape(buy_system)}[/]")
         if sell_system:
             label_parts.append(f"sell sys: [cyan]{escape(sell_system)}[/]")
+        label_parts.append(f"map settle: [cyan]{galaxy_map_settle:.1f}s[/]")
         self._log(f"Starting haul loop: {', '.join(label_parts)} (infinite)...")
         self._routine_active = True
 
@@ -997,6 +1048,7 @@ class ControlRoomApp(App[None]):
             sell_system=sell_system,
             buy_system=buy_system,
             step_delay_s=step_delay,
+            galaxy_map_settle_s=galaxy_map_settle,
             sleeper=sleeper,
             progress_fn=progress,
         ))
@@ -1036,7 +1088,7 @@ class ControlRoomApp(App[None]):
             event.prevent_default()
             self.action_request_quit()
             return
-        if self._haul_prompt_step:
+        if self._haul_prompt_step or self._dest_prompt_destination:
             return  # don't interfere with multi-step haul prompts
         if event.key not in ("up", "down"):
             return
@@ -1067,6 +1119,19 @@ class ControlRoomApp(App[None]):
 
         if self._haul_prompt_step:
             self._handle_haul_prompt(raw)
+            return
+        if self._dest_prompt_destination:
+            destination = self._dest_prompt_destination
+            parsed = self._parse_optional_nonnegative_float(
+                raw,
+                default=self._config.controls.galaxy_map_settle_seconds,
+                label="Galaxy-map settle seconds",
+            )
+            if parsed is None:
+                return
+            self._dest_prompt_destination = ""
+            self.query_one("#cmd", Input).placeholder = _DEFAULT_COMMAND_PLACEHOLDER
+            self._dispatch_dest(destination, parsed)
             return
 
         if not raw:
@@ -1120,6 +1185,20 @@ class ControlRoomApp(App[None]):
             self._cmd_help(raw_rest)
         else:
             self._log(f"[dim]Unknown command: {escape(raw)}[/]")
+
+    def _parse_optional_nonnegative_float(self, raw: str, *, default: float, label: str) -> float | None:
+        value = raw.strip()
+        if not value:
+            return default
+        try:
+            parsed = float(value)
+        except ValueError:
+            self._log(f"[red]{escape(label)} must be a number.[/]")
+            return None
+        if parsed < 0:
+            self._log(f"[red]{escape(label)} must be non-negative.[/]")
+            return None
+        return parsed
 
     def _cmd_commands(self) -> None:
         self._log("[dim]Supported commands:[/]")

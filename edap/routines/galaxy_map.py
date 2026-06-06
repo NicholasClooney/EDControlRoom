@@ -29,9 +29,9 @@ def set_gal_map_destination(
     journal_dir: Path,
     open_check_fn: Callable[[], bool] | None = None,
     open_timeout_s: float = 10.0,
-    open_settle_s: float = 3.0,
+    open_settle_s: float = 5.0,
     search_settle_s: float = 2.0,
-    plot_settle_s: float = 2.0,
+    map_settle_s: float = 2.0,
     step_delay_s: float = 0.5,
     search_commit_hold_s: float = 0.2,
     select_hold_s: float = 5.0,
@@ -68,6 +68,8 @@ def set_gal_map_destination(
             if progress_fn is not None:
                 progress_fn("Galaxy map open check timed out, proceeding anyway...")
     elif open_settle_s > 0:
+        if progress_fn is not None:
+            progress_fn(f"Waiting {open_settle_s:.1f}s for galaxy map to open...")
         sleeper(open_settle_s)
 
     # Step 3: navigate to search field (UI_Up + UI_Select)
@@ -98,6 +100,8 @@ def set_gal_map_destination(
     if dispatch.status != "ok":
         return RoutineResult(action="Enter", dispatch=dispatch, details={"phase": "commit_search"})
     if search_settle_s > 0:
+        if progress_fn is not None:
+            progress_fn(f"Waiting {search_settle_s:.1f}s for search results to populate...")
         sleeper(search_settle_s)
 
     # Step 5: select the first result, then zoom/confirm plot
@@ -112,8 +116,13 @@ def set_gal_map_destination(
     dispatch = controls.ui_select()
     if dispatch.status != "ok":
         return RoutineResult(action="UI_Select", dispatch=dispatch, details={"phase": "select_result"})
-    if step_delay_s > 0:
-        sleeper(step_delay_s)
+    if map_settle_s > 0:
+        if progress_fn is not None:
+            progress_fn(
+                f"Waiting {map_settle_s:.1f}s for search result details to load "
+                "(increase this for distant systems)..."
+            )
+        sleeper(map_settle_s)
 
     if progress_fn is not None:
         progress_fn("Zooming to plot route...")
@@ -128,8 +137,13 @@ def set_gal_map_destination(
     plot_dispatch = controls.ui_select(hold_s=select_hold_s)
     if plot_dispatch.status != "ok":
         return RoutineResult(action="UI_Select", dispatch=plot_dispatch, details={"phase": "plot_route"})
-    if plot_settle_s > 0:
-        sleeper(plot_settle_s)
+    if map_settle_s > 0:
+        if progress_fn is not None:
+            progress_fn(
+                f"Waiting {map_settle_s:.1f}s for route plot to settle "
+                "(increase this for distant systems)..."
+            )
+        sleeper(map_settle_s)
 
     # Step 6: verify NavRoute.json
     actual = _read_navroute_destination(journal_dir)

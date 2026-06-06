@@ -48,6 +48,7 @@ def haul_loop(
     undock_timeout_s: float = 30.0,
     trade_timeout_s: float = 30.0,
     settle_s: float = 2.0,
+    galaxy_map_settle_s: float = 2.0,
     boost_settle_s: float = 3.0,
     deny_retry_delay_s: float = 5.0,
     max_dock_retries: int = 3,
@@ -130,6 +131,7 @@ def haul_loop(
                 destination=buy_system,
                 journal_dir=journal_dir,
                 step_delay_s=step_delay_s,
+                map_settle_s=galaxy_map_settle_s,
                 progress_fn=progress_fn,
             )
 
@@ -203,6 +205,7 @@ def haul_loop(
                 destination=sell_system,
                 journal_dir=journal_dir,
                 step_delay_s=step_delay_s,
+                map_settle_s=galaxy_map_settle_s,
                 progress_fn=progress_fn,
             )
 

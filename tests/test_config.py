@@ -38,6 +38,7 @@ class LoadConfigTests(unittest.TestCase):
             self.assertEqual(config.controls.stop_hotkey, "end")
             self.assertEqual(config.controls.minimum_action_hold_seconds, 0.1)
             self.assertEqual(config.controls.continuous_action_hold_seconds, 0.2)
+            self.assertEqual(config.controls.galaxy_map_settle_seconds, 2.0)
             self.assertEqual(config.screen.resolution_width, 1920)
             self.assertEqual(config.screen.capture.mode, "fullscreen")
             self.assertIn("center", config.screen.capture.regions)

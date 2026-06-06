@@ -559,7 +559,7 @@ class GalMapDestinationTests(unittest.TestCase):
             journal_dir=journal_dir,
             open_settle_s=0.0,
             search_settle_s=0.0,
-            plot_settle_s=0.0,
+            map_settle_s=0.0,
             step_delay_s=0.0,
             sleeper=lambda _: None,
         )
@@ -666,7 +666,7 @@ class GalMapDestinationTests(unittest.TestCase):
                 open_timeout_s=100.0,
                 step_delay_s=0.0,
                 search_settle_s=0.0,
-                plot_settle_s=0.0,
+                map_settle_s=0.0,
                 sleeper=lambda _: None,
                 time_fn=lambda: t[0],
             )

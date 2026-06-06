@@ -13,6 +13,8 @@ minimum_action_hold_seconds = 0.1
 continuous_action_hold_seconds = 0.2
 # Delay between individual key presses in any sequence.
 step_delay_seconds = 0.3
+# Shared settle delay for galaxy-map result loading and route plotting.
+galaxy_map_settle_seconds = 2.0
 
 [screen]
 resolution_width = 1920

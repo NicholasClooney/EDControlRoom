@@ -27,6 +27,7 @@ def _make_config(journal_dir: Path) -> AppConfig:
             minimum_action_hold_seconds=0.1,
             continuous_action_hold_seconds=0.2,
             step_delay_seconds=0.3,
+            galaxy_map_settle_seconds=2.0,
         ),
         screen=ScreenConfig(
             resolution_width=1920,

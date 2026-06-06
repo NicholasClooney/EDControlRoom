@@ -26,6 +26,7 @@ class ControlsConfig:
     minimum_action_hold_seconds: float
     continuous_action_hold_seconds: float
     step_delay_seconds: float
+    galaxy_map_settle_seconds: float
 
 
 @dataclass(frozen=True)
@@ -171,6 +172,8 @@ def validate_config(config: AppConfig) -> AppConfig:
         )
     if config.controls.step_delay_seconds < 0:
         raise ConfigError("Config value `controls.step_delay_seconds` must be non-negative.")
+    if config.controls.galaxy_map_settle_seconds < 0:
+        raise ConfigError("Config value `controls.galaxy_map_settle_seconds` must be non-negative.")
     if config.screen.resolution_width <= 0:
         raise ConfigError("Config value `screen.resolution_width` must be greater than 0.")
     if config.screen.resolution_height <= 0:
@@ -253,6 +256,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             minimum_action_hold_seconds=_float(controls, "minimum_action_hold_seconds", 0.1),
             continuous_action_hold_seconds=_float(controls, "continuous_action_hold_seconds", 0.2),
             step_delay_seconds=_float(controls, "step_delay_seconds", 0.3),
+            galaxy_map_settle_seconds=_float(controls, "galaxy_map_settle_seconds", 2.0),
         ),
         screen=ScreenConfig(
             resolution_width=_integer(screen, "resolution_width", 1920),
