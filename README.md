@@ -160,6 +160,35 @@ python3 run_routine.py --config config.toml --routine dock --delay-seconds 5 --a
 
 The detailed manual test flow lives in [docs/manual-journal-routine-testing.md](docs/manual-journal-routine-testing.md).
 
+### `scratch_cv.py`
+
+CV pipeline probe. Captures one frame, runs the three template matchers (compass, navpoint, destination), and reports scores vs thresholds. Useful for verifying templates after a re-bake or diagnosing a failing match.
+
+```sh
+uv run python3 scratch_cv.py --config config.toml
+uv run python3 scratch_cv.py --config config.toml --save-debug /tmp/cv-debug.png --open
+uv run python3 scratch_cv.py --config config.toml --save-raw /tmp/cv-raw.png --delay 5
+```
+
+### `scratch_rebake.py`
+
+Extracts the processed image region used for a given template so you can re-bake it from a live CrossOver capture. `compass` outputs an equalized grayscale crop of the compass region. `destination` outputs an orange-filtered binary mask of the center region. Open the output in Preview, crop the target element, and save over the corresponding file in `templates/`.
+
+```sh
+uv run python3 scratch_rebake.py compass --delay 3 --open
+uv run python3 scratch_rebake.py destination --delay 3 --open
+uv run python3 scratch_rebake.py destination --raw /tmp/cv-raw.png --open
+```
+
+### `scratch_market.py`
+
+Reads `Market.json` from the journal directory and prints a formatted commodity listing matching the in-game market layout.
+
+```sh
+uv run python3 scratch_market.py --config config.toml
+uv run python3 scratch_market.py --config config.toml --raw
+```
+
 ## Existing Runtime Assumptions
 
 The legacy computer vision code was built around:
