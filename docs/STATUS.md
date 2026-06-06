@@ -79,6 +79,15 @@ Full detail: `docs/research/0004-legacy-autopilot-port-status.md`.
 
 Plans 0002 and 0003 are independent and can run in parallel.
 
+## Ideas / Future Work
+
+These are not scheduled yet but worth capturing for planning.
+
+- **Galaxy map input.** Drive the in-game galaxy map to type a destination system name procedurally, replacing manual system selection. Would unlock fully automated route setting.
+- **Market trading.** Read commodity data from journal/market logs, then drive buy/sell menus via procedural input sequences to automate trade runs.
+- **Human-like input variation.** Add randomized dwell and inter-key delay variation to all synthetic input so sequences look less robotic. For menu-heavy flows (market buy/sell), include occasional overshoot-and-correct behavior (navigate past item, back up) to mimic human selection patterns.
+- **Monitoring and command center CLI.** A multi-panel terminal UI showing: ship and commander status (location, credits, cargo) in one panel, and a concise running log in another (docked at X, refueled, bought N units of Y, etc.). Likely built on `rich` or `textual`.
+
 - Next task in 0003: `undock` is live-validated. `refuel` is the only remaining routine; it remains intentionally deferred.
 - `refuel` is intentionally deferred for now.
 - Next task in 0002: re-bake `templates/compass.png` from a live capture. Run `uv run python3 scratch_cv.py --config config.toml --save-raw /tmp/cv-raw.png`, then crop the compass from the raw frame.
