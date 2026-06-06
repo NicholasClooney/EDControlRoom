@@ -9,7 +9,8 @@ from time import sleep
 
 from edap.binding_lookup import BindingLookup
 from edap.config import ConfigError, DEFAULT_CONFIG_PATH
-from edap.routines import auto_zero_throttle_on_arrival, dock, jump, market_buy, market_sell, station_refuel_menu, undock
+from edap.progress_controls import ProgressShipControls
+from edap.routines import auto_zero_throttle_on_arrival, dock, haul_loop, jump, market_buy, market_sell, station_refuel_menu, undock
 from edap.runtime import build_runtime_context, load_config_with_fallback
 from edap.ship_controls import ShipControls
 from edap.state import JournalWatcher
@@ -22,6 +23,7 @@ ROUTINE_STATION_REFUEL_MENU = "station_refuel_menu"
 ROUTINE_UNDOCK = "undock"
 ROUTINE_MARKET_BUY = "market_buy"
 ROUTINE_MARKET_SELL = "market_sell"
+ROUTINE_HAUL_LOOP = "haul_loop"
 SUPPORTED_ROUTINES = [
     ROUTINE_AUTO_ZERO_THROTTLE_ON_ARRIVAL,
     ROUTINE_JUMP,
@@ -30,6 +32,7 @@ SUPPORTED_ROUTINES = [
     ROUTINE_UNDOCK,
     ROUTINE_MARKET_BUY,
     ROUTINE_MARKET_SELL,
+    ROUTINE_HAUL_LOOP,
 ]
 DEFAULT_EVENT_LOG_PATH = Path("artifacts/run-routine-events.log")
 
@@ -98,70 +101,6 @@ class LoggingJournalWatcher:
         self._log_handle.write(json.dumps(event))
         self._log_handle.write("\n")
         self._log_handle.flush()
-
-
-class ProgressShipControls:
-    """Wraps ShipControls to log each key dispatch to stderr."""
-
-    def __init__(self, controls: ShipControls, progress_fn) -> None:
-        self._controls = controls
-        self._progress = progress_fn
-
-    def _log(self, action: str, repeat: int) -> None:
-        suffix = f" x{repeat}" if repeat > 1 else ""
-        self._progress(f"  key: {action}{suffix}")
-
-    def set_speed_zero(self, repeat: int = 1, hold_s: float | None = None):
-        self._log("SetSpeedZero", repeat)
-        return self._controls.set_speed_zero(repeat=repeat, hold_s=hold_s)
-
-    def boost(self, repeat: int = 1, hold_s: float | None = None):
-        self._log("BoostButton", repeat)
-        return self._controls.boost(repeat=repeat, hold_s=hold_s)
-
-    def hyper_super_combination(self, repeat: int = 1, hold_s: float | None = None):
-        self._log("HyperSuperCombination", repeat)
-        return self._controls.hyper_super_combination(repeat=repeat, hold_s=hold_s)
-
-    def focus_left_panel(self, repeat: int = 1, hold_s: float | None = None):
-        self._log("FocusLeftPanel", repeat)
-        return self._controls.focus_left_panel(repeat=repeat, hold_s=hold_s)
-
-    def ui_back(self, repeat: int = 1, hold_s: float | None = None):
-        self._log("UI_Back", repeat)
-        return self._controls.ui_back(repeat=repeat, hold_s=hold_s)
-
-    def cycle_next_panel(self, repeat: int = 1, hold_s: float | None = None):
-        self._log("CycleNextPanel", repeat)
-        return self._controls.cycle_next_panel(repeat=repeat, hold_s=hold_s)
-
-    def cycle_previous_panel(self, repeat: int = 1, hold_s: float | None = None):
-        self._log("CyclePreviousPanel", repeat)
-        return self._controls.cycle_previous_panel(repeat=repeat, hold_s=hold_s)
-
-    def ui_right(self, repeat: int = 1, hold_s: float | None = None):
-        self._log("UI_Right", repeat)
-        return self._controls.ui_right(repeat=repeat, hold_s=hold_s)
-
-    def ui_left(self, repeat: int = 1, hold_s: float | None = None):
-        self._log("UI_Left", repeat)
-        return self._controls.ui_left(repeat=repeat, hold_s=hold_s)
-
-    def ui_up(self, repeat: int = 1, hold_s: float | None = None):
-        self._log("UI_Up", repeat)
-        return self._controls.ui_up(repeat=repeat, hold_s=hold_s)
-
-    def ui_select(self, repeat: int = 1, hold_s: float | None = None):
-        self._log("UI_Select", repeat)
-        return self._controls.ui_select(repeat=repeat, hold_s=hold_s)
-
-    def ui_down(self, repeat: int = 1, hold_s: float | None = None):
-        self._log("UI_Down", repeat)
-        return self._controls.ui_down(repeat=repeat, hold_s=hold_s)
-
-    def head_look_reset(self, repeat: int = 1, hold_s: float | None = None):
-        self._log("HeadLookReset", repeat)
-        return self._controls.head_look_reset(repeat=repeat, hold_s=hold_s)
 
 
 def main() -> int:
@@ -299,6 +238,24 @@ def main() -> int:
         help="Skip Market.json station verification (useful for testing)",
     )
     parser.add_argument(
+        "--buy-station",
+        metavar="NAME",
+        default="",
+        help="Label for the buy station in haul_loop progress output",
+    )
+    parser.add_argument(
+        "--sell-station",
+        metavar="NAME",
+        default="",
+        help="Label for the sell station in haul_loop progress output",
+    )
+    parser.add_argument(
+        "--iterations",
+        type=int,
+        default=0,
+        help="Number of haul loop iterations (0 = run until interrupted)",
+    )
+    parser.add_argument(
         "--log-events",
         action="store_true",
         help="Log all watched journal events to a file while the routine runs",
@@ -392,6 +349,14 @@ def main() -> int:
                 sys.stderr.write("--amount must be a positive integer or MAX\n")
                 return 2
 
+    if args.routine == ROUTINE_HAUL_LOOP:
+        if not args.target:
+            sys.stderr.write("--target is required for haul_loop (the commodity to buy)\n")
+            return 2
+        if args.iterations < 0:
+            sys.stderr.write("--iterations must be non-negative (0 = infinite)\n")
+            return 2
+
     routine_actions = ["SetSpeedZero"]
     if args.routine == ROUTINE_JUMP:
         routine_actions = ["SetSpeedZero", "HyperSuperCombination"]
@@ -415,6 +380,12 @@ def main() -> int:
         routine_actions = ["UI_Back", "HeadLookReset", "UI_Down", "UI_Select"]
     elif args.routine in {ROUTINE_MARKET_BUY, ROUTINE_MARKET_SELL}:
         routine_actions = ["UI_Select", "UI_Down", "UI_Right", "UI_Back"]
+    elif args.routine == ROUTINE_HAUL_LOOP:
+        routine_actions = [
+            "SetSpeedZero", "BoostButton", "FocusLeftPanel",
+            "UI_Back", "UI_Up", "UI_Down", "UI_Select", "UI_Left", "UI_Right",
+            "CycleNextPanel", "CyclePreviousPanel", "HeadLookReset",
+        ]
 
     runtime = build_runtime_context(loaded.config, actions=routine_actions)
     journal_dir = runtime.journal.effective_path
@@ -427,6 +398,7 @@ def main() -> int:
         ROUTINE_UNDOCK,
         ROUTINE_MARKET_BUY,
         ROUTINE_MARKET_SELL,
+        ROUTINE_HAUL_LOOP,
     }
     if routine_needs_journal and journal_dir is None:
         sys.stderr.write(
@@ -461,7 +433,7 @@ def main() -> int:
         minimum_action_hold_s=loaded.config.controls.minimum_action_hold_seconds,
         continuous_action_hold_s=loaded.config.controls.continuous_action_hold_seconds,
     )
-    logging_controls = ProgressShipControls(controls, _progress)
+    logging_controls = ProgressShipControls(controls, _progress, verbose=True)
     logging_sleeper = _make_logging_sleeper(_progress)
 
     if args.delay_seconds > 0:
@@ -487,6 +459,8 @@ def main() -> int:
             watch_target = "Undocked events"
         elif args.routine in {ROUTINE_MARKET_BUY, ROUTINE_MARKET_SELL}:
             watch_target = "MarketBuy/MarketSell events"
+        elif args.routine == ROUTINE_HAUL_LOOP:
+            watch_target = "haul loop events (SupercruiseExit, Docked, Undocked, MarketBuy/Sell)"
         _progress(
             f"Watching {journal_dir} for {watch_target} "
             f"(poll {args.poll_interval_seconds:.2f}s)."
@@ -525,6 +499,14 @@ def main() -> int:
             _progress(f"  {_describe_binding(runtime.binding_lookup, action)}")
     elif args.routine in {ROUTINE_MARKET_BUY, ROUTINE_MARKET_SELL}:
         for action in ["UI_Select", "UI_Down", "UI_Right", "UI_Back"]:
+            _progress(f"  {_describe_binding(runtime.binding_lookup, action)}")
+    elif args.routine == ROUTINE_HAUL_LOOP:
+        sell_label = f" ({args.sell_station})" if args.sell_station else ""
+        buy_label = f" ({args.buy_station})" if args.buy_station else ""
+        iter_label = f"{args.iterations} iterations" if args.iterations > 0 else "infinite"
+        _progress(f"Haul loop: {iter_label}")
+        _progress(f"  Sell station{sell_label} -> buy {args.target} (MAX) -> sell station{sell_label}")
+        for action in ["SetSpeedZero", "BoostButton", "FocusLeftPanel", "UI_Back", "UI_Up", "UI_Down", "UI_Select", "UI_Left", "UI_Right", "CycleNextPanel", "CyclePreviousPanel", "HeadLookReset"]:
             _progress(f"  {_describe_binding(runtime.binding_lookup, action)}")
 
     try:
@@ -605,6 +587,28 @@ def main() -> int:
                 max_hold_s=args.max_hold_seconds,
                 trade_timeout_s=args.trade_timeout_seconds,
                 skip_station_check=args.skip_station_check,
+                sleeper=logging_sleeper,
+                progress_fn=_progress,
+            )
+        elif args.routine == ROUTINE_HAUL_LOOP:
+            result = haul_loop(
+                logging_controls,
+                watcher,
+                journal_dir=journal_dir,
+                commodity=args.target,
+                sell_station=args.sell_station,
+                buy_station=args.buy_station,
+                iterations=args.iterations,
+                step_delay_s=step_delay_seconds,
+                max_hold_s=args.max_hold_seconds,
+                dock_timeout_s=args.dock_timeout_seconds,
+                request_timeout_s=args.request_timeout_seconds,
+                undock_timeout_s=args.undock_timeout_seconds,
+                trade_timeout_s=args.trade_timeout_seconds,
+                settle_s=args.settle_seconds,
+                boost_settle_s=args.boost_settle_seconds,
+                deny_retry_delay_s=args.deny_retry_delay_seconds,
+                max_dock_retries=args.max_retries,
                 sleeper=logging_sleeper,
                 progress_fn=_progress,
             )

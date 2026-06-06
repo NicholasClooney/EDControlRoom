@@ -13,6 +13,7 @@ Routine commands (type in the input bar):
     buy <item> [N]     buy N units (default MAX) of commodity
     sell [item] [N]    sell commodity (default: market filter); amount default MAX
     jump               FSD jump sequence
+    haul [commodity]   start haul loop; prompts for commodity/stations if not provided
 
 Market commands:
     market [filter]    filter market panel
@@ -43,7 +44,8 @@ from textual.widgets import Footer, Header, Input, RichLog, Static
 from textual.worker import get_current_worker
 
 from edap.config import AppConfig
-from edap.routines import dock, jump, market_buy, market_sell, undock, RoutineResult
+from edap.progress_controls import ProgressShipControls
+from edap.routines import dock, haul_loop, jump, market_buy, market_sell, undock, RoutineResult
 from edap.runtime import RuntimeContext, build_runtime_context, load_config_with_fallback
 from edap.ship_controls import ShipControls
 from edap.state import JournalWatcher, get_latest_journal_log, read_ship_state
@@ -173,6 +175,9 @@ class ControlRoomApp(App[None]):
         self._market_mtime: float | None = None
         self._controls: ShipControls | None = None
         self._routine_active = False
+        self._verbose_controls: bool = False
+        self._haul_params: dict[str, str] = {}
+        self._haul_prompt_step: str = ""  # "commodity" | "buy_station" | "sell_station" | ""
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -181,7 +186,7 @@ class ControlRoomApp(App[None]):
                 yield Static(id="status")
                 yield RichLog(id="activity", markup=True, highlight=True, wrap=True)
             yield Static(id="market")
-        yield Input(placeholder="dock | undock | buy <item> [N] | sell [item] | market [filter|lock|unlock] | q", id="cmd")
+        yield Input(placeholder="dock | undock | buy <item> [N] | sell [item] | haul [commodity] | market [filter|lock|unlock] | q", id="cmd")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -485,6 +490,9 @@ class ControlRoomApp(App[None]):
             self.call_from_thread(self._log, f"[dim]  {escape(msg)}[/]")
         return progress
 
+    def _make_controls(self, progress_fn: Callable[[str], None]) -> ProgressShipControls:
+        return ProgressShipControls(self._controls, progress_fn, verbose=self._verbose_controls)  # type: ignore[arg-type]
+
     @work(thread=True)
     def _run_in_thread(self, fn: Callable[[], RoutineResult | None]) -> None:
         try:
@@ -509,8 +517,8 @@ class ControlRoomApp(App[None]):
         if not self._check_routine_ready():
             return
         skip_scx = self._ship.status == "in_space"
-        controls = self._controls
         progress = self._make_progress()
+        controls = self._make_controls(progress)
         step_delay = self._config.controls.step_delay_seconds
         watcher = JournalWatcher(self._journal_dir)
 
@@ -529,8 +537,8 @@ class ControlRoomApp(App[None]):
     def _cmd_undock(self) -> None:
         if not self._check_routine_ready():
             return
-        controls = self._controls
         progress = self._make_progress()
+        controls = self._make_controls(progress)
         step_delay = self._config.controls.step_delay_seconds
         watcher = JournalWatcher(self._journal_dir)
 
@@ -546,8 +554,8 @@ class ControlRoomApp(App[None]):
     def _cmd_jump(self) -> None:
         if not self._check_routine_ready():
             return
-        controls = self._controls
         progress = self._make_progress()
+        controls = self._make_controls(progress)
         watcher = JournalWatcher(self._journal_dir)
 
         self._routine_active = True
@@ -571,8 +579,8 @@ class ControlRoomApp(App[None]):
             self._log(f"[red]Invalid amount — use a positive integer or MAX[/]")
             return
 
-        controls = self._controls
         progress = self._make_progress()
+        controls = self._make_controls(progress)
         step_delay = self._config.controls.step_delay_seconds
         market_path = self._market_path
         watcher = JournalWatcher(self._journal_dir)
@@ -605,8 +613,8 @@ class ControlRoomApp(App[None]):
             self._sell_all()
 
     def _sell_item(self, target: str, amount: int | str) -> None:
-        controls = self._controls
         progress = self._make_progress()
+        controls = self._make_controls(progress)
         step_delay = self._config.controls.step_delay_seconds
         market_path = self._market_path
         watcher = JournalWatcher(self._journal_dir)
@@ -635,8 +643,8 @@ class ControlRoomApp(App[None]):
             self._log("[yellow]Nothing sellable in cargo (empty, all stolen, or all mission cargo)[/]")
             return
 
-        controls = self._controls
         progress = self._make_progress()
+        controls = self._make_controls(progress)
         step_delay = self._config.controls.step_delay_seconds
         market_path = self._market_path
         watcher = JournalWatcher(self._journal_dir)
@@ -669,11 +677,105 @@ class ControlRoomApp(App[None]):
 
         self._run_in_thread(run_all)
 
+    def _cmd_haul(self, rest: str) -> None:
+        if not self._check_routine_ready():
+            return
+        commodity = rest.strip()
+        self._haul_params = {"commodity": commodity, "buy_station": "", "sell_station": ""}
+        if not commodity:
+            self._haul_prompt_step = "commodity"
+            self._log("Haul loop setup — enter parameters below:")
+            self._log("[dim]Commodity to buy? (e.g. Aluminium)[/]")
+            self.query_one("#cmd", Input).placeholder = "commodity..."
+        else:
+            self._log(f"Haul loop: commodity = [cyan]{escape(commodity)}[/]")
+            self._haul_prompt_step = "buy_station"
+            self._log("[dim]Buy station name? (press Enter to skip)[/]")
+            self.query_one("#cmd", Input).placeholder = "buy station (Enter to skip)..."
+
+    def _handle_haul_prompt(self, value: str) -> None:
+        _DEFAULT_PLACEHOLDER = "dock | undock | buy <item> [N] | sell [item] | haul [commodity] | market [filter|lock|unlock] | q"
+        if self._haul_prompt_step == "commodity":
+            if not value.strip():
+                self._log("[red]Commodity is required — enter a commodity name.[/]")
+                return
+            self._haul_params["commodity"] = value.strip()
+            self._log(f"  Commodity: [cyan]{escape(value.strip())}[/]")
+            self._haul_prompt_step = "buy_station"
+            self._log("[dim]Buy station name? (press Enter to skip)[/]")
+            self.query_one("#cmd", Input).placeholder = "buy station (Enter to skip)..."
+        elif self._haul_prompt_step == "buy_station":
+            self._haul_params["buy_station"] = value.strip()
+            if value.strip():
+                self._log(f"  Buy station: [cyan]{escape(value.strip())}[/]")
+            else:
+                self._log("  Buy station: [dim](none)[/]")
+            self._haul_prompt_step = "sell_station"
+            self._log("[dim]Sell station name? (press Enter to skip)[/]")
+            self.query_one("#cmd", Input).placeholder = "sell station (Enter to skip)..."
+        elif self._haul_prompt_step == "sell_station":
+            self._haul_params["sell_station"] = value.strip()
+            if value.strip():
+                self._log(f"  Sell station: [cyan]{escape(value.strip())}[/]")
+            else:
+                self._log("  Sell station: [dim](none)[/]")
+            self._haul_prompt_step = ""
+            self.query_one("#cmd", Input).placeholder = _DEFAULT_PLACEHOLDER
+            self._dispatch_haul_loop()
+
+    def _dispatch_haul_loop(self) -> None:
+        commodity = self._haul_params.get("commodity", "")
+        buy_station = self._haul_params.get("buy_station", "")
+        sell_station = self._haul_params.get("sell_station", "")
+
+        if self._ship.status != "in_station":
+            self._log("[red]Haul loop requires you to be docked at the sell station before starting.[/]")
+            return
+        if sell_station and self._ship.station:
+            if self._ship.station.lower() != sell_station.lower():
+                self._log(
+                    f"[yellow]Warning: docked at [bold]{escape(self._ship.station)}[/bold] "
+                    f"but sell station is [bold]{escape(sell_station)}[/bold] — "
+                    f"haul loop expects you to start at the sell station.[/]"
+                )
+        else:
+            self._log("[dim]Reminder: haul loop starts by selling cargo here, then flies to the buy station. Make sure you are docked at your sell station.[/]")
+
+        progress = self._make_progress()
+        controls = self._make_controls(progress)
+        step_delay = self._config.controls.step_delay_seconds
+        journal_dir = self._journal_dir
+        watcher = JournalWatcher(journal_dir)
+
+        label_parts = [f"[cyan]{escape(commodity)}[/]"]
+        if buy_station:
+            label_parts.append(f"buy @ [cyan]{escape(buy_station)}[/]")
+        if sell_station:
+            label_parts.append(f"sell @ [cyan]{escape(sell_station)}[/]")
+        self._log(f"Starting haul loop: {', '.join(label_parts)} (infinite)...")
+        self._routine_active = True
+
+        self._run_in_thread(lambda: haul_loop(
+            controls,
+            watcher,
+            journal_dir=journal_dir,
+            commodity=commodity,
+            buy_station=buy_station,
+            sell_station=sell_station,
+            step_delay_s=step_delay,
+            progress_fn=progress,
+        ))
+
     # ── Command input ──────────────────────────────────────────────────────────
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         raw = event.value.strip()
         event.input.value = ""
+
+        if self._haul_prompt_step:
+            self._handle_haul_prompt(raw)
+            return
+
         if not raw:
             return
 
@@ -685,6 +787,8 @@ class ControlRoomApp(App[None]):
         parts = cmd.split(None, 1)
         verb = parts[0]
         rest = parts[1].strip() if len(parts) > 1 else ""
+        raw_parts = raw.split(None, 1)
+        raw_rest = raw_parts[1].strip() if len(raw_parts) > 1 else ""
 
         if verb == "dock":
             self._cmd_dock()
@@ -696,15 +800,30 @@ class ControlRoomApp(App[None]):
             self._cmd_buy(rest)
         elif verb == "sell":
             self._cmd_sell(rest)
+        elif verb == "haul":
+            self._cmd_haul(raw_rest)
         elif verb == "market":
             self._cmd_market(rest)
+        elif verb == "verbose":
+            self._cmd_verbose(rest)
         elif verb in {"help", "?"}:
             self._log(
-                "[dim]Routines: dock | undock | jump | buy <item> [N] | sell [item] [N]  "
-                "—  Market: market [filter|lock|unlock]  —  q to quit[/]"
+                "[dim]Routines: dock | undock | jump | buy <item> [N] | sell [item] [N] | haul [commodity]  "
+                "—  Market: market [filter|lock|unlock]  —  verbose [on|off]  —  q to quit[/]"
             )
         else:
             self._log(f"[dim]Unknown command: {escape(raw)}[/]")
+
+    def _cmd_verbose(self, rest: str) -> None:
+        if rest in {"on", "1", "true"}:
+            self._verbose_controls = True
+            self._log("[dim]Verbose key logging on — key presses will appear in the activity log.[/]")
+        elif rest in {"off", "0", "false", ""}:
+            self._verbose_controls = False
+            self._log("[dim]Verbose key logging off.[/]")
+        else:
+            state = "on" if self._verbose_controls else "off"
+            self._log(f"[dim]verbose {state}  —  use: verbose on | verbose off[/]")
 
     def _cmd_market(self, rest: str) -> None:
         if rest == "lock":
