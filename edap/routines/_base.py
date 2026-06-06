@@ -91,17 +91,11 @@ class SupportsGalaxyMapControls(Protocol):
     def ui_up(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
         """Dispatch the UI_Up action."""
 
-    def ui_down(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
-        """Dispatch the UI_Down action."""
-
     def ui_select(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
         """Dispatch the UI_Select action."""
 
     def ui_right(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
         """Dispatch the UI_Right action."""
-
-    def cam_zoom_in(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
-        """Dispatch the CamZoomIn action."""
 
     def type_text(self, text: str) -> None:
         """Type a string of text character by character."""

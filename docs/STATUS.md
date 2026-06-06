@@ -2,7 +2,7 @@
 
 _This is the maintained status document for the repo. Update it at the end of each session when project understanding, port status, or next steps change. Keep it current over time rather than treating it as a frozen checkpoint._
 
-Last updated: 2026-06-06 (session 11)
+Last updated: 2026-06-06 (session 12)
 
 ## Where We Are
 
@@ -36,6 +36,7 @@ Latest live validation on the current macOS + CrossOver setup:
 - Dock routine was further extended (not yet live-validated): boost after SupercruiseExit with configurable settle time, DockingDenied retry loop with configurable delay, `ui_left` after `ui_select` to dismiss the station contact menu
 - `run_routine.py --routine undock --log-events` completed a full undock cycle from a docked state
 - `run_routine.py --routine set_gal_map_destination --destination "Colonia" --delay-seconds 5` live-validated: two input bugs found and fixed — modifier key was not explicitly pressed/released (caused ctrl bleed-through to subsequent keys), and `type_text` used keycode 0 for every character (CrossOver ignores the unicode string and reads the physical keycode, so all text arrived as AAAA...); both fixed in `edap/platform/input/macos.py`
+- Galaxy map destination flow re-validated after reverting 251a841: the CamZoomIn (Z) + poll/retry variant broke destination selection because Z arrived while the search field was still in text-input mode. Pre-251a841 sequence (UI_Right + UI_Select held 5s + fixed 2s settle + single NavRoute.json check) was restored on top of the refactored `edap/routines/` package and confirmed working live.
 
 The important caveat is that the real autopilot loop is still largely unported. The project is in a portability-first and runtime-seams phase, not a "macOS autopilot feature complete" phase.
 
@@ -64,7 +65,7 @@ The important caveat is that the real autopilot loop is still largely unported. 
 | Market data reading | Done | `scratch_market.py` — reads `Market.json` from journal dir, mirrors in-game layout (alphabetical categories, alphabetical items within each); `--raw` flat table with sort options |
 | Market buy/sell routine | Done (not live-validated) | `edap/routines/` — `market_buy` / `market_sell` wired to `run_routine.py`; sell list filtered by `DemandBracket > 0` (matches game); sell skips quantity input (game pre-fills full cargo); `UI_Back x2` after trade to return to station menu; station guard with `--skip-station-check` bypass; `--target` / `--amount` / `--step-delay-seconds` flags |
 | Community haul loop | **Needs live validation** | `edap/routines/` — `haul_loop` chains existing pieces: sell all cargo from `Cargo.json` (skips stolen/mission), undock, wait SCX + dock at buy station, buy MAX commodity, undock, wait SCX + dock at sell station with auto-refuel, repeat; wired to `run_routine.py` as `--routine haul_loop --target <commodity> [--buy-station NAME] [--sell-station NAME] [--iterations N]` (0 = infinite) |
-| Galaxy map destination | **Needs live validation** | `edap/routines/` — restored original sequence: UI_Right + UI_Select (pick result), CamZoomIn/Z + UI_Select held 0.75s (plot), NavRoute.json polled up to `plot_timeout_s` (default 15s) instead of fixed sleep, retries through up to `max_results` (default 5) on mismatch; `--plot-timeout-seconds` flag in `run_routine.py`; `run_routine.py` was missing `CamZoomIn` and `UI_Down` from its `routine_actions` list (now fixed); Bug: CamZoomIn (Z) reaches the search field while it is still in text-input mode — fix still pending |
+| Galaxy map destination | Done (live-validated) | `edap/routines/` — sequence reverted to the pre-251a841 flow after the CamZoomIn/poll/retry version broke destination selection (Z landed in the still-active search bar). Live-validated flow: UI_Up + UI_Select (focus search), type text + Enter, UI_Right + UI_Select held `select_hold_s` (default 5s) to plot, fixed `plot_settle_s` (default 2s) sleep, single NavRoute.json check; `run_routine.py` flag is `--plot-settle-seconds`. No retry loop, no CamZoomIn, no UI_Down. |
 | Control room TUI | **Needs live validation** | `control_room.py` — Textual TUI with ship status, activity log, and market panels; dispatches `dock`/`undock`/`jump`/`buy`/`sell`/`haul`/`dest` routines from the input bar; `dest <system>` / `set_dest <system>` wired to `set_gal_map_destination`; `sell` with no args iterates full cargo manifest; `haul [commodity]` prompts step-by-step for commodity, buy station, sell station; sell station defaults to current docked station; enforces start-at-sell-station precondition; `verbose on/off` toggles key press logging; command history (up/down arrows); Ctrl-C/Ctrl-D require double-press to exit (5s window); input bar auto-focused on launch; `market filter <name>` sets filter (title-cased); `market` / `market clear` clears; `market lock/unlock` |
 
 ## Unverified on macOS / CrossOver

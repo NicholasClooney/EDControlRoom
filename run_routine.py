@@ -276,10 +276,10 @@ def main() -> int:
         help="Seconds to wait after submitting a search before selecting results (default 2)",
     )
     parser.add_argument(
-        "--plot-timeout-seconds",
+        "--plot-settle-seconds",
         type=float,
-        default=15.0,
-        help="Max seconds to wait for NavRoute.json to confirm the plotted route (default 15)",
+        default=2.0,
+        help="Seconds to wait after plotting before verifying NavRoute (default 2)",
     )
     parser.add_argument(
         "--select-hold-seconds",
@@ -424,7 +424,7 @@ def main() -> int:
             "CycleNextPanel", "CyclePreviousPanel", "HeadLookReset",
         ]
     elif args.routine == ROUTINE_SET_GAL_MAP_DESTINATION:
-        routine_actions = ["GalaxyMapOpen", "UI_Up", "UI_Down", "UI_Select", "UI_Right", "CamZoomIn"]
+        routine_actions = ["GalaxyMapOpen", "UI_Up", "UI_Select", "UI_Right"]
 
     runtime = build_runtime_context(loaded.config, actions=routine_actions)
     journal_dir = runtime.journal.effective_path
@@ -663,9 +663,9 @@ def main() -> int:
                 journal_dir=journal_dir,
                 open_settle_s=args.open_settle_seconds,
                 search_settle_s=args.search_settle_seconds,
-                plot_timeout_s=args.plot_timeout_seconds,
+                plot_settle_s=args.plot_settle_seconds,
                 step_delay_s=step_delay_seconds,
-                zoom_select_hold_s=args.select_hold_seconds,
+                select_hold_s=args.select_hold_seconds,
                 sleeper=logging_sleeper,
                 progress_fn=_progress,
             )

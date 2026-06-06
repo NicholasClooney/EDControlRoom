@@ -62,7 +62,7 @@ _ALL_ROUTINE_ACTIONS = [
     "UI_Back", "UI_Up", "UI_Down", "UI_Select", "UI_Left", "UI_Right",
     "CycleNextPanel", "CyclePreviousPanel",
     "HeadLookReset",
-    "GalaxyMapOpen", "CamZoomIn",
+    "GalaxyMapOpen",
 ]
 
 
