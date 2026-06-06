@@ -276,10 +276,10 @@ def main() -> int:
         help="Seconds to wait after submitting a search before selecting results (default 2)",
     )
     parser.add_argument(
-        "--plot-settle-seconds",
+        "--plot-timeout-seconds",
         type=float,
-        default=2.0,
-        help="Seconds to wait after plotting before verifying NavRoute (default 2)",
+        default=15.0,
+        help="Max seconds to wait for NavRoute.json to confirm the plotted route (default 15)",
     )
     parser.add_argument(
         "--select-hold-seconds",
@@ -663,9 +663,9 @@ def main() -> int:
                 journal_dir=journal_dir,
                 open_settle_s=args.open_settle_seconds,
                 search_settle_s=args.search_settle_seconds,
-                plot_settle_s=args.plot_settle_seconds,
+                plot_timeout_s=args.plot_timeout_seconds,
                 step_delay_s=step_delay_seconds,
-                select_hold_s=args.select_hold_seconds,
+                zoom_select_hold_s=args.select_hold_seconds,
                 sleeper=logging_sleeper,
                 progress_fn=_progress,
             )

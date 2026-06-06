@@ -549,15 +549,20 @@ class GalMapDestinationTests(unittest.TestCase):
         destination: str,
         journal_dir: Path,
     ) -> RoutineResult:
+        # Counter-based time_fn so the poll loop advances without real wall time.
+        t: list[float] = [0.0]
+        def _tick() -> float:
+            v = t[0]; t[0] += 1.0; return v
         return set_gal_map_destination(
             controls,
             destination=destination,
             journal_dir=journal_dir,
             open_settle_s=0.0,
             search_settle_s=0.0,
-            plot_settle_s=0.0,
+            plot_timeout_s=5.0,
             step_delay_s=0.0,
             sleeper=lambda _: None,
+            time_fn=_tick,
         )
 
     def test_happy_path_plots_and_closes(self) -> None:
@@ -575,7 +580,7 @@ class GalMapDestinationTests(unittest.TestCase):
         actions = [c["action"] for c in controls.calls]
         self.assertEqual(actions[0], "GalaxyMapOpen")
         self.assertIn("UI_Up", actions)
-        self.assertNotIn("CamZoomIn", actions)
+        self.assertIn("CamZoomIn", actions)
         self.assertEqual(actions[-1], "GalaxyMapOpen")
 
     def test_types_destination_then_enter(self) -> None:
@@ -601,10 +606,12 @@ class GalMapDestinationTests(unittest.TestCase):
 
         actions = [c["action"] for c in controls.calls]
         right_idx = actions.index("UI_Right")
-        # UI_Select with hold immediately follows UI_Right
+        # UI_Select (pick result), then CamZoomIn, then UI_Select held (plot)
         self.assertEqual(actions[right_idx + 1], "UI_Select")
-        select_call = controls.calls[right_idx + 1]
-        self.assertGreater(select_call["hold_s"], 0)
+        self.assertEqual(actions[right_idx + 2], "CamZoomIn")
+        self.assertEqual(actions[right_idx + 3], "UI_Select")
+        plot_select_call = controls.calls[right_idx + 3]
+        self.assertGreater(plot_select_call["hold_s"], 0)
 
     def test_mismatch_returns_error_and_closes_map(self) -> None:
         controls = _make_gal_map_controls()
@@ -617,7 +624,7 @@ class GalMapDestinationTests(unittest.TestCase):
         self.assertEqual(result.dispatch.status, "error")
         actions = [c["action"] for c in controls.calls]
         self.assertEqual(actions[-1], "GalaxyMapOpen")
-        self.assertNotIn("UI_Down", actions)
+        self.assertIn("UI_Down", actions)
 
     def test_missing_navroute_returns_error(self) -> None:
         controls = _make_gal_map_controls()
@@ -658,7 +665,7 @@ class GalMapDestinationTests(unittest.TestCase):
                 open_timeout_s=100.0,
                 step_delay_s=0.0,
                 search_settle_s=0.0,
-                plot_settle_s=0.0,
+                plot_timeout_s=5.0,
                 sleeper=lambda _: None,
                 time_fn=lambda: t[0],
             )
