@@ -44,7 +44,7 @@ from rich.text import Text
 from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Footer, Header, Input, Static, TextArea
+from textual.widgets import Footer, Header, Input, RichLog, Static
 from textual.worker import get_current_worker
 
 from edap.config import AppConfig
@@ -69,7 +69,6 @@ _ALL_ROUTINE_ACTIONS = [
 ]
 
 _DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | dock | undock | buy <item> [N] | sell [item] | haul [commodity] | dest <system> | market ... | q"
-_MAX_ACTIVITY_LINES = 2000
 
 
 # ── State ──────────────────────────────────────────────────────────────────────
@@ -259,15 +258,6 @@ def _parse_amount(s: str) -> int | str | None:
         return n if n > 0 else None
     except ValueError:
         return None
-
-
-def _plain_text(message: str) -> str:
-    try:
-        return Text.from_markup(message).plain
-    except Exception:
-        return message
-
-
 # ── App ────────────────────────────────────────────────────────────────────────
 
 
@@ -313,7 +303,6 @@ class ControlRoomApp(App[None]):
         self._controls: ShipControls | None = None
         self._routine_active = False
         self._verbose_controls: bool = False
-        self._activity_lines: list[str] = []
         self._haul_params: dict[str, str] = {}
         self._haul_prompt_step: str = ""  # "commodity" | "buy_station" | "sell_station" | "sell_system" | "buy_system" | "galaxy_map_settle" | "dock_timeout"
         self._dest_prompt_destination: str = ""
@@ -330,14 +319,7 @@ class ControlRoomApp(App[None]):
         with Horizontal(id="main"):
             with Vertical(id="left"):
                 yield Static(id="status")
-                yield TextArea(
-                    "",
-                    id="activity",
-                    read_only=True,
-                    soft_wrap=True,
-                    show_line_numbers=False,
-                    show_cursor=False,
-                )
+                yield RichLog(id="activity", markup=True, highlight=True, wrap=True)
             yield Static(id="market")
         yield Input(placeholder=_DEFAULT_COMMAND_PLACEHOLDER, id="cmd")
         yield Footer()
@@ -345,7 +327,7 @@ class ControlRoomApp(App[None]):
     def on_mount(self) -> None:
         self.title = "ED Control Room"
         self.query_one("#status", Static).border_title = "SHIP STATUS"
-        self.query_one("#activity", TextArea).border_title = "ACTIVITY"
+        self.query_one("#activity", RichLog).border_title = "ACTIVITY"
         self.query_one("#market", Static).border_title = "MARKET"
         self._build_controls()
         self._bootstrap_ship_state()
@@ -472,13 +454,9 @@ class ControlRoomApp(App[None]):
         widget.update(Text.from_markup("\n".join(sections)))
 
     def _log(self, msg: str) -> None:
-        line = f"{_hhmmss()}  {_plain_text(msg)}"
-        self._activity_lines.append(line)
-        if len(self._activity_lines) > _MAX_ACTIVITY_LINES:
-            self._activity_lines = self._activity_lines[-_MAX_ACTIVITY_LINES:]
-        activity = self.query_one("#activity", TextArea)
-        activity.load_text("\n".join(self._activity_lines))
-        activity.scroll_end(animate=False)
+        self.query_one("#activity", RichLog).write(
+            f"[dim]{_hhmmss()}[/]  {msg}"
+        )
 
     # ── Market JSON ────────────────────────────────────────────────────────────
 
@@ -709,6 +687,8 @@ class ControlRoomApp(App[None]):
         controls = self._make_controls(progress)
         sleeper = self._make_sleeper()
         step_delay = self._config.controls.step_delay_seconds
+        undock_timeout = self._config.controls.undock_timeout_seconds
+        in_space_timeout = self._config.controls.undock_in_space_timeout_seconds
         watcher = self._make_watcher()
 
         self._routine_active = True
@@ -738,6 +718,8 @@ class ControlRoomApp(App[None]):
         self._routine_worker = self._run_in_thread(lambda: undock(
             controls,
             watcher,
+            undock_timeout_s=undock_timeout,
+            in_space_timeout_s=in_space_timeout,
             step_delay_s=step_delay,
             sleeper=sleeper,
             progress_fn=progress,
