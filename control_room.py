@@ -18,10 +18,10 @@ Routine commands (type in the input bar):
     set_dest <system>  alias for dest
 
 Market commands:
-    market <term>      filter market panel by commodity name (e.g. market aluminium)
-    market             clear the filter
-    market lock        freeze panel to current station
-    market unlock      unfreeze panel
+    market filter <name>   filter market panel by commodity name (e.g. market filter aluminium)
+    market [clear]         clear the filter (default when no args)
+    market lock            freeze panel to current station
+    market unlock          unfreeze panel
 
 Other:
     q / quit           exit
@@ -199,7 +199,7 @@ class ControlRoomApp(App[None]):
                 yield Static(id="status")
                 yield RichLog(id="activity", markup=True, highlight=True, wrap=True)
             yield Static(id="market")
-        yield Input(placeholder="dock | undock | buy <item> [N] | sell [item] | haul [commodity] | dest <system> | market <term>|lock|unlock | q", id="cmd")
+        yield Input(placeholder="dock | undock | buy <item> [N] | sell [item] | haul [commodity] | dest <system> | market filter <name>|lock|unlock | q", id="cmd")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -729,7 +729,7 @@ class ControlRoomApp(App[None]):
             self.query_one("#cmd", Input).placeholder = "buy station (Enter to skip)..."
 
     def _handle_haul_prompt(self, value: str) -> None:
-        _DEFAULT_PLACEHOLDER = "dock | undock | buy <item> [N] | sell [item] | haul [commodity] | dest <system> | market <term>|lock|unlock | q"
+        _DEFAULT_PLACEHOLDER = "dock | undock | buy <item> [N] | sell [item] | haul [commodity] | dest <system> | market filter <name>|lock|unlock | q"
         if self._haul_prompt_step == "commodity":
             if not value.strip():
                 self._log("[red]Commodity is required — enter a commodity name.[/]")
@@ -903,7 +903,7 @@ class ControlRoomApp(App[None]):
         elif verb in {"help", "?"}:
             self._log(
                 "[dim]Routines: dock | undock | jump | buy <item> [N] | sell [item] [N] | haul [commodity] | dest <system>  "
-                "—  Market: market <term> | market lock | market unlock  —  verbose [on|off]  —  q to quit[/]"
+                "—  Market: market filter <name> | market [clear] | market lock | market unlock  —  verbose [on|off]  —  q to quit[/]"
             )
         else:
             self._log(f"[dim]Unknown command: {escape(raw)}[/]")
@@ -920,9 +920,6 @@ class ControlRoomApp(App[None]):
             self._log(f"[dim]verbose {state}  —  use: verbose on | verbose off[/]")
 
     def _cmd_market(self, rest: str) -> None:
-        # strip accidental leading "filter " keyword (old docs used "market [filter]")
-        if rest.lower().startswith("filter "):
-            rest = rest[7:].strip()
         rest_lower = rest.lower()
         if rest_lower == "lock":
             self._market.locked = True
@@ -933,11 +930,16 @@ class ControlRoomApp(App[None]):
             self._log("[dim]Market panel unlocked.[/]")
             self._load_market_json()
             self._refresh_market()
-        elif rest:
-            self._market_filter = rest.title()
+        elif rest_lower.startswith("filter "):
+            term = rest[7:].strip()
+            if not term:
+                self._log("[red]Usage: market filter <item name>[/]")
+                return
+            self._market_filter = term.title()
             self._log(f"[dim]Market filter: {escape(self._market_filter)}[/]")
             self._refresh_market()
         else:
+            # market / market clear — both clear the filter
             self._market_filter = None
             self._log("[dim]Market filter cleared.[/]")
             self._refresh_market()
