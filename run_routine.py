@@ -414,7 +414,7 @@ def main() -> int:
     elif args.routine == ROUTINE_UNDOCK:
         routine_actions = ["UI_Back", "HeadLookReset", "UI_Down", "UI_Select"]
     elif args.routine in {ROUTINE_MARKET_BUY, ROUTINE_MARKET_SELL}:
-        routine_actions = ["UI_Select", "UI_Down", "UI_Right"]
+        routine_actions = ["UI_Select", "UI_Down", "UI_Right", "UI_Back"]
 
     runtime = build_runtime_context(loaded.config, actions=routine_actions)
     journal_dir = runtime.journal.effective_path
@@ -524,7 +524,7 @@ def main() -> int:
         for action in ["UI_Back", "HeadLookReset", "UI_Down", "UI_Select"]:
             _progress(f"  {_describe_binding(runtime.binding_lookup, action)}")
     elif args.routine in {ROUTINE_MARKET_BUY, ROUTINE_MARKET_SELL}:
-        for action in ["UI_Select", "UI_Down", "UI_Right"]:
+        for action in ["UI_Select", "UI_Down", "UI_Right", "UI_Back"]:
             _progress(f"  {_describe_binding(runtime.binding_lookup, action)}")
 
     try:

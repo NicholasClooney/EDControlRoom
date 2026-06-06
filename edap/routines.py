@@ -60,6 +60,9 @@ class SupportsMarketControls(Protocol):
     def ui_right(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
         """Dispatch the UI_Right action."""
 
+    def ui_back(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        """Dispatch the UI_Back action."""
+
 
 class SupportsDockingControls(SupportsStationMenuControls, SupportsSetSpeedZero, Protocol):
     def boost(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
@@ -870,27 +873,29 @@ def _market_trade(
     watcher.poll()
 
     # Set quantity
-    if amount == "MAX":
-        if progress_fn is not None:
-            progress_fn(f"  UI_Right hold {max_hold_s:.0f}s (fill to max)")
-        qty_dispatch = controls.ui_right(hold_s=max_hold_s)
-        if qty_dispatch.status != "ok":
-            return RoutineResult(action="UI_Right", dispatch=qty_dispatch, details={"phase": "set_quantity"})
-    else:
-        qty = int(amount)
-        if progress_fn is not None:
-            progress_fn(f"  UI_Right x{qty} (set quantity to {qty})")
-        qty_dispatch = None
-        for _ in range(qty):
-            qty_dispatch = controls.ui_right()
+    # Set quantity -- sell pre-fills with full cargo amount so no input needed
+    if side == "buy":
+        if amount == "MAX":
+            if progress_fn is not None:
+                progress_fn(f"  UI_Right hold {max_hold_s:.0f}s (fill to max)")
+            qty_dispatch = controls.ui_right(hold_s=max_hold_s)
             if qty_dispatch.status != "ok":
                 return RoutineResult(action="UI_Right", dispatch=qty_dispatch, details={"phase": "set_quantity"})
-            if step_delay_s > 0:
-                sleeper(step_delay_s)
-        if qty_dispatch is None:
-            return _market_error(event_type, "amount must be at least 1")
-    if step_delay_s > 0:
-        sleeper(step_delay_s)
+        else:
+            qty = int(amount)
+            if progress_fn is not None:
+                progress_fn(f"  UI_Right x{qty} (set quantity to {qty})")
+            qty_dispatch = None
+            for _ in range(qty):
+                qty_dispatch = controls.ui_right()
+                if qty_dispatch.status != "ok":
+                    return RoutineResult(action="UI_Right", dispatch=qty_dispatch, details={"phase": "set_quantity"})
+                if step_delay_s > 0:
+                    sleeper(step_delay_s)
+            if qty_dispatch is None:
+                return _market_error(event_type, "amount must be at least 1")
+        if step_delay_s > 0:
+            sleeper(step_delay_s)
 
     # Confirm trade
     confirm_label = "BUY" if side == "buy" else "SELL"
@@ -933,6 +938,11 @@ def _market_trade(
         cr_key = "TotalCost" if side == "buy" else "TotalSale"
         cr_val = trade_event.get(cr_key, "?")
         progress_fn(f"{event_type}: {count}x {target}, {cr_val} CR total")
+
+    # Return to station menu
+    if progress_fn is not None:
+        progress_fn("  UI_Back x2 (return to station menu)")
+    controls.ui_back(repeat=2)
 
     return RoutineResult(
         action=event_type,
