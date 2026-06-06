@@ -44,7 +44,7 @@ def _filter_blue(bgr: np.ndarray) -> np.ndarray:
 
 def _filter_orange2(bgr: np.ndarray) -> np.ndarray:
     hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
-    return cv2.inRange(hsv, np.array([15, 220, 220]), np.array([30, 255, 255]))
+    return cv2.inRange(hsv, np.array([10, 100, 80]), np.array([30, 255, 255]))
 
 
 def _match_compass(
@@ -150,6 +150,8 @@ def main() -> None:
     parser.add_argument("--threshold-destination", type=float, default=_THRESHOLD_DESTINATION)
     parser.add_argument("--delay", type=float, default=0.0, metavar="SECONDS",
                         help="wait before capturing (focus the game window first)")
+    parser.add_argument("--open", action="store_true",
+                        help="open debug image in Preview after saving (requires --save-debug)")
     args = parser.parse_args()
 
     if args.delay > 0:
@@ -218,6 +220,9 @@ def main() -> None:
     if args.save_debug:
         _save_debug(frame_bgr, compass_b, center_b, c_res, n_res, d_res, Path(args.save_debug))
         print(f"Debug frame: {args.save_debug}")
+        if args.open:
+            import subprocess
+            subprocess.run(["open", args.save_debug])
 
     sys.exit(0 if all_pass else 1)
 

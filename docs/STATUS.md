@@ -2,7 +2,7 @@
 
 _This is the maintained status document for the repo. Update it at the end of each session when project understanding, port status, or next steps change. Keep it current over time rather than treating it as a frozen checkpoint._
 
-Last updated: 2026-06-06 (session 3)
+Last updated: 2026-06-06 (session 4)
 
 ## Where We Are
 
@@ -64,7 +64,7 @@ The important caveat is that the real autopilot loop is still largely unported. 
 
 ## Unverified on macOS / CrossOver
 
-- **CV templates on Retina + CrossOver.** `scratch_cv.py` has been run against a live CrossOver session. Navpoint passed (0.59 vs 0.5 threshold). Compass near-missed (0.29 vs 0.3 threshold) — template needs re-baking from a frame captured on this machine. Destination was 0.0 as expected (ship was not in supercruise with a target locked). Compass re-bake is the next CV task.
+- **CV templates on Retina + CrossOver.** All three templates re-baked and passing against live CrossOver captures: compass (re-baked from equalized region), navpoint (was already passing), destination (re-baked from orange-filtered center region; `_filter_orange2` range loosened from `[15,220,220]–[30,255,255]` to `[10,100,80]–[30,255,255]` to match CrossOver rendering). `scratch_rebake.py` added as a helper for future re-bakes. Scores observed: compass ~0.6+, navpoint ~0.86, destination passing when target reticle is centered on screen.
 - **Real-time capture loop.** Only ever captured a single frame. Frame rate and capture cost in a continuous loop are unmeasured.
 - **Journal write latency vs poll rate.** We have not measured how quickly Elite (through CrossOver) flushes events to disk relative to a 0.5s poll.
 - **Window focus during autopilot.** `CGEventPost` is global on macOS; behavior across focus loss and multi-monitor setups during a live run is untested.
@@ -98,6 +98,4 @@ These are not scheduled yet but worth capturing for planning.
 - Next task in 0003: `undock` is live-validated. `refuel` is the only remaining routine; it remains intentionally deferred.
 - `refuel` is intentionally deferred for now.
 - Next task for 0005: live-validate `market_buy` and `market_sell`. Navigation count bug fixed (sell list was using `Demand > 0`; corrected to `DemandBracket > 0`). First full test: `--routine market_sell --target Aluminium --amount MAX --step-delay-seconds 1 --delay-seconds 5`.
-- Next task in 0002: re-bake `templates/compass.png` from a live capture. Run `uv run python3 scratch_cv.py --config config.toml --save-raw /tmp/cv-raw.png`, then crop the compass from the raw frame.
-- Destination template needs a supercruise test before deciding whether it also needs re-baking.
-- Then: use plan 0004 to measure capture-loop performance and journal latency.
+- Next task in 0002: CV templates are validated. Next step is plan 0004 — measure capture-loop performance and journal latency, then wire CV into a real alignment loop.
