@@ -615,10 +615,12 @@ def _market_buy_list(items: list[dict]) -> list[tuple[str, str]]:
 
 
 def _market_sell_list(items: list[dict]) -> list[tuple[str, str]]:
+    # DemandBracket > 0 matches the in-game sell tab. Items with Demand=1 and
+    # bracket=0 are placeholders the game does not display or accept.
     rows = [
         (_market_localised(it, "Category"), _market_localised(it, "Name"))
         for it in items
-        if it.get("Demand", 0) > 0
+        if it.get("DemandBracket", 0) > 0
     ]
     return sorted(rows, key=lambda r: (r[0].lower(), r[1].lower()))
 

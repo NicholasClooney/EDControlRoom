@@ -50,7 +50,7 @@ def _ingame_display(items: list[dict], filter_term: str | None) -> None:
         demand = item.get("Demand", 0)
         if stock > 0:
             buy_groups.setdefault(category, []).append((name, stock, item.get("BuyPrice", 0)))
-        if demand > 0:
+        if item.get("DemandBracket", 0) > 0:
             sell_groups.setdefault(category, []).append((name, demand, item.get("SellPrice", 0)))
 
     all_names = [n for grp in (buy_groups, sell_groups) for it in grp.values() for n, _, _ in it]
