@@ -46,6 +46,12 @@ class SupportsUndockControls(Protocol):
     def ui_select(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
         """Dispatch the UI_Select action."""
 
+    def set_speed_full(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        """Dispatch the SetSpeed100 action."""
+
+    def boost(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        """Dispatch the BoostButton action."""
+
 
 class SupportsMarketControls(Protocol):
     def ui_select(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
@@ -157,3 +163,10 @@ def _is_docked_event(event: dict[str, object]) -> bool:
 
 def _is_undocked_event(event: dict[str, object]) -> bool:
     return event.get("event") == "Undocked"
+
+
+def _is_in_space_event(event: dict[str, object]) -> bool:
+    return (
+        (event.get("event") == "Location" and event.get("Docked") is False)
+        or event.get("event") in {"SupercruiseEntry", "FSDJump", "SupercruiseExit", "DockingCancelled"}
+    )

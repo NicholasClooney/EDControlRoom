@@ -10,6 +10,7 @@ from edap.routines._base import (
     SupportsPollEvents,
     SupportsStationMenuControls,
     SupportsUndockControls,
+    _is_in_space_event,
     _is_docked_event,
     _is_docking_response_event,
     _is_supercruise_exit_event,
@@ -348,6 +349,7 @@ def undock(
     watcher: SupportsPollEvents,
     *,
     undock_timeout_s: float = 30.0,
+    in_space_timeout_s: float = 180.0,
     step_delay_s: float = 0.3,
     time_fn: Callable[[], float] = monotonic,
     sleeper: Callable[[float], None] = sleep,
@@ -355,6 +357,8 @@ def undock(
 ) -> RoutineResult:
     if undock_timeout_s < 0:
         raise ValueError("undock_timeout_s must be non-negative")
+    if in_space_timeout_s < 0:
+        raise ValueError("in_space_timeout_s must be non-negative")
     if step_delay_s < 0:
         raise ValueError("step_delay_s must be non-negative")
 
@@ -426,9 +430,57 @@ def undock(
     if progress_fn is not None:
         station = undocked_event.get("StationName", "")
         progress_fn(f"Undocked: {station}" if station else "Undocked")
+
+    if progress_fn is not None:
+        progress_fn(f"Waiting for in-space confirmation (timeout {in_space_timeout_s:.0f}s)...")
+    in_space_event = _wait_for_event(
+        watcher,
+        predicate=_is_in_space_event,
+        deadline=time_fn() + in_space_timeout_s,
+        time_fn=time_fn,
+    )
+    if in_space_event is None:
+        return RoutineResult(
+            action="Undocked",
+            dispatch=ActionDispatchResult(
+                action="Undocked",
+                status="error",
+                reason=f"in-space confirmation was not observed within {in_space_timeout_s:.0f}s after undocking",
+            ),
+            trigger_event=undocked_event,
+            details={
+                "phase": "wait_for_in_space",
+                "undock_timeout_s": undock_timeout_s,
+                "in_space_timeout_s": in_space_timeout_s,
+            },
+        )
+
+    if progress_fn is not None:
+        progress_fn("In space confirmed; setting speed to 100%...")
+    full_speed_dispatch = controls.set_speed_full()
+    if full_speed_dispatch.status != "ok":
+        return RoutineResult(
+            action="SetSpeed100",
+            dispatch=full_speed_dispatch,
+            trigger_event=in_space_event,
+            details={
+                "phase": "set_speed_full",
+                "undocked_event": undocked_event,
+                "in_space_event": in_space_event,
+            },
+        )
+
+    if progress_fn is not None:
+        progress_fn("Boosting away...")
+    boost_dispatch = controls.boost()
     return RoutineResult(
-        action="Undocked",
-        dispatch=launch_dispatch,
-        trigger_event=undocked_event,
-        details={"phase": "complete"},
+        action="BoostButton",
+        dispatch=boost_dispatch,
+        trigger_event=in_space_event,
+        details={
+            "phase": "complete",
+            "undocked_event": undocked_event,
+            "in_space_event": in_space_event,
+            "set_speed_full": full_speed_dispatch.to_dict(),
+        },
     )

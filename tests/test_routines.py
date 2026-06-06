@@ -17,6 +17,7 @@ from edap.routines import (
     set_speed_zero_then_wait,
     station_refuel_menu,
     station_refuel_menu_sequence,
+    undock,
 )
 
 
@@ -33,6 +34,10 @@ class FakeShipControls:
 
     def set_speed_zero(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
         self.calls.append({"action": "SetSpeedZero", "repeat": repeat, "hold_s": hold_s})
+        return self._set_speed_zero_result
+
+    def set_speed_full(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        self.calls.append({"action": "SetSpeed100", "repeat": repeat, "hold_s": hold_s})
         return self._set_speed_zero_result
 
     def hyper_super_combination(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
@@ -65,6 +70,10 @@ class FakeShipControls:
 
     def cycle_previous_panel(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
         self.calls.append({"action": "CyclePreviousPanel", "repeat": repeat, "hold_s": hold_s})
+        return self._set_speed_zero_result
+
+    def head_look_reset(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        self.calls.append({"action": "HeadLookReset", "repeat": repeat, "hold_s": hold_s})
         return self._set_speed_zero_result
 
     def boost(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
@@ -403,6 +412,9 @@ class RoutinesTests(unittest.TestCase):
                 {"action": "FocusLeftPanel", "repeat": 1, "hold_s": 0.0},
                 {"action": "CycleNextPanel", "repeat": 1, "hold_s": 0.0},
                 {"action": "CycleNextPanel", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Left", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Left", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Left", "repeat": 1, "hold_s": 0.0},
                 {"action": "UI_Right", "repeat": 1, "hold_s": 0.0},
                 {"action": "UI_Select", "repeat": 1, "hold_s": 0.0},
                 {"action": "UI_Left", "repeat": 1, "hold_s": 0.0},
@@ -411,7 +423,7 @@ class RoutinesTests(unittest.TestCase):
                 {"action": "UI_Back", "repeat": 1, "hold_s": 0.0},
             ],
         )
-        self.assertEqual(sleep_calls, [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 1.0])
+        self.assertEqual(sleep_calls, [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 1.0])
 
     def test_dock_waits_for_supercruise_exit_and_then_docks(self) -> None:
         controls = FakeShipControls(
@@ -450,7 +462,7 @@ class RoutinesTests(unittest.TestCase):
         self.assertEqual(result.details["supercruise_exit_event"], {"event": "SupercruiseExit", "BodyType": "Station"})
         self.assertEqual(controls.calls[0], {"action": "BoostButton", "repeat": 1, "hold_s": 0.0})
         self.assertEqual(controls.calls[-1], {"action": "SetSpeedZero", "repeat": 2, "hold_s": 0.0})
-        self.assertEqual(sleep_calls, [3.0, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 1.0])
+        self.assertEqual(sleep_calls, [3.0, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 1.0])
 
     def test_dock_retries_after_docking_denied(self) -> None:
         controls = FakeShipControls(
@@ -523,13 +535,99 @@ class RoutinesTests(unittest.TestCase):
         self.assertEqual(result.details["auto_refuel"], True)
         self.assertEqual(result.details["followup_action"], "station_refuel_menu")
         self.assertEqual(result.details["supercruise_exit_event"], None)
-        self.assertEqual(sleep_calls, [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 1.0, 2.0, 0.5, 0.5])
+        self.assertEqual(sleep_calls, [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 1.0, 2.0, 0.5, 0.5])
         self.assertEqual(
             controls.calls[-3:],
             [
                 {"action": "UI_Up", "repeat": 1, "hold_s": 0.0},
                 {"action": "UI_Select", "repeat": 1, "hold_s": 0.0},
                 {"action": "UI_Down", "repeat": 1, "hold_s": 0.0},
+            ],
+        )
+
+    def test_undock_waits_for_in_space_then_sets_full_speed_and_boosts(self) -> None:
+        controls = FakeShipControls(
+            set_speed_zero_result=ActionDispatchResult(
+                action="SetSpeed100",
+                status="ok",
+                binding=NormalizedBinding(key="w", modifier=None),
+            )
+        )
+        watcher = FakeWatcher(
+            [
+                [],  # absorbed by prime poll() before the undocked wait
+                [{"event": "Undocked", "StationName": "Pawelczyk Dock"}],
+                [{"event": "Location", "Docked": False, "StationName": "Pawelczyk Dock"}],
+            ]
+        )
+        time_values = iter([0.0, 0.0, 0.1, 0.1])
+        sleep_calls: list[float] = []
+
+        result = undock(
+            controls,
+            watcher,
+            undock_timeout_s=30.0,
+            in_space_timeout_s=180.0,
+            step_delay_s=0.3,
+            time_fn=lambda: next(time_values),
+            sleeper=sleep_calls.append,
+        )
+
+        self.assertEqual(result.action, "BoostButton")
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertEqual(result.trigger_event, {"event": "Location", "Docked": False, "StationName": "Pawelczyk Dock"})
+        self.assertEqual(result.details["undocked_event"], {"event": "Undocked", "StationName": "Pawelczyk Dock"})
+        self.assertEqual(result.details["in_space_event"], {"event": "Location", "Docked": False, "StationName": "Pawelczyk Dock"})
+        self.assertEqual(
+            controls.calls,
+            [
+                {"action": "UI_Back", "repeat": 10, "hold_s": 0.0},
+                {"action": "HeadLookReset", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Down", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Select", "repeat": 1, "hold_s": 0.0},
+                {"action": "SetSpeed100", "repeat": 1, "hold_s": 0.0},
+                {"action": "BoostButton", "repeat": 1, "hold_s": 0.0},
+            ],
+        )
+        self.assertEqual(sleep_calls, [0.3, 0.3, 0.3])
+
+    def test_undock_returns_error_when_in_space_not_seen(self) -> None:
+        controls = FakeShipControls(
+            set_speed_zero_result=ActionDispatchResult(
+                action="SetSpeed100",
+                status="ok",
+                binding=NormalizedBinding(key="w", modifier=None),
+            )
+        )
+        watcher = FakeWatcher(
+            [
+                [],
+                [{"event": "Undocked", "StationName": "Pawelczyk Dock"}],
+                [],
+            ]
+        )
+        time_values = iter([0.0, 0.0, 0.1, 0.3])
+
+        result = undock(
+            controls,
+            watcher,
+            undock_timeout_s=30.0,
+            in_space_timeout_s=0.1,
+            step_delay_s=0.0,
+            time_fn=lambda: next(time_values),
+            sleeper=lambda _: None,
+        )
+
+        self.assertEqual(result.action, "Undocked")
+        self.assertEqual(result.dispatch.status, "error")
+        self.assertIn("in-space confirmation", result.dispatch.reason)
+        self.assertEqual(
+            controls.calls,
+            [
+                {"action": "UI_Back", "repeat": 10, "hold_s": 0.0},
+                {"action": "HeadLookReset", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Down", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Select", "repeat": 1, "hold_s": 0.0},
             ],
         )
 
