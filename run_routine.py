@@ -424,7 +424,7 @@ def main() -> int:
             "CycleNextPanel", "CyclePreviousPanel", "HeadLookReset",
         ]
     elif args.routine == ROUTINE_SET_GAL_MAP_DESTINATION:
-        routine_actions = ["GalaxyMapOpen", "UI_Up", "UI_Select", "UI_Right"]
+        routine_actions = ["GalaxyMapOpen", "UI_Up", "UI_Down", "UI_Select", "UI_Right", "CamZoomIn"]
 
     runtime = build_runtime_context(loaded.config, actions=routine_actions)
     journal_dir = runtime.journal.effective_path
