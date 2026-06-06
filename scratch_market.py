@@ -20,7 +20,7 @@ import json
 import sys
 from pathlib import Path
 
-from edap.runtime import load_config_with_fallback
+from edap.runtime import build_runtime_context, load_config_with_fallback
 
 _BRACKET_LABEL = {0: "none", 1: "low", 2: "med", 3: "high"}
 
@@ -48,9 +48,15 @@ def main() -> None:
     args = parser.parse_args()
 
     loaded = load_config_with_fallback(args.config)
-    journal_dir = loaded.config.paths.journal_dir
+    ctx = build_runtime_context(loaded.config)
+    journal_dir = ctx.journal.effective_path
     if journal_dir is None:
-        print("ERROR: paths.journal_dir not set in config", file=sys.stderr)
+        print(
+            f"ERROR: could not resolve journal directory "
+            f"(source: {ctx.journal.cli_source_status()}). "
+            "Set paths.journal_dir in config.toml or ensure CrossOver auto-detection works.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     market_path = journal_dir / "Market.json"
