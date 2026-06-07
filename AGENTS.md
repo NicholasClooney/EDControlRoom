@@ -65,6 +65,7 @@ After an agent finishes:
 - capture the result in `docs/STATUS.md` if it changes project understanding, status, or next steps
 - update any deeper supporting docs only when the change needs more detail than `docs/STATUS.md` should carry
 - integrate and commit the work atomically in logically grouped commits
+- when bringing work back from a branch or worktree, keep history linear: prefer cherry-pick or rebase, and do not create merge commits
 - close the completed agent once its work has been captured
 
 Do not leave completed agent work floating in the worktree without either committing it or intentionally discarding it.
