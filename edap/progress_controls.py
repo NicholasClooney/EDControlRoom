@@ -36,9 +36,25 @@ class ProgressShipControls:
         self._log("SetSpeedZero", repeat)
         return self._controls.set_speed_zero(repeat=repeat, hold_s=hold_s)
 
+    def set_speed_full(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
+        self._log("SetSpeed100", repeat)
+        return self._controls.set_speed_full(repeat=repeat, hold_s=hold_s)
+
     def boost(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
         self._log("BoostButton", repeat)
         return self._controls.boost(repeat=repeat, hold_s=hold_s)
+
+    def ui_focus(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
+        self._log("UIFocus", repeat)
+        return self._controls.ui_focus(repeat=repeat, hold_s=hold_s)
+
+    def roll_left(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
+        self._log("RollLeftButton", repeat)
+        return self._controls.roll_left(repeat=repeat, hold_s=hold_s)
+
+    def roll_right(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
+        self._log("RollRightButton", repeat)
+        return self._controls.roll_right(repeat=repeat, hold_s=hold_s)
 
     def hyper_super_combination(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
         self._log("HyperSuperCombination", repeat)
