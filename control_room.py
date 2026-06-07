@@ -60,6 +60,11 @@ from edap.control_room.history import (
     resume_summary as _resume_summary,
 )
 from edap.control_room.models import MarketData, ReplaySelection, ShipState
+from edap.control_room.routines_movement import (
+    cmd_boost as _cmd_boost_impl,
+    cmd_escape as _cmd_escape_impl,
+    cmd_jump as _cmd_jump_impl,
+)
 from edap.control_room.routines_station import (
     cmd_dock as _cmd_dock_impl,
     cmd_undock as _cmd_undock_impl,
@@ -71,7 +76,7 @@ from edap.control_room_state import (
     save_control_room_state,
 )
 from edap.progress_controls import ProgressShipControls
-from edap.routines import escape_mass_lock, haul_loop, jump, market_buy, market_sell, set_gal_map_destination, RoutineResult
+from edap.routines import haul_loop, market_buy, market_sell, set_gal_map_destination
 from edap.runtime import RuntimeContext, build_runtime_context, load_config_with_fallback
 from edap.ship_controls import DEFAULT_SHIP_CONTROL_ACTIONS, ShipControls
 from edap.state import JournalWatcher, get_latest_journal_log, read_ship_state
@@ -827,59 +832,13 @@ class ControlRoomApp(App[None]):
         _cmd_undock_impl(self)
 
     def _cmd_jump(self) -> None:
-        if not self._check_routine_ready():
-            return
-        progress = self._make_progress()
-        controls = self._make_controls(progress)
-        watcher = self._make_watcher()
-
-        self._routine_active = True
-        self._log("Starting jump sequence...")
-        self._routine_worker = self._run_in_thread(lambda: jump(
-            controls,
-            watcher,
-            progress_fn=progress,
-        ))
+        _cmd_jump_impl(self)
 
     def _cmd_escape(self) -> None:
-        if not self._check_routine_ready():
-            return
-        progress = self._make_progress()
-        controls = self._make_controls(progress)
-        sleeper = self._make_sleeper()
-        journal_dir = self._journal_dir
-        boost_delay = self._config.controls.mass_lock_boost_delay_seconds
-        step_delay = self._config.controls.step_delay_seconds
-
-        self._routine_active = True
-        self._log("Starting escape mass lock...")
-        self._routine_worker = self._run_in_thread(lambda: escape_mass_lock(
-            controls,
-            journal_dir=journal_dir,
-            boost_delay_s=boost_delay,
-            step_delay_s=step_delay,
-            sleeper=sleeper,
-            progress_fn=progress,
-        ))
+        _cmd_escape_impl(self)
 
     def _cmd_boost(self) -> None:
-        if not self._check_routine_ready():
-            return
-        progress = self._make_progress()
-        controls = self._make_controls(progress)
-
-        self._routine_active = True
-        self._log("Boosting 3x...")
-
-        def run_boost() -> RoutineResult:
-            result = controls.boost(repeat=3)
-            return RoutineResult(
-                action="Boost",
-                dispatch=result,
-                details={"boost_count": 3},
-            )
-
-        self._routine_worker = self._run_in_thread(run_boost)
+        _cmd_boost_impl(self)
 
     def _start_dest_prompt(self, destination: str, *, settle_default: float | None = None) -> None:
         self._dest_prompt_destination = destination

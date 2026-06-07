@@ -208,7 +208,7 @@ class ControlRoomBindingsTests(unittest.TestCase):
             captured["kwargs"] = kwargs
             return None
 
-        with patch("control_room.escape_mass_lock", new=fake_escape_mass_lock):
+        with patch("edap.control_room.routines_movement.escape_mass_lock", new=fake_escape_mass_lock):
             self.app._cmd_escape()
 
         self.assertEqual(captured["kwargs"]["boost_delay_s"], 5.0)
