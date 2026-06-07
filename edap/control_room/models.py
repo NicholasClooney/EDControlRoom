@@ -31,6 +31,26 @@ class MarketData:
     locked: bool = False
 
 
+@dataclass
+class HaulStats:
+    commodity: str = ""
+    buy_station: str = ""
+    sell_station: str = ""
+    active: bool = False
+    clean_run_active: bool = False
+    waiting_for_sell_departure: bool = False
+    resumed_mid_run: bool = False
+    docked_back_at_sell: bool = False
+    current_run_started_at: float | None = None
+    current_run_elapsed_s: float | None = None
+    current_run_profit: int = 0
+    completed_runs: int = 0
+    accumulated_profit: int = 0
+    last_run_profit: int | None = None
+    last_run_elapsed_s: float | None = None
+    total_run_elapsed_s: float = 0.0
+
+
 @dataclass(frozen=True)
 class CommandHelp:
     name: str
@@ -45,4 +65,3 @@ class ReplaySelection:
     entry: CommandHistoryEntry
     label: str
     detail: str
-

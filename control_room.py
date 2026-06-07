@@ -61,7 +61,7 @@ from edap.control_room import (
     routines_station,
     routines_trade,
 )
-from edap.control_room.models import MarketData, ReplaySelection, ShipState
+from edap.control_room.models import HaulStats, MarketData, ReplaySelection, ShipState
 
 # Modules eligible for in-place hot reload via the `reload` command.
 # Order matters: leaf modules first, then modules that import from them.
@@ -84,6 +84,7 @@ from edap.control_room_state import (
 from edap.progress_controls import ProgressShipControls
 from edap.runtime import RuntimeContext, build_runtime_context, load_config_with_fallback
 from edap.ship_controls import DEFAULT_SHIP_CONTROL_ACTIONS, ShipControls
+from edap.status import read_status
 from edap.state import JournalWatcher, get_latest_journal_log, read_ship_state
 
 
@@ -151,6 +152,54 @@ def _is_recent(ev: dict[str, Any], threshold_s: float = 120.0) -> bool:
         return True
 
 
+def _fmt_duration(seconds: float | None) -> str:
+    if seconds is None:
+        return "—"
+    total = max(0, int(round(seconds)))
+    hours, rem = divmod(total, 3600)
+    minutes, secs = divmod(rem, 60)
+    if hours:
+        return f"{hours:d}:{minutes:02d}:{secs:02d}"
+    return f"{minutes:02d}:{secs:02d}"
+
+
+def _build_log_text(msg: str) -> Text:
+    line = Text.from_markup(f"[dim]{_hhmmss()}[/]  {msg}")
+    line.no_wrap = False
+    line.overflow = "fold"
+    return line
+
+
+def _read_cargo_inventory(journal_dir: Path) -> list[dict[str, Any]]:
+    cargo_path = journal_dir / "Cargo.json"
+    try:
+        with cargo_path.open(encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        return []
+    inventory = data.get("Inventory", [])
+    return inventory if isinstance(inventory, list) else []
+
+
+def _cargo_summary_lines(inventory: list[dict[str, Any]], *, limit: int = 3) -> list[str]:
+    rows = [
+        item for item in inventory
+        if int(item.get("Count", 0) or 0) > 0
+    ]
+    rows.sort(
+        key=lambda item: (
+            -int(item.get("Count", 0) or 0),
+            str(item.get("Name_Localised") or item.get("Name") or "").lower(),
+        )
+    )
+    result: list[str] = []
+    for item in rows[:limit]:
+        name = str(item.get("Name_Localised") or item.get("Name") or "?")
+        count = int(item.get("Count", 0) or 0)
+        result.append(f"{count}t {escape(name)}")
+    return result
+
+
 # ── App ────────────────────────────────────────────────────────────────────────
 
 
@@ -165,6 +214,7 @@ class ControlRoomApp(App[None]):
     Screen  { layout: vertical; }
     #main   { height: 1fr; }
     #left   { width: 58%; }
+    #right  { width: 42%; }
     #status {
         height: auto;
         max-height: 14;
@@ -179,8 +229,13 @@ class ControlRoomApp(App[None]):
         border: solid $primary;
         padding: 0 1;
     }
+    #haul {
+        height: 1fr;
+        border: solid $primary;
+        padding: 0 1;
+    }
     #market {
-        width: 42%;
+        height: 1fr;
         border: solid $primary;
         padding: 0 1;
     }
@@ -215,10 +270,12 @@ class ControlRoomApp(App[None]):
         self._market_path = self._journal_dir / "Market.json"
         self._ship = ShipState()
         self._market = MarketData()
+        self._haul_stats = HaulStats()
         self._market_filter = market_filter
         self._market_mtime: float | None = None
         self._controls: ShipControls | None = None
         self._routine_active = False
+        self._active_routine_name: str | None = None
         self._verbose_controls: bool = False
         self._haul_params: dict[str, str] = {}
         self._haul_prompt_defaults: dict[str, str] = {}
@@ -238,6 +295,7 @@ class ControlRoomApp(App[None]):
         self._shutdown_finalized: bool = False
         self._watcher_worker: Any | None = None
         self._routine_worker: Any | None = None
+        self._time_fn: Callable[[], float] = time.monotonic
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -253,7 +311,9 @@ class ControlRoomApp(App[None]):
                         )
                         yield OptionList(id="resume-list")
                         yield Static(id="resume-detail")
-            yield Static(id="market")
+            with Vertical(id="right"):
+                yield Static(id="market")
+                yield Static(id="haul")
         yield Input(placeholder=_DEFAULT_COMMAND_PLACEHOLDER, id="cmd")
         yield Footer()
 
@@ -262,12 +322,14 @@ class ControlRoomApp(App[None]):
         self.query_one("#status", Static).border_title = "SHIP STATUS"
         self.query_one("#activity", RichLog).border_title = "ACTIVITY"
         self.query_one("#resume-browser", Vertical).border_title = "REPLAY HISTORY"
+        self.query_one("#haul", Static).border_title = "HAUL"
         self.query_one("#market", Static).border_title = "MARKET"
         self._build_controls()
         self._load_saved_state()
         self._bootstrap_ship_state()
         self._load_market_json()
         self._refresh_status()
+        self._refresh_haul_stats()
         self._refresh_market()
         self._watcher_worker = self._start_watcher()
         self.set_focus(self.query_one("#cmd", Input))
@@ -310,47 +372,134 @@ class ControlRoomApp(App[None]):
     def _bootstrap_ship_state(self) -> None:
         log = get_latest_journal_log(self._journal_dir)
         if log is None:
-            return
+            s0 = None
+        else:
+            try:
+                s0 = read_ship_state(log)
+                self._ship.system = s0.location
+                self._ship.status = s0.status
+                self._ship.ship_type = s0.ship_type
+                self._ship.fuel_level = s0.fuel_level
+                self._ship.fuel_capacity = s0.fuel_capacity
+                self._ship.target = s0.target
+            except Exception:
+                s0 = None
+
         try:
-            s0 = read_ship_state(log)
-            self._ship.system = s0.location
-            self._ship.status = s0.status
-            self._ship.ship_type = s0.ship_type
-            self._ship.fuel_level = s0.fuel_level
-            self._ship.fuel_capacity = s0.fuel_capacity
-            self._ship.target = s0.target
+            status = read_status(self._journal_dir)
         except Exception:
-            pass
+            status = None
+
+        if status is not None:
+            if status.balance is not None:
+                self._ship.credits = status.balance
+            if status.cargo is not None:
+                self._ship.cargo_count = int(status.cargo)
+        self._ship.cargo_inventory = _read_cargo_inventory(self._journal_dir)
 
     # ── Rendering ──────────────────────────────────────────────────────────────
 
     def _refresh_status(self) -> None:
         s = self._ship
+        left_rows: list[str] = []
+        right_rows: list[str] = []
+
+        def left_row(label: str, value: str) -> None:
+            left_rows.append(f"[dim]{label:<11}[/]  {value}")
+
+        def right_row(label: str, value: str) -> None:
+            right_rows.append(f"[dim]{label:<11}[/]  {value}")
+
+        if s.commander:
+            left_row("Commander", f"[bold]{escape(s.commander)}[/]")
+        left_row("System", f"[bold]{escape(s.system or '—')}[/]")
+        if s.station:
+            left_row("Station", f"[bold cyan]{escape(s.station)}[/]")
+        left_row("Status", escape(s.status or "—"))
+        if s.fuel_level is not None and s.fuel_capacity:
+            left_row("Fuel", _fuel_bar(s.fuel_level, s.fuel_capacity))
+        if s.target:
+            left_row("Target", f"[yellow]{escape(s.target)}[/]")
+
+        if s.credits is not None:
+            right_row("Balance", f"[green]{_fmt_cr(s.credits)}[/]")
+        if s.cargo_capacity is not None:
+            pct = round(s.cargo_count / s.cargo_capacity * 100) if s.cargo_capacity else 0
+            right_row("Cargo", f"{s.cargo_count} / {s.cargo_capacity} t  ({pct}%)")
+        elif s.cargo_count:
+            right_row("Cargo", f"{s.cargo_count} t")
+
+        cargo_lines = _cargo_summary_lines(s.cargo_inventory, limit=3)
+        if cargo_lines:
+            right_row("Cargo Top", cargo_lines[0])
+            for line in cargo_lines[1:]:
+                right_rows.append(f"{'':13}{line}")
+
+        left_width = max((len(Text.from_markup(line).plain) for line in left_rows), default=0)
+        paired_lines: list[str] = []
+        row_count = max(len(left_rows), len(right_rows))
+        for idx in range(row_count):
+            left = left_rows[idx] if idx < len(left_rows) else ""
+            right = right_rows[idx] if idx < len(right_rows) else ""
+            left_plain = Text.from_markup(left).plain if left else ""
+            gap = " " * max(4, left_width - len(left_plain) + 4)
+            paired_lines.append(f"{left}{gap}{right}" if right else left)
+
+        content = "\n".join(paired_lines) if paired_lines else "[dim]No data yet[/]"
+        self.query_one("#status", Static).update(Text.from_markup(content))
+
+    def _refresh_haul_stats(self) -> None:
+        stats = self._haul_stats
+        widget = self.query_one("#haul", Static)
+        if not stats.commodity:
+            lines = [
+                "[dim]No haul session active.[/]",
+                "",
+                "Start `haul` to track cycle time,",
+                "average time, and session profit.",
+            ]
+            if self._ship.credits is not None:
+                lines.extend(["", f"[dim]Balance[/]  [green]{_fmt_cr(self._ship.credits)}[/]"])
+            widget.update(Text.from_markup("\n".join(lines)))
+            return
+
         rows: list[str] = []
 
         def row(label: str, value: str) -> None:
-            rows.append(f"[dim]{label:<11}[/]  {value}")
+            rows.append(f"[dim]{label:<12}[/]  {value}")
 
-        if s.commander:
-            row("Commander", f"[bold]{escape(s.commander)}[/]")
-        row("System", f"[bold]{escape(s.system or '—')}[/]")
-        if s.station:
-            row("Station", f"[bold cyan]{escape(s.station)}[/]")
-        row("Status", escape(s.status or "—"))
-        if s.fuel_level is not None and s.fuel_capacity:
-            row("Fuel", _fuel_bar(s.fuel_level, s.fuel_capacity))
-        if s.credits is not None:
-            row("Credits", f"[green]{_fmt_cr(s.credits)}[/]")
-        if s.cargo_capacity is not None:
-            pct = round(s.cargo_count / s.cargo_capacity * 100) if s.cargo_capacity else 0
-            row("Cargo", f"{s.cargo_count} / {s.cargo_capacity} t  ({pct}%)")
-        elif s.cargo_count:
-            row("Cargo", f"{s.cargo_count} t")
-        if s.target:
-            row("Target", f"[yellow]{escape(s.target)}[/]")
+        status = "active" if stats.active else "stopped"
+        if stats.resumed_mid_run and not stats.clean_run_active:
+            status = "resumed mid-run"
+        elif stats.waiting_for_sell_departure:
+            status = "waiting at sell"
+        elif stats.docked_back_at_sell:
+            status = "back at sell"
 
-        content = "\n".join(rows) if rows else "[dim]No data yet[/]"
-        self.query_one("#status", Static).update(Text.from_markup(content))
+        current_elapsed = stats.current_run_elapsed_s
+        if stats.current_run_started_at is not None and not stats.docked_back_at_sell:
+            current_elapsed = self._time_fn() - stats.current_run_started_at
+
+        avg_elapsed = (
+            stats.total_run_elapsed_s / stats.completed_runs
+            if stats.completed_runs > 0 else None
+        )
+
+        row("Status", escape(status))
+        row("Commodity", f"[cyan]{escape(stats.commodity)}[/]")
+        row("Sell", f"[bold cyan]{escape(stats.sell_station or '—')}[/]")
+        row("Buy", escape(stats.buy_station or "—"))
+        if self._ship.credits is not None:
+            row("Balance", f"[green]{_fmt_cr(self._ship.credits)}[/]")
+        row("This run", f"[green]{_fmt_cr(stats.current_run_profit)}[/]" if stats.clean_run_active else "[dim]—[/]")
+        row("Elapsed", escape(_fmt_duration(current_elapsed)))
+        row("Avg time", escape(_fmt_duration(avg_elapsed)))
+        row("Runs", str(stats.completed_runs))
+        row("Accum", f"[green]{_fmt_cr(stats.accumulated_profit)}[/]")
+        row("Last run", f"[green]{_fmt_cr(stats.last_run_profit)}[/]" if stats.last_run_profit is not None else "[dim]—[/]")
+        row("Last time", escape(_fmt_duration(stats.last_run_elapsed_s)))
+
+        widget.update(Text.from_markup("\n".join(rows)))
 
     def _refresh_market(self) -> None:
         m = self._market
@@ -411,9 +560,95 @@ class ControlRoomApp(App[None]):
         widget.update(Text.from_markup("\n".join(sections)))
 
     def _log(self, msg: str) -> None:
-        self.query_one("#activity", RichLog).write(
-            f"[dim]{_hhmmss()}[/]  {msg}"
+        self.query_one("#activity", RichLog).write(_build_log_text(msg))
+
+    def _start_haul_stats(
+        self,
+        *,
+        commodity: str,
+        buy_station: str,
+        sell_station: str,
+    ) -> None:
+        at_sell_station = bool(
+            sell_station
+            and self._ship.status == "in_station"
+            and self._ship.station
+            and self._ship.station.lower() == sell_station.lower()
         )
+        self._haul_stats = HaulStats(
+            commodity=commodity,
+            buy_station=buy_station,
+            sell_station=sell_station,
+            active=True,
+            current_run_started_at=self._time_fn(),
+            waiting_for_sell_departure=at_sell_station,
+            resumed_mid_run=not at_sell_station,
+        )
+        self._refresh_haul_stats()
+
+    def _stop_haul_stats(self) -> None:
+        if not self._haul_stats.commodity:
+            return
+        self._haul_stats.active = False
+        self._refresh_haul_stats()
+
+    def _finalize_completed_haul_run(self) -> None:
+        stats = self._haul_stats
+        if not stats.clean_run_active:
+            return
+        elapsed = stats.current_run_elapsed_s
+        if elapsed is None and stats.current_run_started_at is not None:
+            elapsed = self._time_fn() - stats.current_run_started_at
+        if elapsed is None:
+            return
+        stats.completed_runs += 1
+        stats.last_run_elapsed_s = elapsed
+        stats.last_run_profit = stats.current_run_profit
+        stats.total_run_elapsed_s += elapsed
+        stats.accumulated_profit += stats.current_run_profit
+        stats.current_run_profit = 0
+        stats.current_run_started_at = self._time_fn()
+        stats.current_run_elapsed_s = None
+        stats.docked_back_at_sell = False
+        stats.waiting_for_sell_departure = False
+        stats.resumed_mid_run = False
+
+    def _handle_haul_event(self, ev: dict[str, Any], *, station_before: str | None) -> None:
+        stats = self._haul_stats
+        if not stats.active or not stats.commodity or not stats.sell_station:
+            return
+
+        event = ev.get("event", "")
+        current_station = station_before or self._ship.station
+        at_sell = bool(current_station and current_station.lower() == stats.sell_station.lower())
+        at_buy = bool(stats.buy_station and current_station and current_station.lower() == stats.buy_station.lower())
+
+        if event == "Undocked" and at_sell:
+            if stats.docked_back_at_sell:
+                self._finalize_completed_haul_run()
+            elif stats.current_run_started_at is None:
+                stats.current_run_started_at = self._time_fn()
+                stats.current_run_elapsed_s = None
+            stats.clean_run_active = True
+            stats.waiting_for_sell_departure = False
+            stats.resumed_mid_run = False
+            stats.docked_back_at_sell = False
+            stats.current_run_profit = 0
+        elif event == "Docked" and ev.get("StationName", "").lower() == stats.sell_station.lower():
+            if stats.clean_run_active and stats.current_run_started_at is not None:
+                stats.current_run_elapsed_s = self._time_fn() - stats.current_run_started_at
+                stats.docked_back_at_sell = True
+            elif stats.resumed_mid_run:
+                if stats.current_run_started_at is not None:
+                    stats.current_run_elapsed_s = self._time_fn() - stats.current_run_started_at
+                stats.resumed_mid_run = False
+                stats.waiting_for_sell_departure = True
+        elif event == "MarketBuy" and stats.clean_run_active and at_buy and "TotalCost" in ev:
+            stats.current_run_profit -= int(ev["TotalCost"])
+        elif event == "MarketSell" and stats.clean_run_active and at_sell and "TotalSale" in ev:
+            stats.current_run_profit += int(ev["TotalSale"])
+
+        self._refresh_haul_stats()
 
     def _record_history_entry(self, entry: CommandHistoryEntry) -> None:
         if self._saved_state.history and self._saved_state.history[-1].raw == entry.raw and self._saved_state.history[-1].params == entry.params:
@@ -602,6 +837,7 @@ class ControlRoomApp(App[None]):
     def _handle_event(self, ev: dict[str, Any]) -> None:
         event = ev.get("event", "")
         s = self._ship
+        station_before = s.station
 
         if event == "Commander":
             s.commander = ev.get("Name", s.commander)
@@ -678,6 +914,7 @@ class ControlRoomApp(App[None]):
             self._load_market_json()
 
         self._refresh_status()
+        self._handle_haul_event(ev, station_before=station_before)
 
     def _activity_line(self, ev: dict[str, Any]) -> str | None:
         if not _is_recent(ev):
@@ -730,6 +967,7 @@ class ControlRoomApp(App[None]):
                 now = time.monotonic()
                 if now - last_market_check > 2.0:
                     self.call_from_thread(self._load_market_json)
+                    self.call_from_thread(self._refresh_haul_stats)
                     last_market_check = now
             except Exception:
                 time.sleep(1.0)
@@ -798,6 +1036,9 @@ class ControlRoomApp(App[None]):
     def _clear_routine(self) -> None:
         self._routine_active = False
         self._routine_worker = None
+        if self._active_routine_name == "haul":
+            self._stop_haul_stats()
+        self._active_routine_name = None
         if self._shutdown_requested:
             self._finalize_shutdown()
 

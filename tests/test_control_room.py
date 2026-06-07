@@ -6,7 +6,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from control_room import ControlRoomApp, _ALL_ROUTINE_ACTIONS
+from control_room import (
+    ControlRoomApp,
+    _ALL_ROUTINE_ACTIONS,
+    _build_log_text,
+    _cargo_summary_lines,
+)
 from edap.actions import ActionDispatchResult
 from edap.config import (
     AppConfig,
@@ -106,6 +111,9 @@ class _HarnessApp(ControlRoomApp):
     def _refresh_market(self) -> None:  # type: ignore[override]
         return None
 
+    def _refresh_haul_stats(self) -> None:  # type: ignore[override]
+        return None
+
     def _show_resume_picker(self) -> None:  # type: ignore[override]
         if not self._saved_state.history:
             self._log("[dim]No saved command history yet.[/]")
@@ -166,6 +174,45 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertFalse(self.app._shutdown_requested)
         self.assertTrue(worker.cancelled)
         self.assertEqual(self.app.exit_calls, 0)
+
+    def test_bootstrap_ship_state_reads_balance_and_cargo_from_status_json(self) -> None:
+        journal_dir = Path(self.tmpdir.name)
+        (journal_dir / "Journal.240101000000.01.log").write_text(
+            json.dumps({
+                "event": "Location",
+                "Docked": True,
+                "StarSystem": "HIP 58412",
+                "StationName": "Pawelczyk Dock",
+                "FuelLevel": 16.0,
+                "FuelCapacity": 32.0,
+            }) + "\n",
+            encoding="utf-8",
+        )
+        (journal_dir / "Status.json").write_text(
+            json.dumps({
+                "Flags": 1,
+                "Fuel": {"FuelMain": 16.0, "FuelReservoir": 0.5},
+                "Cargo": 24,
+                "Balance": 123456789,
+            }),
+            encoding="utf-8",
+        )
+        (journal_dir / "Cargo.json").write_text(
+            json.dumps({
+                "Inventory": [
+                    {"Name": "gold", "Name_Localised": "Gold", "Count": 5},
+                    {"Name": "silver", "Name_Localised": "Silver", "Count": 7},
+                ]
+            }),
+            encoding="utf-8",
+        )
+
+        self.app._bootstrap_ship_state()
+
+        self.assertEqual(self.app._ship.system, "HIP 58412")
+        self.assertEqual(self.app._ship.credits, 123456789)
+        self.assertEqual(self.app._ship.cargo_count, 24)
+        self.assertEqual(len(self.app._ship.cargo_inventory), 2)
 
 
 class ControlRoomBindingsTests(unittest.TestCase):
@@ -327,6 +374,9 @@ class ControlRoomBindingsTests(unittest.TestCase):
         self.assertFalse(any("requires you to be docked at the sell station" in msg for msg in self.app.logged))
         self.assertIn("Starting haul loop:", "\n".join(self.app.logged))
         self.assertEqual(captured["kwargs"]["confirm_fn"]("ignored"), False)
+        self.assertEqual(self.app._active_routine_name, "haul")
+        self.assertEqual(self.app._haul_stats.commodity, "Aluminium")
+        self.assertTrue(self.app._haul_stats.resumed_mid_run)
 
     def test_haul_dispatch_prompts_to_confirm_unknown_buy_station(self) -> None:
         self.app.query_one = lambda *args, **kwargs: _InputStub()  # type: ignore[method-assign]
@@ -479,6 +529,88 @@ class ControlRoomBindingsTests(unittest.TestCase):
         raws = [item.entry.raw for item in self.app._filtered_resume_entries()]
 
         self.assertEqual(raws, ["jump", "dock"])
+
+    def test_log_lines_use_fold_wrap(self) -> None:
+        line = _build_log_text("A" * 200)
+
+        self.assertFalse(line.no_wrap)
+        self.assertEqual(line.overflow, "fold")
+
+    def test_cargo_summary_lines_limits_to_top_three(self) -> None:
+        lines = _cargo_summary_lines([
+            {"Name": "gold", "Name_Localised": "Gold", "Count": 4},
+            {"Name": "silver", "Name_Localised": "Silver", "Count": 10},
+            {"Name": "palladium", "Name_Localised": "Palladium", "Count": 6},
+            {"Name": "bertrandite", "Name_Localised": "Bertrandite", "Count": 2},
+        ])
+
+        self.assertEqual(lines, [
+            "10t Silver",
+            "6t Palladium",
+            "4t Gold",
+        ])
+
+    def test_haul_stats_track_clean_cycle_profit_and_time(self) -> None:
+        self.app._ship.status = "in_station"
+        self.app._ship.station = "Pawelczyk Dock"
+        self.app._ship.credits = 1_000_000
+        self.app._time_fn = lambda: 100.0
+        self.app._start_haul_stats(
+            commodity="Aluminium",
+            buy_station="Hutton Orbital",
+            sell_station="Pawelczyk Dock",
+        )
+
+        self.assertTrue(self.app._haul_stats.waiting_for_sell_departure)
+        self.assertEqual(self.app._haul_stats.current_run_started_at, 100.0)
+
+        self.app._time_fn = lambda: 110.0
+        self.app._handle_haul_event({"event": "Undocked"}, station_before="Pawelczyk Dock")
+        self.assertTrue(self.app._haul_stats.clean_run_active)
+        self.assertEqual(self.app._haul_stats.current_run_started_at, 100.0)
+
+        self.app._time_fn = lambda: 200.0
+        self.app._handle_haul_event({"event": "MarketBuy", "TotalCost": 250_000}, station_before="Hutton Orbital")
+        self.assertEqual(self.app._haul_stats.current_run_profit, -250_000)
+
+        self.app._time_fn = lambda: 310.0
+        self.app._handle_haul_event({"event": "Docked", "StationName": "Pawelczyk Dock"}, station_before=None)
+        self.assertTrue(self.app._haul_stats.docked_back_at_sell)
+        self.assertEqual(self.app._haul_stats.current_run_elapsed_s, 210.0)
+
+        self.app._time_fn = lambda: 315.0
+        self.app._handle_haul_event({"event": "MarketSell", "TotalSale": 400_000}, station_before="Pawelczyk Dock")
+        self.assertEqual(self.app._haul_stats.current_run_profit, 150_000)
+
+        self.app._time_fn = lambda: 320.0
+        self.app._handle_haul_event({"event": "Undocked"}, station_before="Pawelczyk Dock")
+        self.assertEqual(self.app._haul_stats.completed_runs, 1)
+        self.assertEqual(self.app._haul_stats.last_run_profit, 150_000)
+        self.assertEqual(self.app._haul_stats.accumulated_profit, 150_000)
+        self.assertEqual(self.app._haul_stats.last_run_elapsed_s, 210.0)
+        self.assertEqual(self.app._haul_stats.current_run_started_at, 320.0)
+
+    def test_haul_stats_ignore_partial_resume_until_next_clean_departure(self) -> None:
+        self.app._ship.status = "in_supercruise"
+        self.app._time_fn = lambda: 50.0
+        self.app._start_haul_stats(
+            commodity="Aluminium",
+            buy_station="Hutton Orbital",
+            sell_station="Pawelczyk Dock",
+        )
+
+        self.assertTrue(self.app._haul_stats.resumed_mid_run)
+        self.assertEqual(self.app._haul_stats.current_run_started_at, 50.0)
+
+        self.app._time_fn = lambda: 200.0
+        self.app._handle_haul_event({"event": "MarketSell", "TotalSale": 400_000}, station_before="Pawelczyk Dock")
+        self.assertEqual(self.app._haul_stats.current_run_profit, 0)
+
+        self.app._handle_haul_event({"event": "Docked", "StationName": "Pawelczyk Dock"}, station_before=None)
+        self.assertTrue(self.app._haul_stats.waiting_for_sell_departure)
+        self.assertFalse(self.app._haul_stats.clean_run_active)
+        self.assertEqual(self.app._haul_stats.current_run_elapsed_s, 150.0)
+        self.assertEqual(self.app._haul_stats.completed_runs, 0)
 
 
 class ControlRoomDispatchTests(unittest.TestCase):

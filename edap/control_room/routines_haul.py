@@ -129,7 +129,13 @@ def dispatch_haul_loop(app: ControlRoomApp) -> None:
     label_parts.append(f"map settle: [cyan]{galaxy_map_settle:.1f}s[/]")
     label_parts.append(f"dock timeout: [cyan]{dock_timeout:.1f}s[/]")
     app._log(f"Starting haul loop: {', '.join(label_parts)} (infinite)...")
+    app._start_haul_stats(
+        commodity=commodity,
+        buy_station=buy_station,
+        sell_station=sell_station,
+    )
     app._routine_active = True
+    app._active_routine_name = "haul"
 
     app._routine_worker = app._run_in_thread(lambda: haul_loop(
         controls,
