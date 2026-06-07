@@ -72,6 +72,8 @@ def dispatch(app: ControlRoomApp, raw: str) -> None:
     elif verb in {"replay", "history"}:
         app._record_history_entry(CommandHistoryEntry(raw=raw, command="replay", timestamp=now_iso()))
         cmd_resume(app)
+    elif verb == "reload":
+        app._cmd_reload()
     else:
         app._log(f"[dim]Unknown command: {escape(raw)}[/]")
 

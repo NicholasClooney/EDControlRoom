@@ -34,6 +34,7 @@ Other:
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import sys
 import time
@@ -50,40 +51,30 @@ from textual.widgets import Footer, Header, Input, OptionList, RichLog, Static
 from textual.worker import get_current_worker
 
 from edap.config import AppConfig
-from edap.control_room import commands as _commands
-from edap.control_room.help import CONTROL_ROOM_COMMAND_INDEX, CONTROL_ROOM_COMMANDS
-from edap.control_room.history import (
-    default_haul_matches as _default_haul_matches_pure,
-    filtered_resume_entries as _filtered_resume_entries_pure,
-    now_iso as _now_iso,
-    resume_detail as _resume_detail,
-    resume_label as _resume_label_pure,
-    resume_summary as _resume_summary,
+from edap.control_room import (
+    commands as _commands,
+    help as _help,
+    history as _history,
+    routines_haul,
+    routines_movement,
+    routines_nav,
+    routines_station,
+    routines_trade,
 )
 from edap.control_room.models import MarketData, ReplaySelection, ShipState
-from edap.control_room.routines_haul import (
-    cmd_haul as _cmd_haul_impl,
-    dispatch_haul_loop as _dispatch_haul_loop_impl,
-)
-from edap.control_room.routines_trade import (
-    cmd_buy as _cmd_buy_impl,
-    cmd_sell as _cmd_sell_impl,
-    sell_all as _sell_all_impl,
-    sell_item as _sell_item_impl,
-)
-from edap.control_room.routines_nav import (
-    cmd_dest as _cmd_dest_impl,
-    dispatch_dest as _dispatch_dest_impl,
-)
-from edap.control_room.routines_movement import (
-    cmd_boost as _cmd_boost_impl,
-    cmd_escape as _cmd_escape_impl,
-    cmd_jump as _cmd_jump_impl,
-)
-from edap.control_room.routines_station import (
-    cmd_dock as _cmd_dock_impl,
-    cmd_undock as _cmd_undock_impl,
-)
+
+# Modules eligible for in-place hot reload via the `reload` command.
+# Order matters: leaf modules first, then modules that import from them.
+_RELOADABLE_MODULES = [
+    routines_haul,
+    routines_trade,
+    routines_nav,
+    routines_movement,
+    routines_station,
+    _history,
+    _help,
+    _commands,
+]
 from edap.control_room_state import (
     CommandHistoryEntry,
     ControlRoomState,
@@ -100,7 +91,7 @@ from edap.state import JournalWatcher, get_latest_journal_log, read_ship_state
 
 _ALL_ROUTINE_ACTIONS = list(DEFAULT_SHIP_CONTROL_ACTIONS)
 
-_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | dest <system> | market ... | q"
+_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | dest <system> | market ... | reload | q"
 
 
 class _RoutineCancelled(Exception):
@@ -439,13 +430,13 @@ class ControlRoomApp(App[None]):
         self._save_saved_state()
 
     def _default_haul_matches(self, entry: CommandHistoryEntry) -> bool:
-        return _default_haul_matches_pure(entry, self._saved_state.default_haul)
+        return _history.default_haul_matches(entry, self._saved_state.default_haul)
 
     def _resume_label(self, entry: CommandHistoryEntry) -> str:
-        return _resume_label_pure(entry, self._saved_state.default_haul)
+        return _history.resume_label(entry, self._saved_state.default_haul)
 
     def _filtered_resume_entries(self) -> list[ReplaySelection]:
-        return _filtered_resume_entries_pure(
+        return _history.filtered_resume_entries(
             self._saved_state.history,
             self._saved_state.default_haul,
             self._resume_filter,
@@ -512,7 +503,7 @@ class ControlRoomApp(App[None]):
         detail = "[dim]No selection[/]"
         entry = self._selected_resume_entry()
         if entry is not None:
-            detail = escape(_resume_detail(entry))
+            detail = escape(_history.resume_detail(entry))
         self.query_one("#resume-detail", Static).update(Text.from_markup(detail))
 
     def _resume_execute_selected(self) -> None:
@@ -812,19 +803,19 @@ class ControlRoomApp(App[None]):
     # ── Routine commands ───────────────────────────────────────────────────────
 
     def _cmd_dock(self) -> None:
-        _cmd_dock_impl(self)
+        routines_station.cmd_dock(self)
 
     def _cmd_undock(self) -> None:
-        _cmd_undock_impl(self)
+        routines_station.cmd_undock(self)
 
     def _cmd_jump(self) -> None:
-        _cmd_jump_impl(self)
+        routines_movement.cmd_jump(self)
 
     def _cmd_escape(self) -> None:
-        _cmd_escape_impl(self)
+        routines_movement.cmd_escape(self)
 
     def _cmd_boost(self) -> None:
-        _cmd_boost_impl(self)
+        routines_movement.cmd_boost(self)
 
     def _start_dest_prompt(self, destination: str, *, settle_default: float | None = None) -> None:
         self._dest_prompt_destination = destination
@@ -840,10 +831,10 @@ class ControlRoomApp(App[None]):
         )
 
     def _cmd_dest(self, destination: str) -> None:
-        _cmd_dest_impl(self, destination)
+        routines_nav.cmd_dest(self, destination)
 
     def _dispatch_dest(self, destination: str, galaxy_map_settle: float) -> None:
-        _dispatch_dest_impl(self, destination, galaxy_map_settle)
+        routines_nav.dispatch_dest(self, destination, galaxy_map_settle)
 
     def _saved_haul_defaults(self, seed: dict[str, str] | None = None) -> dict[str, str]:
         defaults = dict(self._saved_state.default_haul)
@@ -899,19 +890,19 @@ class ControlRoomApp(App[None]):
             self.query_one("#cmd", Input).placeholder = "buy station (Enter to skip)..."
 
     def _cmd_buy(self, rest: str) -> None:
-        _cmd_buy_impl(self, rest)
+        routines_trade.cmd_buy(self, rest)
 
     def _cmd_sell(self, rest: str) -> None:
-        _cmd_sell_impl(self, rest)
+        routines_trade.cmd_sell(self, rest)
 
     def _sell_item(self, target: str, amount: int | str) -> None:
-        _sell_item_impl(self, target, amount)
+        routines_trade.sell_item(self, target, amount)
 
     def _sell_all(self) -> None:
-        _sell_all_impl(self)
+        routines_trade.sell_all(self)
 
     def _cmd_haul(self, rest: str) -> None:
-        _cmd_haul_impl(self, rest)
+        routines_haul.cmd_haul(self, rest)
 
     def _handle_haul_prompt(self, value: str) -> None:
         if self._haul_prompt_step == "commodity":
@@ -1027,7 +1018,23 @@ class ControlRoomApp(App[None]):
             self._dispatch_haul_loop()
 
     def _dispatch_haul_loop(self) -> None:
-        _dispatch_haul_loop_impl(self)
+        routines_haul.dispatch_haul_loop(self)
+
+    # ── Hot reload ─────────────────────────────────────────────────────────────
+
+    def _cmd_reload(self) -> None:
+        reloaded: list[str] = []
+        for module in _RELOADABLE_MODULES:
+            try:
+                importlib.reload(module)
+                reloaded.append(module.__name__)
+            except Exception as exc:
+                self._log(f"[red]Reload failed for {escape(module.__name__)}: {escape(str(exc))}[/]")
+                return
+        self._log("[green]Hot-reloaded modules:[/]")
+        for name in reloaded:
+            self._log(f"  [dim]•[/] {escape(name)}")
+        self._log("[dim]Next command dispatch will use the new code. App/widget edits still need a restart.[/]")
 
     # ── Quit ───────────────────────────────────────────────────────────────────
 
