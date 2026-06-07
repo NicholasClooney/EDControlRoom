@@ -26,6 +26,7 @@ Market commands:
 Other:
     commands           list supported commands
     help [command]     explain a command in plain English
+    resume             open the recent-command picker
     q / quit           cancel active work if needed, then exit
 """
 from __future__ import annotations
@@ -35,7 +36,7 @@ import json
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable
 
@@ -44,10 +45,16 @@ from rich.text import Text
 from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Footer, Header, Input, RichLog, Static
+from textual.widgets import Footer, Header, Input, OptionList, RichLog, Static
 from textual.worker import get_current_worker
 
 from edap.config import AppConfig
+from edap.control_room_state import (
+    CommandHistoryEntry,
+    ControlRoomState,
+    load_control_room_state,
+    save_control_room_state,
+)
 from edap.progress_controls import ProgressShipControls
 from edap.routines import dock, haul_loop, jump, market_buy, market_sell, set_gal_map_destination, undock, RoutineResult
 from edap.runtime import RuntimeContext, build_runtime_context, load_config_with_fallback
@@ -68,7 +75,7 @@ _ALL_ROUTINE_ACTIONS = [
     "GalaxyMapOpen", "CamZoomIn",
 ]
 
-_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | dock | undock | buy <item> [N] | sell [item] | haul [commodity] | dest <system> | market ... | q"
+_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | resume | dock | undock | buy <item> [N] | sell [item] | haul [commodity] | dest <system> | market ... | q"
 
 
 # ── State ──────────────────────────────────────────────────────────────────────
@@ -106,6 +113,13 @@ class _CommandHelp:
     summary: str
     detail: str
     aliases: tuple[str, ...] = ()
+
+
+@dataclass
+class _ResumeSelection:
+    entry: CommandHistoryEntry
+    label: str
+    detail: str
 
 
 class _RoutineCancelled(Exception):
@@ -199,6 +213,12 @@ _COMMANDS: list[_CommandHelp] = [
         aliases=("?",),
     ),
     _CommandHelp(
+        name="resume",
+        usage="resume",
+        summary="Open the recent-command picker for execute-or-edit replay.",
+        detail="Shows a scrollable list of recent saved commands across sessions. Press Enter to execute the selected entry immediately, or press e to reopen it for editing.",
+    ),
+    _CommandHelp(
         name="quit",
         usage="q | quit | exit",
         summary="Cancel active work if needed, then shut down control room cleanly.",
@@ -260,6 +280,22 @@ def _parse_amount(s: str) -> int | str | None:
         return None
 
 
+def _now_iso() -> str:
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _resume_summary(entry: CommandHistoryEntry) -> str:
+    prefix = entry.timestamp or "?"
+    return f"{prefix}  {entry.raw}"
+
+
+def _resume_detail(entry: CommandHistoryEntry) -> str:
+    if not entry.params:
+        return entry.raw
+    parts = [f"{key}={value}" for key, value in entry.params.items()]
+    return f"{entry.raw}\n" + "\n".join(parts)
+
+
 def _read_cargo_inventory(journal_dir: Path) -> list[dict[str, Any]]:
     cargo_path = journal_dir / "Cargo.json"
     try:
@@ -308,6 +344,35 @@ class ControlRoomApp(App[None]):
         padding: 0 1;
     }
     #cmd { height: 3; }
+    #resume-modal {
+        display: none;
+        layer: overlay;
+        align: center middle;
+        width: 100%;
+        height: 100%;
+        background: $background 60%;
+    }
+    #resume-dialog {
+        width: 80;
+        height: 24;
+        border: heavy $primary;
+        background: $surface;
+        padding: 1;
+    }
+    #resume-help {
+        height: auto;
+        padding: 0 0 1 0;
+    }
+    #resume-list {
+        height: 1fr;
+        border: solid $accent;
+    }
+    #resume-detail {
+        height: 6;
+        border: solid $primary;
+        padding: 0 1;
+        margin: 1 0 0 0;
+    }
     """
 
     def __init__(self, ctx: RuntimeContext, market_filter: str | None = None) -> None:
@@ -324,11 +389,17 @@ class ControlRoomApp(App[None]):
         self._routine_active = False
         self._verbose_controls: bool = False
         self._haul_params: dict[str, str] = {}
+        self._haul_prompt_defaults: dict[str, str] = {}
         self._haul_prompt_step: str = ""  # "commodity" | "buy_station" | "sell_station" | "sell_system" | "buy_system" | "galaxy_map_settle" | "dock_timeout"
         self._dest_prompt_destination: str = ""
+        self._dest_prompt_settle_default: float | None = None
         self._history: list[str] = []
         self._history_pos: int = 0  # len(_history) means "not browsing"
         self._history_draft: str = ""  # saved draft while navigating history
+        self._state_path: Path = self._config.control_room.state_file
+        self._saved_state = ControlRoomState()
+        self._resume_entries: list[_ResumeSelection] = []
+        self._resume_open = False
         self._shutdown_requested: bool = False
         self._shutdown_finalized: bool = False
         self._watcher_worker: Any | None = None
@@ -342,6 +413,14 @@ class ControlRoomApp(App[None]):
                 yield RichLog(id="activity", markup=True, highlight=True, wrap=True)
             yield Static(id="market")
         yield Input(placeholder=_DEFAULT_COMMAND_PLACEHOLDER, id="cmd")
+        with Vertical(id="resume-modal"):
+            with Vertical(id="resume-dialog"):
+                yield Static(
+                    "Recent commands  |  Enter execute  |  e edit  |  Esc/q close",
+                    id="resume-help",
+                )
+                yield OptionList(id="resume-list")
+                yield Static(id="resume-detail")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -350,12 +429,14 @@ class ControlRoomApp(App[None]):
         self.query_one("#activity", RichLog).border_title = "ACTIVITY"
         self.query_one("#market", Static).border_title = "MARKET"
         self._build_controls()
+        self._load_saved_state()
         self._bootstrap_ship_state()
         self._load_market_json()
         self._refresh_status()
         self._refresh_market()
         self._watcher_worker = self._start_watcher()
         self.set_focus(self.query_one("#cmd", Input))
+        self._update_resume_detail()
 
     # ── Setup ──────────────────────────────────────────────────────────────────
 
@@ -369,6 +450,27 @@ class ControlRoomApp(App[None]):
             minimum_action_hold_s=self._config.controls.minimum_action_hold_seconds,
             continuous_action_hold_s=self._config.controls.continuous_action_hold_seconds,
         )
+
+    def _load_saved_state(self) -> None:
+        try:
+            self._saved_state = load_control_room_state(self._state_path)
+        except Exception as exc:
+            self._saved_state = ControlRoomState()
+            self._log(
+                f"[yellow]Failed to load control-room state "
+                f"from {escape(str(self._state_path))}: {escape(str(exc))}[/]"
+            )
+        self._history = [entry.raw for entry in self._saved_state.history if entry.raw]
+        self._history_pos = len(self._history)
+
+    def _save_saved_state(self) -> None:
+        try:
+            save_control_room_state(self._state_path, self._saved_state)
+        except Exception as exc:
+            self._log(
+                f"[yellow]Failed to save control-room state "
+                f"to {escape(str(self._state_path))}: {escape(str(exc))}[/]"
+            )
 
     def _bootstrap_ship_state(self) -> None:
         log = get_latest_journal_log(self._journal_dir)
@@ -477,6 +579,114 @@ class ControlRoomApp(App[None]):
         self.query_one("#activity", RichLog).write(
             f"[dim]{_hhmmss()}[/]  {msg}"
         )
+
+    def _record_history_entry(self, entry: CommandHistoryEntry) -> None:
+        if self._saved_state.history and self._saved_state.history[-1].raw == entry.raw and self._saved_state.history[-1].params == entry.params:
+            self._saved_state.history[-1] = entry
+        else:
+            self._saved_state.history.append(entry)
+
+        limit = self._config.control_room.history_limit
+        if len(self._saved_state.history) > limit:
+            self._saved_state.history = self._saved_state.history[-limit:]
+
+        self._history = [item.raw for item in self._saved_state.history if item.raw]
+        self._history_pos = len(self._history)
+        self._history_draft = ""
+        self._save_saved_state()
+
+    def _show_resume_picker(self) -> None:
+        if not self._saved_state.history:
+            self._log("[dim]No saved command history yet.[/]")
+            return
+
+        self._resume_entries = [
+            _ResumeSelection(
+                entry=entry,
+                label=_resume_summary(entry),
+                detail=_resume_detail(entry),
+            )
+            for entry in reversed(self._saved_state.history)
+        ]
+        option_list = self.query_one("#resume-list", OptionList)
+        option_list.clear_options()
+        option_list.add_options([item.label for item in self._resume_entries])
+        option_list.highlighted = 0
+        self._resume_open = True
+        self.query_one("#resume-modal", Vertical).styles.display = "block"
+        self._update_resume_detail()
+        self.set_focus(option_list)
+
+    def _close_resume_picker(self) -> None:
+        self._resume_open = False
+        self.query_one("#resume-modal", Vertical).styles.display = "none"
+        self.set_focus(self.query_one("#cmd", Input))
+
+    def _selected_resume_entry(self) -> CommandHistoryEntry | None:
+        if not self._resume_entries:
+            return None
+        option_list = self.query_one("#resume-list", OptionList)
+        index = option_list.highlighted
+        if index is None or index < 0 or index >= len(self._resume_entries):
+            return None
+        return self._resume_entries[index].entry
+
+    def _update_resume_detail(self) -> None:
+        detail = "[dim]No selection[/]"
+        entry = self._selected_resume_entry()
+        if entry is not None:
+            detail = escape(_resume_detail(entry))
+        self.query_one("#resume-detail", Static).update(Text.from_markup(detail))
+
+    def _resume_execute_selected(self) -> None:
+        entry = self._selected_resume_entry()
+        if entry is None:
+            return
+        self._close_resume_picker()
+        self._replay_history_entry(entry, edit=False)
+
+    def _resume_edit_selected(self) -> None:
+        entry = self._selected_resume_entry()
+        if entry is None:
+            return
+        self._close_resume_picker()
+        self._replay_history_entry(entry, edit=True)
+
+    def _replay_history_entry(self, entry: CommandHistoryEntry, *, edit: bool) -> None:
+        if edit:
+            if entry.command == "haul":
+                self._start_haul_prompt(
+                    commodity="",
+                    prompt_for_commodity=True,
+                    seed={str(key): str(value) for key, value in entry.params.items()},
+                )
+                return
+            if entry.command == "dest":
+                destination = str(entry.params.get("destination", "")).strip()
+                if destination:
+                    settle_value = entry.params.get("galaxy_map_settle")
+                    settle_default = float(settle_value) if settle_value is not None else None
+                    self._start_dest_prompt(destination, settle_default=settle_default)
+                    return
+            cmd_input = self.query_one("#cmd", Input)
+            cmd_input.value = entry.raw
+            cmd_input.cursor_position = len(cmd_input.value)
+            self.set_focus(cmd_input)
+            return
+
+        if entry.command == "haul":
+            self._haul_params = {str(key): str(value) for key, value in entry.params.items()}
+            self._dispatch_haul_loop()
+            return
+        if entry.command == "dest":
+            destination = str(entry.params.get("destination", "")).strip()
+            if destination:
+                settle_value = entry.params.get("galaxy_map_settle")
+                settle = float(settle_value) if settle_value is not None else self._saved_dest_settle_default()
+                self._dispatch_dest(destination, settle)
+            return
+
+        self._dispatch_command(entry.raw)
 
     # ── Market JSON ────────────────────────────────────────────────────────────
 
@@ -758,14 +968,16 @@ class ControlRoomApp(App[None]):
             progress_fn=progress,
         ))
 
-    def _cmd_dest(self, destination: str) -> None:
-        if not self._check_routine_ready():
-            return
-        if not destination:
-            self._log("[red]Usage: dest <system name>[/]")
-            return
+    def _saved_dest_settle_default(self) -> float:
+        value = self._saved_state.dest_defaults.get("galaxy_map_settle")
+        if isinstance(value, (int, float)):
+            return float(value)
+        return self._config.controls.galaxy_map_settle_seconds
+
+    def _start_dest_prompt(self, destination: str, *, settle_default: float | None = None) -> None:
         self._dest_prompt_destination = destination
-        default_settle = self._config.controls.galaxy_map_settle_seconds
+        self._dest_prompt_settle_default = settle_default if settle_default is not None else self._saved_dest_settle_default()
+        default_settle = self._dest_prompt_settle_default
         self._log(f"Destination: [bold]{escape(destination)}[/]")
         self._log(
             f"[dim]Galaxy-map settle seconds? "
@@ -775,6 +987,14 @@ class ControlRoomApp(App[None]):
             f"galaxy map settle seconds (Enter = {default_settle:.1f})..."
         )
 
+    def _cmd_dest(self, destination: str) -> None:
+        if not self._check_routine_ready():
+            return
+        if not destination:
+            self._log("[red]Usage: dest <system name>[/]")
+            return
+        self._start_dest_prompt(destination)
+
     def _dispatch_dest(self, destination: str, galaxy_map_settle: float) -> None:
         progress = self._make_progress()
         controls = self._make_controls(progress)
@@ -782,6 +1002,16 @@ class ControlRoomApp(App[None]):
         step_delay = self._config.controls.step_delay_seconds
         journal_dir = self._journal_dir
 
+        self._saved_state.dest_defaults["galaxy_map_settle"] = galaxy_map_settle
+        self._record_history_entry(CommandHistoryEntry(
+            raw=f"dest {destination}",
+            command="dest",
+            params={
+                "destination": destination,
+                "galaxy_map_settle": galaxy_map_settle,
+            },
+            timestamp=_now_iso(),
+        ))
         self._routine_active = True
         self._log(
             f"Setting galaxy map destination: [bold]{escape(destination)}[/] "
@@ -797,6 +1027,59 @@ class ControlRoomApp(App[None]):
             progress_fn=progress,
         ))
 
+    def _saved_haul_defaults(self, seed: dict[str, str] | None = None) -> dict[str, str]:
+        defaults = dict(self._saved_state.haul_defaults)
+        if seed:
+            defaults.update({key: value for key, value in seed.items() if value != ""})
+        if not defaults.get("sell_station") and self._ship.station:
+            defaults["sell_station"] = self._ship.station
+        if not defaults.get("sell_system") and self._ship.system:
+            defaults["sell_system"] = self._ship.system
+        if not defaults.get("galaxy_map_settle"):
+            defaults["galaxy_map_settle"] = str(self._saved_dest_settle_default())
+        if not defaults.get("dock_timeout"):
+            defaults["dock_timeout"] = str(self._config.controls.haul_dock_timeout_seconds)
+        return defaults
+
+    def _start_haul_prompt(
+        self,
+        *,
+        commodity: str,
+        prompt_for_commodity: bool,
+        seed: dict[str, str] | None = None,
+    ) -> None:
+        self._haul_params = {
+            "commodity": commodity.strip(),
+            "buy_station": "",
+            "sell_station": "",
+            "sell_system": "",
+            "buy_system": "",
+            "galaxy_map_settle": "",
+            "dock_timeout": "",
+        }
+        self._haul_prompt_defaults = self._saved_haul_defaults(seed)
+        self._log("Haul loop setup — enter parameters below:")
+        if prompt_for_commodity:
+            self._haul_prompt_step = "commodity"
+            default_commodity = self._haul_prompt_defaults.get("commodity", "")
+            if default_commodity:
+                self._log(f"[dim]Commodity to buy? (Enter = {escape(default_commodity)})[/]")
+                self.query_one("#cmd", Input).placeholder = f"commodity (Enter = {default_commodity})..."
+            else:
+                self._log("[dim]Commodity to buy? (e.g. Aluminium)[/]")
+                self.query_one("#cmd", Input).placeholder = "commodity..."
+            return
+
+        self._log(f"Haul loop: commodity = [cyan]{escape(self._haul_params['commodity'])}[/]")
+        self._haul_prompt_step = "buy_station"
+        default_buy_station = self._haul_prompt_defaults.get("buy_station", "")
+        if default_buy_station:
+            self._log(f"[dim]Buy station name? (Enter = {escape(default_buy_station)})[/]")
+            self.query_one("#cmd", Input).placeholder = f"buy station (Enter = {default_buy_station})..."
+        else:
+            self._log("[dim]Buy station name? (press Enter to skip)[/]")
+            self.query_one("#cmd", Input).placeholder = "buy station (Enter to skip)..."
+
     def _cmd_buy(self, rest: str) -> None:
         if not self._check_routine_ready():
             return
@@ -809,6 +1092,12 @@ class ControlRoomApp(App[None]):
         if amount is None:
             self._log(f"[red]Invalid amount — use a positive integer or MAX[/]")
             return
+        self._record_history_entry(CommandHistoryEntry(
+            raw=f"buy {rest}",
+            command="buy",
+            params={"target": target, "amount": amount},
+            timestamp=_now_iso(),
+        ))
 
         progress = self._make_progress()
         controls = self._make_controls(progress)
@@ -841,8 +1130,20 @@ class ControlRoomApp(App[None]):
             if amount is None:
                 self._log("[red]Invalid amount — use a positive integer or MAX[/]")
                 return
+            self._record_history_entry(CommandHistoryEntry(
+                raw=f"sell {rest}",
+                command="sell",
+                params={"target": target, "amount": amount},
+                timestamp=_now_iso(),
+            ))
             self._sell_item(target, amount)
         else:
+            self._record_history_entry(CommandHistoryEntry(
+                raw="sell",
+                command="sell",
+                params={"mode": "all"},
+                timestamp=_now_iso(),
+            ))
             self._sell_all()
 
     def _sell_item(self, target: str, amount: int | str) -> None:
@@ -919,72 +1220,82 @@ class ControlRoomApp(App[None]):
         if not self._check_routine_ready():
             return
         commodity = rest.strip()
-        self._haul_params = {
-            "commodity": commodity,
-            "buy_station": "",
-            "sell_station": "",
-            "sell_system": "",
-            "buy_system": "",
-            "galaxy_map_settle": "",
-            "dock_timeout": "",
-        }
         if not commodity:
-            self._haul_prompt_step = "commodity"
-            self._log("Haul loop setup — enter parameters below:")
-            self._log("[dim]Commodity to buy? (e.g. Aluminium)[/]")
-            self.query_one("#cmd", Input).placeholder = "commodity..."
+            self._start_haul_prompt(commodity="", prompt_for_commodity=True)
         else:
-            self._log(f"Haul loop: commodity = [cyan]{escape(commodity)}[/]")
-            self._haul_prompt_step = "buy_station"
-            self._log("[dim]Buy station name? (press Enter to skip)[/]")
-            self.query_one("#cmd", Input).placeholder = "buy station (Enter to skip)..."
+            self._start_haul_prompt(commodity=commodity, prompt_for_commodity=False)
 
     def _handle_haul_prompt(self, value: str) -> None:
         if self._haul_prompt_step == "commodity":
-            if not value.strip():
+            resolved = value.strip() or self._haul_prompt_defaults.get("commodity", "")
+            if not resolved:
                 self._log("[red]Commodity is required — enter a commodity name.[/]")
                 return
-            self._haul_params["commodity"] = value.strip()
-            self._log(f"  Commodity: [cyan]{escape(value.strip())}[/]")
+            self._haul_params["commodity"] = resolved
+            self._log(f"  Commodity: [cyan]{escape(resolved)}[/]")
             self._haul_prompt_step = "buy_station"
-            self._log("[dim]Buy station name? (press Enter to skip)[/]")
-            self.query_one("#cmd", Input).placeholder = "buy station (Enter to skip)..."
+            default_buy_station = self._haul_prompt_defaults.get("buy_station", "")
+            if default_buy_station:
+                self._log(f"[dim]Buy station name? (Enter = {escape(default_buy_station)})[/]")
+                self.query_one("#cmd", Input).placeholder = f"buy station (Enter = {default_buy_station})..."
+            else:
+                self._log("[dim]Buy station name? (press Enter to skip)[/]")
+                self.query_one("#cmd", Input).placeholder = "buy station (Enter to skip)..."
         elif self._haul_prompt_step == "buy_station":
-            self._haul_params["buy_station"] = value.strip()
-            if value.strip():
-                self._log(f"  Buy station: [cyan]{escape(value.strip())}[/]")
+            resolved = value.strip() or self._haul_prompt_defaults.get("buy_station", "")
+            self._haul_params["buy_station"] = resolved
+            if resolved:
+                self._log(f"  Buy station: [cyan]{escape(resolved)}[/]")
             else:
                 self._log("  Buy station: [dim](none)[/]")
             self._haul_prompt_step = "sell_station"
-            current = self._ship.station or "current station"
-            self._log(f"[dim]Sell station name? (Enter to use {escape(current)})[/]")
-            self.query_one("#cmd", Input).placeholder = f"sell station (Enter = {current})..."
+            default_sell_station = self._haul_prompt_defaults.get("sell_station", "")
+            if default_sell_station:
+                self._log(f"[dim]Sell station name? (Enter = {escape(default_sell_station)})[/]")
+                self.query_one("#cmd", Input).placeholder = f"sell station (Enter = {default_sell_station})..."
+            else:
+                current = self._ship.station or "current station"
+                self._log(f"[dim]Sell station name? (Enter to use {escape(current)})[/]")
+                self.query_one("#cmd", Input).placeholder = f"sell station (Enter = {current})..."
         elif self._haul_prompt_step == "sell_station":
-            self._haul_params["sell_station"] = value.strip()
-            if value.strip():
-                self._log(f"  Sell station: [cyan]{escape(value.strip())}[/]")
+            resolved = value.strip() or self._haul_prompt_defaults.get("sell_station", "")
+            self._haul_params["sell_station"] = resolved
+            if resolved:
+                self._log(f"  Sell station: [cyan]{escape(resolved)}[/]")
             else:
                 self._log(f"  Sell station: [dim](current station)[/]")
             self._haul_prompt_step = "sell_system"
-            current_system = self._ship.system or "current system"
-            self._log(f"[dim]Sell system? (Enter to use {escape(current_system)})[/]")
-            self.query_one("#cmd", Input).placeholder = f"sell system (Enter = {current_system})..."
+            default_sell_system = self._haul_prompt_defaults.get("sell_system", "")
+            if default_sell_system:
+                self._log(f"[dim]Sell system? (Enter = {escape(default_sell_system)})[/]")
+                self.query_one("#cmd", Input).placeholder = f"sell system (Enter = {default_sell_system})..."
+            else:
+                current_system = self._ship.system or "current system"
+                self._log(f"[dim]Sell system? (Enter to use {escape(current_system)})[/]")
+                self.query_one("#cmd", Input).placeholder = f"sell system (Enter = {current_system})..."
         elif self._haul_prompt_step == "sell_system":
-            self._haul_params["sell_system"] = value.strip()
-            if value.strip():
-                self._log(f"  Sell system: [cyan]{escape(value.strip())}[/]")
+            resolved = value.strip() or self._haul_prompt_defaults.get("sell_system", "")
+            self._haul_params["sell_system"] = resolved
+            if resolved:
+                self._log(f"  Sell system: [cyan]{escape(resolved)}[/]")
             else:
                 self._log(f"  Sell system: [dim](current system)[/]")
             self._haul_prompt_step = "buy_system"
-            self._log("[dim]Buy system? (press Enter to skip)[/]")
-            self.query_one("#cmd", Input).placeholder = "buy system (Enter to skip)..."
+            default_buy_system = self._haul_prompt_defaults.get("buy_system", "")
+            if default_buy_system:
+                self._log(f"[dim]Buy system? (Enter = {escape(default_buy_system)})[/]")
+                self.query_one("#cmd", Input).placeholder = f"buy system (Enter = {default_buy_system})..."
+            else:
+                self._log("[dim]Buy system? (press Enter to skip)[/]")
+                self.query_one("#cmd", Input).placeholder = "buy system (Enter to skip)..."
         elif self._haul_prompt_step == "buy_system":
-            self._haul_params["buy_system"] = value.strip()
-            if value.strip():
-                self._log(f"  Buy system: [cyan]{escape(value.strip())}[/]")
+            resolved = value.strip() or self._haul_prompt_defaults.get("buy_system", "")
+            self._haul_params["buy_system"] = resolved
+            if resolved:
+                self._log(f"  Buy system: [cyan]{escape(resolved)}[/]")
             else:
                 self._log("  Buy system: [dim](none)[/]")
-            default_settle = self._config.controls.galaxy_map_settle_seconds
+            default_settle = float(self._haul_prompt_defaults.get("galaxy_map_settle", self._saved_dest_settle_default()))
             self._haul_prompt_step = "galaxy_map_settle"
             self._log(
                 f"[dim]Galaxy-map settle seconds? "
@@ -996,14 +1307,14 @@ class ControlRoomApp(App[None]):
         elif self._haul_prompt_step == "galaxy_map_settle":
             parsed = self._parse_optional_nonnegative_float(
                 value,
-                default=self._config.controls.galaxy_map_settle_seconds,
+                default=float(self._haul_prompt_defaults.get("galaxy_map_settle", self._saved_dest_settle_default())),
                 label="Galaxy-map settle seconds",
             )
             if parsed is None:
                 return
             self._haul_params["galaxy_map_settle"] = str(parsed)
             self._log(f"  Galaxy-map settle: [cyan]{parsed:.1f}s[/]")
-            default_timeout = self._config.controls.haul_dock_timeout_seconds
+            default_timeout = float(self._haul_prompt_defaults.get("dock_timeout", self._config.controls.haul_dock_timeout_seconds))
             self._haul_prompt_step = "dock_timeout"
             self._log(
                 f"[dim]Haul docking timeout seconds? "
@@ -1015,7 +1326,7 @@ class ControlRoomApp(App[None]):
         elif self._haul_prompt_step == "dock_timeout":
             parsed = self._parse_optional_nonnegative_float(
                 value,
-                default=self._config.controls.haul_dock_timeout_seconds,
+                default=float(self._haul_prompt_defaults.get("dock_timeout", self._config.controls.haul_dock_timeout_seconds)),
                 label="Haul docking timeout seconds",
             )
             if parsed is None:
@@ -1023,6 +1334,7 @@ class ControlRoomApp(App[None]):
             self._haul_params["dock_timeout"] = str(parsed)
             self._log(f"  Haul docking timeout: [cyan]{parsed:.1f}s[/]")
             self._haul_prompt_step = ""
+            self._haul_prompt_defaults = {}
             self.query_one("#cmd", Input).placeholder = _DEFAULT_COMMAND_PLACEHOLDER
             self._dispatch_haul_loop()
 
@@ -1070,6 +1382,23 @@ class ControlRoomApp(App[None]):
         )
         journal_dir = self._journal_dir
         watcher = self._make_watcher()
+
+        self._saved_state.haul_defaults = {
+            "commodity": commodity,
+            "buy_station": buy_station,
+            "sell_station": sell_station,
+            "sell_system": sell_system,
+            "buy_system": buy_system,
+            "galaxy_map_settle": str(galaxy_map_settle),
+            "dock_timeout": str(dock_timeout),
+        }
+        self._saved_state.dest_defaults["galaxy_map_settle"] = galaxy_map_settle
+        self._record_history_entry(CommandHistoryEntry(
+            raw=f"haul {commodity}",
+            command="haul",
+            params=dict(self._saved_state.haul_defaults),
+            timestamp=_now_iso(),
+        ))
 
         label_parts = [f"[cyan]{escape(commodity)}[/]"]
         if buy_station:
@@ -1136,6 +1465,17 @@ class ControlRoomApp(App[None]):
             event.prevent_default()
             self.action_request_quit()
             return
+        if self._resume_open:
+            if event.key in {"escape", "q"}:
+                event.prevent_default()
+                self._close_resume_picker()
+            elif event.key == "e":
+                event.prevent_default()
+                self._resume_edit_selected()
+            elif event.key == "enter":
+                event.prevent_default()
+                self._resume_execute_selected()
+            return
         if self._haul_prompt_step or self._dest_prompt_destination:
             return  # don't interfere with multi-step haul prompts
         if event.key not in ("up", "down"):
@@ -1172,12 +1512,13 @@ class ControlRoomApp(App[None]):
             destination = self._dest_prompt_destination
             parsed = self._parse_optional_nonnegative_float(
                 raw,
-                default=self._config.controls.galaxy_map_settle_seconds,
+                default=self._dest_prompt_settle_default or self._saved_dest_settle_default(),
                 label="Galaxy-map settle seconds",
             )
             if parsed is None:
                 return
             self._dest_prompt_destination = ""
+            self._dest_prompt_settle_default = None
             self.query_one("#cmd", Input).placeholder = _DEFAULT_COMMAND_PLACEHOLDER
             self._dispatch_dest(destination, parsed)
             return
@@ -1185,18 +1526,12 @@ class ControlRoomApp(App[None]):
         if not raw:
             return
 
-        # Push to history (no duplicates of adjacent entry, skip haul prompt steps)
-        if not self._history or self._history[-1] != raw:
-            self._history.append(raw)
-        # Reset history position to "not browsing"
-        self._history_pos = len(self._history)
-        self._history_draft = ""
-
         self._dispatch_command(raw)
 
     def _dispatch_command(self, raw: str) -> None:
         cmd = raw.lower()
         if cmd in {"q", "quit", "exit"}:
+            self._record_history_entry(CommandHistoryEntry(raw=raw, command="quit", timestamp=_now_iso()))
             self._request_shutdown("quit command")
             return
 
@@ -1207,15 +1542,18 @@ class ControlRoomApp(App[None]):
         raw_rest = raw_parts[1].strip() if len(raw_parts) > 1 else ""
 
         if verb == "dock":
+            self._record_history_entry(CommandHistoryEntry(raw=raw, command="dock", timestamp=_now_iso()))
             self._cmd_dock()
         elif verb == "undock":
+            self._record_history_entry(CommandHistoryEntry(raw=raw, command="undock", timestamp=_now_iso()))
             self._cmd_undock()
         elif verb == "jump":
+            self._record_history_entry(CommandHistoryEntry(raw=raw, command="jump", timestamp=_now_iso()))
             self._cmd_jump()
         elif verb == "buy":
-            self._cmd_buy(rest)
+            self._cmd_buy(raw_rest)
         elif verb == "sell":
-            self._cmd_sell(rest)
+            self._cmd_sell(raw_rest)
         elif verb == "haul":
             self._cmd_haul(raw_rest)
         elif verb in {"dest", "set_dest"}:
@@ -1224,13 +1562,20 @@ class ControlRoomApp(App[None]):
             else:
                 self._cmd_dest(raw_rest)
         elif verb == "market":
+            self._record_history_entry(CommandHistoryEntry(raw=raw, command="market", params={"value": raw_rest}, timestamp=_now_iso()))
             self._cmd_market(raw_rest)
         elif verb == "verbose":
+            self._record_history_entry(CommandHistoryEntry(raw=raw, command="verbose", params={"value": rest}, timestamp=_now_iso()))
             self._cmd_verbose(rest)
         elif verb == "commands":
+            self._record_history_entry(CommandHistoryEntry(raw=raw, command="commands", timestamp=_now_iso()))
             self._cmd_commands()
         elif verb in {"help", "?"}:
+            self._record_history_entry(CommandHistoryEntry(raw=raw, command="help", params={"topic": raw_rest}, timestamp=_now_iso()))
             self._cmd_help(raw_rest)
+        elif verb == "resume":
+            self._record_history_entry(CommandHistoryEntry(raw=raw, command="resume", timestamp=_now_iso()))
+            self._cmd_resume()
         else:
             self._log(f"[dim]Unknown command: {escape(raw)}[/]")
 
@@ -1253,6 +1598,9 @@ class ControlRoomApp(App[None]):
         for command in _COMMANDS:
             aliases = f" [dim](aliases: {', '.join(command.aliases)})[/]" if command.aliases else ""
             self._log(f"[bold]{escape(command.usage)}[/] — {escape(command.summary)}{aliases}")
+
+    def _cmd_resume(self) -> None:
+        self._show_resume_picker()
 
     def _cmd_help(self, rest: str) -> None:
         topic = rest.strip().lower()
@@ -1307,6 +1655,14 @@ class ControlRoomApp(App[None]):
             self._market_filter = None
             self._log("[dim]Market filter cleared.[/]")
             self._refresh_market()
+
+    def on_option_list_option_highlighted(self, message: OptionList.OptionHighlighted) -> None:
+        if message.option_list.id == "resume-list":
+            self._update_resume_detail()
+
+    def on_option_list_option_selected(self, message: OptionList.OptionSelected) -> None:
+        if message.option_list.id == "resume-list":
+            self._resume_execute_selected()
 
 
 # ── Entry point ────────────────────────────────────────────────────────────────

@@ -12,11 +12,13 @@ from edap.config import (
     AppConfig,
     CaptureConfig,
     CaptureRegionConfig,
+    ControlRoomConfig,
     ControlsConfig,
     PathsConfig,
     RuntimeConfig,
     ScreenConfig,
 )
+from edap.control_room_state import CommandHistoryEntry
 from edap.routines import RoutineResult
 from edap.runtime import ResolvedPath, RuntimeContext
 
@@ -47,6 +49,10 @@ def _make_config(journal_dir: Path) -> AppConfig:
             ),
         ),
         runtime=RuntimeConfig(platform="macos", debug=False),
+        control_room=ControlRoomConfig(
+            state_file=journal_dir / ".control_room_state.json",
+            history_limit=20,
+        ),
     )
 
 
@@ -198,6 +204,25 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertIn("Cargo.json fallback", output)
         self.assertIn("Sell-all complete", output)
         self.assertNotIn("Nothing sellable in cargo", output)
+
+    def test_record_history_entry_trims_to_configured_limit(self) -> None:
+        self.app._config = self.app._config.__class__(
+            paths=self.app._config.paths,
+            controls=self.app._config.controls,
+            screen=self.app._config.screen,
+            runtime=self.app._config.runtime,
+            control_room=ControlRoomConfig(
+                state_file=self.app._config.control_room.state_file,
+                history_limit=2,
+            ),
+        )
+
+        self.app._record_history_entry(CommandHistoryEntry(raw="dock", command="dock", timestamp="1"))
+        self.app._record_history_entry(CommandHistoryEntry(raw="jump", command="jump", timestamp="2"))
+        self.app._record_history_entry(CommandHistoryEntry(raw="undock", command="undock", timestamp="3"))
+
+        self.assertEqual([entry.raw for entry in self.app._saved_state.history], ["jump", "undock"])
+        self.assertEqual(self.app._history, ["jump", "undock"])
 
 
 if __name__ == "__main__":

@@ -52,3 +52,7 @@ bottom = 0.9375
 [runtime]
 platform = "macos"
 debug = true
+
+[control_room]
+state_file = ".control_room_state.json"
+history_limit = 20

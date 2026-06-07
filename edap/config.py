@@ -62,11 +62,18 @@ class RuntimeConfig:
 
 
 @dataclass(frozen=True)
+class ControlRoomConfig:
+    state_file: Path
+    history_limit: int
+
+
+@dataclass(frozen=True)
 class AppConfig:
     paths: PathsConfig
     controls: ControlsConfig
     screen: ScreenConfig
     runtime: RuntimeConfig
+    control_room: ControlRoomConfig
 
 
 class ConfigError(ValueError):
@@ -194,6 +201,8 @@ def validate_config(config: AppConfig) -> AppConfig:
         raise ConfigError(
             f"Config value `runtime.platform` must be one of: {supported}."
         )
+    if config.control_room.history_limit <= 0:
+        raise ConfigError("Config value `control_room.history_limit` must be greater than 0.")
 
     _validate_path_shape(config.paths.journal_dir, key="paths.journal_dir", should_be_dir=True)
     _validate_path_shape(config.paths.bindings_file, key="paths.bindings_file", should_be_dir=False)
@@ -227,6 +236,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
     screen_capture = _optional_table(screen, "capture")
     screen_capture_regions = _optional_table(screen_capture, "regions")
     runtime = _require_table(raw, "runtime")
+    control_room = _optional_table(raw, "control_room")
 
     capture_regions: dict[str, CaptureRegionConfig] = {
         "center": CaptureRegionConfig(
@@ -283,6 +293,10 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
         runtime=RuntimeConfig(
             platform=_string(runtime, "platform", "macos"),
             debug=_boolean(runtime, "debug", True),
+        ),
+        control_room=ControlRoomConfig(
+            state_file=Path(_string(control_room, "state_file", ".control_room_state.json")).expanduser(),
+            history_limit=_integer(control_room, "history_limit", 20),
         ),
     )
     return validate_config(config)

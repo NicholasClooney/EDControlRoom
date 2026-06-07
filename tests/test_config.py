@@ -45,6 +45,8 @@ class LoadConfigTests(unittest.TestCase):
             self.assertEqual(config.screen.capture.mode, "fullscreen")
             self.assertIn("center", config.screen.capture.regions)
             self.assertEqual(config.runtime.platform, "macos")
+            self.assertEqual(config.control_room.state_file, Path(".control_room_state.json"))
+            self.assertEqual(config.control_room.history_limit, 20)
 
     def test_rejects_non_positive_continuous_hold_setting(self) -> None:
         with TemporaryDirectory() as temp_dir:
