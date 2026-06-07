@@ -2,7 +2,7 @@
 
 _This is the maintained status document for the repo. Update it at the end of each session when project understanding, port status, or next steps change. Keep it current over time rather than treating it as a frozen checkpoint._
 
-Last updated: 2026-06-07 (session 33)
+Last updated: 2026-06-07 (session 34)
 
 ## Where We Are
 
@@ -48,6 +48,7 @@ Latest live validation on the current macOS + CrossOver setup:
 - Control-room `boost` and `escape` are now distinct: `boost` fires `UseBoostJuice` three times unconditionally, while `escape` remains the Status.json-driven mass-lock escape path (`SetSpeed100`, then poll `fsd_mass_locked` and boost until it clears)
 - `run_routine.py --routine set_gal_map_destination --destination "Colonia" --delay-seconds 5` live-validated: two input bugs found and fixed — modifier key was not explicitly pressed/released (caused ctrl bleed-through to subsequent keys), and `type_text` used keycode 0 for every character (CrossOver ignores the unicode string and reads the physical keycode, so all text arrived as AAAA...); both fixed in `edap/platform/input/macos.py`
 - Galaxy map destination flow re-validated after re-introducing the Odyssey-style result selection without poll/retry: `type_text("\n")` was no longer reliably committing the search field in live CrossOver runs, so the routine now submits search with a direct held Enter (default 0.2s). Current timing defaults: `open_settle_s` is now 5s, and the shared galaxy-map settle delay is now explicit (`controls.galaxy_map_settle_seconds`, CLI override `--galaxy-map-settle-seconds`) for both the post-result CamZoomIn wait and the post-plot settle wait. This same delay now flows through `dest` and `haul_loop`.
+- `control_room.py` was split for file size (1681 → 1203 LOC) into a package under `edap/control_room/`: pure history helpers in `history.py`; dispatch + meta commands (`commands`, `help`, `replay`, `verbose`, `market`) in `commands.py`; routine launchers grouped as `routines_station.py` (dock/undock), `routines_movement.py` (jump/escape/boost), `routines_nav.py` (dest), `routines_trade.py` (buy/sell/sell-all), and `routines_haul.py` (haul). Each new module is a thin module-level functions layer that takes `app: ControlRoomApp` as first arg. Coupling is unchanged — the split is for agent-readability, not decoupling. Prompts and replay-picker UI stay on `ControlRoomApp`. Dispatch routing/history-recording is now covered by focused tests in `tests/test_control_room.py::ControlRoomDispatchTests`.
 
 The important caveat is that the real autopilot loop is still largely unported. The project is in a portability-first and runtime-seams phase, not a "macOS autopilot feature complete" phase.
 
