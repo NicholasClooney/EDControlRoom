@@ -26,7 +26,7 @@ Market commands:
 Other:
     commands           list supported commands
     help [command]     explain a command in plain English
-    replay             open the recent-command picker
+    replay             open the replay history browser
     q / quit           cancel active work if needed, then exit
 """
 from __future__ import annotations
@@ -215,8 +215,8 @@ _COMMANDS: list[_CommandHelp] = [
     _CommandHelp(
         name="replay",
         usage="replay",
-        summary="Open the recent-command picker for execute-or-edit replay.",
-        detail="Shows a scrollable list of recent saved commands across sessions. Press Enter to execute the selected entry immediately, press e to reopen it for editing, or press * on a haul entry to save or clear it as the default haul setup.",
+        summary="Open the replay history browser for execute-or-edit replay.",
+        detail="Shows recent saved commands across sessions in the activity-pane replay browser. Press Enter to execute the selected entry immediately, press e to reopen it for editing, or press * on a haul entry to save or clear it as the default haul setup.",
         aliases=("history",),
     ),
     _CommandHelp(
@@ -334,6 +334,9 @@ class ControlRoomApp(App[None]):
         border: solid $primary;
         padding: 0 1;
     }
+    #activity-pane {
+        height: 1fr;
+    }
     #activity {
         height: 1fr;
         border: solid $primary;
@@ -345,19 +348,10 @@ class ControlRoomApp(App[None]):
         padding: 0 1;
     }
     #cmd { height: 3; }
-    #resume-modal {
+    #resume-browser {
         display: none;
-        layer: overlay;
-        align: center middle;
-        width: 100%;
-        height: 100%;
-        background: $background 60%;
-    }
-    #resume-dialog {
-        width: 80;
-        height: 24;
+        height: 1fr;
         border: heavy $primary;
-        background: $surface;
         padding: 1;
     }
     #resume-help {
@@ -411,23 +405,24 @@ class ControlRoomApp(App[None]):
         with Horizontal(id="main"):
             with Vertical(id="left"):
                 yield Static(id="status")
-                yield RichLog(id="activity", markup=True, highlight=True, wrap=True)
+                with Vertical(id="activity-pane"):
+                    yield RichLog(id="activity", markup=True, highlight=True, wrap=True)
+                    with Vertical(id="resume-browser"):
+                        yield Static(
+                            "Replay history  |  Enter execute  |  e edit  |  * set default haul  |  Esc/q close",
+                            id="resume-help",
+                        )
+                        yield OptionList(id="resume-list")
+                        yield Static(id="resume-detail")
             yield Static(id="market")
         yield Input(placeholder=_DEFAULT_COMMAND_PLACEHOLDER, id="cmd")
-        with Vertical(id="resume-modal"):
-            with Vertical(id="resume-dialog"):
-                yield Static(
-                    "Recent commands  |  Enter execute  |  e edit  |  * set default haul  |  Esc/q close",
-                    id="resume-help",
-                )
-                yield OptionList(id="resume-list")
-                yield Static(id="resume-detail")
         yield Footer()
 
     def on_mount(self) -> None:
         self.title = "ED Control Room"
         self.query_one("#status", Static).border_title = "SHIP STATUS"
         self.query_one("#activity", RichLog).border_title = "ACTIVITY"
+        self.query_one("#resume-browser", Vertical).border_title = "REPLAY HISTORY"
         self.query_one("#market", Static).border_title = "MARKET"
         self._build_controls()
         self._load_saved_state()
@@ -621,7 +616,8 @@ class ControlRoomApp(App[None]):
         option_list.add_options([item.label for item in self._resume_entries])
         option_list.highlighted = 0
         self._resume_open = True
-        self.query_one("#resume-modal", Vertical).styles.display = "block"
+        self.query_one("#activity", RichLog).styles.display = "none"
+        self.query_one("#resume-browser", Vertical).styles.display = "block"
         self._update_resume_detail()
         self.set_focus(option_list)
 
@@ -646,7 +642,8 @@ class ControlRoomApp(App[None]):
 
     def _close_resume_picker(self) -> None:
         self._resume_open = False
-        self.query_one("#resume-modal", Vertical).styles.display = "none"
+        self.query_one("#resume-browser", Vertical).styles.display = "none"
+        self.query_one("#activity", RichLog).styles.display = "block"
         self.set_focus(self.query_one("#cmd", Input))
 
     def _selected_resume_entry(self) -> CommandHistoryEntry | None:

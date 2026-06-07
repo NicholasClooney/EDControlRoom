@@ -11,3 +11,4 @@ dist
 *.pyc
 artifacts/
 config.toml
+.control_room_state.json
