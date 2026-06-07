@@ -102,6 +102,16 @@ class _HarnessApp(ControlRoomApp):
         self._shutdown_finalized = True
         self.exit()
 
+    def _refresh_market(self) -> None:  # type: ignore[override]
+        return None
+
+    def _show_resume_picker(self) -> None:  # type: ignore[override]
+        if not self._saved_state.history:
+            self._log("[dim]No saved command history yet.[/]")
+            return
+        self._resume_open = True
+        self._resume_entries = self._filtered_resume_entries()
+
 
 class ControlRoomCommandTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -334,6 +344,68 @@ class ControlRoomBindingsTests(unittest.TestCase):
         raws = [item.entry.raw for item in self.app._filtered_resume_entries()]
 
         self.assertEqual(raws, ["jump", "dock"])
+
+
+class ControlRoomDispatchTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmpdir.cleanup)
+        self.app = _HarnessApp(_make_context(Path(self.tmpdir.name)))
+
+    def _last_history(self) -> CommandHistoryEntry | None:
+        history = self.app._saved_state.history
+        return history[-1] if history else None
+
+    def test_unknown_verb_logs_warning_and_does_not_record_history(self) -> None:
+        self.app._dispatch_command("frobnicate now")
+
+        output = "\n".join(self.app.logged)
+        self.assertIn("Unknown command: frobnicate now", output)
+        self.assertEqual(self.app._saved_state.history, [])
+
+    def test_verb_routing_is_case_insensitive(self) -> None:
+        self.app._dispatch_command("HELP set_dest")
+
+        output = "\n".join(self.app.logged)
+        self.assertIn("dest <system>", output)
+        entry = self._last_history()
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.command, "help")
+
+    def test_history_alias_opens_replay_picker(self) -> None:
+        self.app._saved_state.history = [
+            CommandHistoryEntry(raw="dock", command="dock", timestamp="1"),
+        ]
+
+        self.app._dispatch_command("history")
+
+        self.assertTrue(self.app._resume_open)
+        entry = self._last_history()
+        self.assertEqual(entry.command, "replay")
+
+    def test_exit_alias_requests_shutdown(self) -> None:
+        self.app._dispatch_command("exit")
+
+        self.assertTrue(self.app._shutdown_requested)
+        entry = self._last_history()
+        self.assertEqual(entry.command, "quit")
+        self.assertEqual(entry.raw, "exit")
+
+    def test_verbose_on_toggles_state_and_records_history(self) -> None:
+        self.app._dispatch_command("verbose on")
+
+        self.assertTrue(self.app._verbose_controls)
+        entry = self._last_history()
+        self.assertEqual(entry.command, "verbose")
+        self.assertEqual(entry.params, {"value": "on"})
+
+    def test_market_filter_sets_filter_and_records_raw_value(self) -> None:
+        self.app._dispatch_command("market filter Aluminium")
+
+        self.assertEqual(self.app._market_filter, "Aluminium")
+        entry = self._last_history()
+        self.assertEqual(entry.command, "market")
+        self.assertEqual(entry.params, {"value": "filter Aluminium"})
 
 
 if __name__ == "__main__":
