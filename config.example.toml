@@ -27,6 +27,8 @@ undock_in_space_timeout_seconds = 180.0
 mass_lock_boost_delay_seconds = 5.0
 # Delay after each UI_Down tap in buy/sell market navigation (covers both the item-list scroll and single down taps).
 market_nav_delay_seconds = 0.1
+# Maximum buy/sell attempts before aborting when the matching MarketBuy/MarketSell journal event is not observed.
+market_trade_max_attempts = 3
 
 [screen]
 resolution_width = 1920

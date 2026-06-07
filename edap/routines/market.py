@@ -52,9 +52,11 @@ def _is_market_event(event: dict[str, object], event_type: str, target: str) -> 
     if event.get("event") != event_type:
         return False
     t = target.lower()
+    # Exact match (case-insensitive) so a wrong commodity cannot satisfy the
+    # predicate -- e.g. a stray MarketBuy for "Gold" must not match target "Gold Ore".
     return (
-        t in str(event.get("Type_Localised", "")).lower()
-        or t in str(event.get("Type", "")).lower()
+        str(event.get("Type_Localised", "")).lower() == t
+        or str(event.get("Type", "")).lower() == t
     )
 
 
@@ -98,6 +100,7 @@ def market_buy(
     max_hold_s: float = 10.0,
     trade_timeout_s: float = 30.0,
     skip_station_check: bool = False,
+    max_attempts: int = 3,
     time_fn: Callable[[], float] = monotonic,
     sleeper: Callable[[float], None] = sleep,
     progress_fn: Callable[[str], None] | None = None,
@@ -107,6 +110,7 @@ def market_buy(
         market_path=market_path, target=target, amount=amount, side="buy",
         step_delay_s=step_delay_s, nav_delay_s=nav_delay_s, max_hold_s=max_hold_s,
         trade_timeout_s=trade_timeout_s, skip_station_check=skip_station_check,
+        max_attempts=max_attempts,
         time_fn=time_fn, sleeper=sleeper, progress_fn=progress_fn,
     )
 
@@ -123,6 +127,7 @@ def market_sell(
     max_hold_s: float = 10.0,
     trade_timeout_s: float = 30.0,
     skip_station_check: bool = False,
+    max_attempts: int = 3,
     time_fn: Callable[[], float] = monotonic,
     sleeper: Callable[[float], None] = sleep,
     progress_fn: Callable[[str], None] | None = None,
@@ -132,6 +137,7 @@ def market_sell(
         market_path=market_path, target=target, amount=amount, side="sell",
         step_delay_s=step_delay_s, nav_delay_s=nav_delay_s, max_hold_s=max_hold_s,
         trade_timeout_s=trade_timeout_s, skip_station_check=skip_station_check,
+        max_attempts=max_attempts,
         time_fn=time_fn, sleeper=sleeper, progress_fn=progress_fn,
     )
 
@@ -149,12 +155,77 @@ def _market_trade(
     max_hold_s: float,
     trade_timeout_s: float,
     skip_station_check: bool,
+    max_attempts: int,
     time_fn: Callable[[], float],
     sleeper: Callable[[float], None],
     progress_fn: Callable[[str], None] | None,
 ) -> RoutineResult:
     event_type = "MarketBuy" if side == "buy" else "MarketSell"
+    if max_attempts < 1:
+        max_attempts = 1
 
+    last_failure: RoutineResult | None = None
+    for attempt in range(1, max_attempts + 1):
+        if attempt > 1:
+            if progress_fn is not None:
+                progress_fn(
+                    f"Retrying {side} of '{target}' "
+                    f"(attempt {attempt}/{max_attempts})..."
+                )
+            # Bail out of any lingering dialog/list back to station services
+            for _ in range(4):
+                controls.ui_back()
+                if nav_delay_s > 0:
+                    sleeper(nav_delay_s)
+
+        result = _market_trade_attempt(
+            controls, watcher,
+            market_path=market_path, target=target, amount=amount, side=side,
+            event_type=event_type,
+            step_delay_s=step_delay_s, nav_delay_s=nav_delay_s, max_hold_s=max_hold_s,
+            trade_timeout_s=trade_timeout_s, skip_station_check=skip_station_check,
+            time_fn=time_fn, sleeper=sleeper, progress_fn=progress_fn,
+        )
+
+        if result.dispatch.status == "ok" and result.trigger_event is not None:
+            return result
+
+        # Only the wait-for-event phase is retryable; other failures (UI dispatch,
+        # missing Market.json, item not in list) indicate setup problems that won't
+        # be fixed by trying again.
+        phase = (result.details or {}).get("phase", "")
+        if phase != "wait_for_event":
+            return result
+
+        last_failure = result
+
+    assert last_failure is not None
+    base_reason = last_failure.dispatch.reason or "no event observed"
+    return _market_error(
+        event_type,
+        f"{event_type} for '{target}' failed after {max_attempts} "
+        f"attempts: {base_reason}",
+    )
+
+
+def _market_trade_attempt(
+    controls: SupportsMarketControls,
+    watcher: SupportsPollEvents,
+    *,
+    market_path: Path,
+    target: str,
+    amount: int | str,
+    side: str,
+    event_type: str,
+    step_delay_s: float,
+    nav_delay_s: float,
+    max_hold_s: float,
+    trade_timeout_s: float,
+    skip_station_check: bool,
+    time_fn: Callable[[], float],
+    sleeper: Callable[[float], None],
+    progress_fn: Callable[[str], None] | None,
+) -> RoutineResult:
     # Navigate to commodities market first -- the game writes Market.json when the screen opens
     if progress_fn is not None:
         progress_fn("Navigating to commodities market...")

@@ -78,6 +78,7 @@ def cmd_buy(app: ControlRoomApp, rest: str) -> None:
     app._routine_active = True
     amt_label = str(amount) + ("t" if isinstance(amount, int) else "")
     app._log(f"Buying {amt_label} [cyan]{escape(target)}[/]...")
+    max_attempts = app._config.controls.market_trade_max_attempts
     app._routine_worker = app._run_in_thread(lambda: market_buy(
         controls,
         watcher,
@@ -86,6 +87,7 @@ def cmd_buy(app: ControlRoomApp, rest: str) -> None:
         amount=amount,
         step_delay_s=step_delay,
         nav_delay_s=nav_delay,
+        max_attempts=max_attempts,
         sleeper=sleeper,
         progress_fn=progress,
     ))
@@ -130,6 +132,7 @@ def sell_item(app: ControlRoomApp, target: str, amount: int | str) -> None:
     app._routine_active = True
     amt_label = str(amount) + ("t" if isinstance(amount, int) else "")
     app._log(f"Selling {amt_label} [cyan]{escape(target)}[/]...")
+    max_attempts = app._config.controls.market_trade_max_attempts
     app._routine_worker = app._run_in_thread(lambda: market_sell(
         controls, watcher,
         market_path=market_path,
@@ -137,6 +140,7 @@ def sell_item(app: ControlRoomApp, target: str, amount: int | str) -> None:
         amount=amount,
         step_delay_s=step_delay,
         nav_delay_s=nav_delay,
+        max_attempts=max_attempts,
         sleeper=sleeper,
         progress_fn=progress,
     ))
@@ -165,6 +169,7 @@ def sell_all(app: ControlRoomApp) -> None:
         app._log("[yellow]Cargo journal state was empty; using Cargo.json fallback for sell-all[/]")
     app._log(f"Selling all cargo: [cyan]{escape(names)}[/]")
     app._routine_active = True
+    max_attempts = app._config.controls.market_trade_max_attempts
 
     def run_all() -> None:
         for item in inventory:
@@ -179,6 +184,7 @@ def sell_all(app: ControlRoomApp) -> None:
                     amount="MAX",
                     step_delay_s=step_delay,
                     nav_delay_s=nav_delay,
+                    max_attempts=max_attempts,
                     sleeper=sleeper,
                     progress_fn=progress,
                 )
