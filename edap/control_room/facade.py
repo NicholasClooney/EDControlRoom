@@ -36,8 +36,8 @@ class ControlRoomFacade:
         self._default_placeholder = default_placeholder
         self._reloadable_modules = reloadable_modules
 
-    def dispatch_command(self, raw: str) -> None:
-        _commands.dispatch(self._app, raw)
+    def dispatch_command(self, raw: str, *, skip_delay: bool | None = None) -> None:
+        _commands.dispatch(self._app, raw, skip_delay_override=skip_delay)
 
     def record_history_entry(self, entry: CommandHistoryEntry) -> None:
         _persistence.record_history_entry(self._app, entry)
@@ -53,6 +53,9 @@ class ControlRoomFacade:
 
     def resume_execute_selected(self) -> None:
         _replay.resume_execute_selected(self._app)
+
+    def resume_execute_selected_immediate(self) -> None:
+        _replay.resume_execute_selected_immediate(self._app)
 
     def resume_edit_selected(self) -> None:
         _replay.resume_edit_selected(self._app)
@@ -86,6 +89,7 @@ class ControlRoomFacade:
         description: str,
         start_message: str,
         fn: Callable[[], Any],
+        skip_delay: bool = False,
         active_routine_name: str | None = None,
         on_start: Callable[[], None] | None = None,
     ) -> None:
@@ -94,6 +98,7 @@ class ControlRoomFacade:
             description=description,
             start_message=start_message,
             fn=fn,
+            skip_delay=skip_delay,
             active_routine_name=active_routine_name,
             on_start=on_start,
         )
@@ -101,29 +106,66 @@ class ControlRoomFacade:
     def raise_if_worker_cancelled(self) -> None:
         _workers.raise_if_worker_cancelled()
 
-    def cmd_dock(self) -> None:
-        routines_station.cmd_dock(self._app)
+    def cmd_dock(self, *, skip_delay: bool = False) -> None:
+        routines_station.cmd_dock(self._app, skip_delay=skip_delay)
 
-    def cmd_undock(self) -> None:
-        routines_station.cmd_undock(self._app)
+    def cmd_undock(self, *, skip_delay: bool = False) -> None:
+        routines_station.cmd_undock(self._app, skip_delay=skip_delay)
 
-    def cmd_jump(self) -> None:
-        routines_movement.cmd_jump(self._app)
+    def cmd_jump(self, *, skip_delay: bool = False) -> None:
+        routines_movement.cmd_jump(self._app, skip_delay=skip_delay)
 
-    def cmd_escape(self) -> None:
-        routines_movement.cmd_escape(self._app)
+    def cmd_escape(self, *, skip_delay: bool = False) -> None:
+        routines_movement.cmd_escape(self._app, skip_delay=skip_delay)
 
-    def cmd_boost(self) -> None:
-        routines_movement.cmd_boost(self._app)
+    def cmd_boost(self, *, skip_delay: bool = False) -> None:
+        routines_movement.cmd_boost(self._app, skip_delay=skip_delay)
 
-    def start_dest_prompt(self, destination: str, *, settle_default: float | None = None) -> None:
-        _prompts.start_dest_prompt(self._app, destination, settle_default=settle_default)
+    def start_dest_prompt(
+        self,
+        destination: str,
+        *,
+        settle_default: float | None = None,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        _prompts.start_dest_prompt(
+            self._app,
+            destination,
+            settle_default=settle_default,
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
 
-    def cmd_dest(self, destination: str) -> None:
-        routines_nav.cmd_dest(self._app, destination)
+    def cmd_dest(
+        self,
+        destination: str,
+        *,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        routines_nav.cmd_dest(
+            self._app,
+            destination,
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
 
-    def dispatch_dest(self, destination: str, galaxy_map_settle: float) -> None:
-        routines_nav.dispatch_dest(self._app, destination, galaxy_map_settle)
+    def dispatch_dest(
+        self,
+        destination: str,
+        galaxy_map_settle: float,
+        *,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        routines_nav.dispatch_dest(
+            self._app,
+            destination,
+            galaxy_map_settle,
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
 
     def saved_haul_defaults(self, seed: dict[str, str] | None = None) -> dict[str, str]:
         return _prompts.saved_haul_defaults(self._app, seed)
@@ -134,28 +176,43 @@ class ControlRoomFacade:
         commodity: str,
         prompt_for_commodity: bool,
         seed: dict[str, str] | None = None,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
     ) -> None:
         _prompts.start_haul_prompt(
             self._app,
             commodity=commodity,
             prompt_for_commodity=prompt_for_commodity,
             seed=seed,
+            skip_delay=skip_delay,
+            raw_command=raw_command,
         )
 
-    def cmd_buy(self, rest: str) -> None:
-        routines_trade.cmd_buy(self._app, rest)
+    def cmd_buy(self, rest: str, *, skip_delay: bool = False) -> None:
+        routines_trade.cmd_buy(self._app, rest, skip_delay=skip_delay)
 
-    def cmd_sell(self, rest: str) -> None:
-        routines_trade.cmd_sell(self._app, rest)
+    def cmd_sell(self, rest: str, *, skip_delay: bool = False) -> None:
+        routines_trade.cmd_sell(self._app, rest, skip_delay=skip_delay)
 
-    def sell_item(self, target: str, amount: int | str) -> None:
-        routines_trade.sell_item(self._app, target, amount)
+    def sell_item(self, target: str, amount: int | str, *, skip_delay: bool = False) -> None:
+        routines_trade.sell_item(self._app, target, amount, skip_delay=skip_delay)
 
-    def sell_all(self) -> None:
-        routines_trade.sell_all(self._app)
+    def sell_all(self, *, skip_delay: bool = False) -> None:
+        routines_trade.sell_all(self._app, skip_delay=skip_delay)
 
-    def cmd_haul(self, rest: str) -> None:
-        routines_haul.cmd_haul(self._app, rest)
+    def cmd_haul(
+        self,
+        rest: str,
+        *,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        routines_haul.cmd_haul(
+            self._app,
+            rest,
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
 
     def start_haul_confirm_prompt(self, station: str) -> None:
         _prompts.start_haul_confirm_prompt(self._app, station)
@@ -174,8 +231,17 @@ class ControlRoomFacade:
             default_placeholder=self._default_placeholder,
         )
 
-    def dispatch_haul_loop(self) -> None:
-        routines_haul.dispatch_haul_loop(self._app)
+    def dispatch_haul_loop(
+        self,
+        *,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        routines_haul.dispatch_haul_loop(
+            self._app,
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
 
     def cmd_reload(self) -> None:
         reloaded: list[str] = []
@@ -202,6 +268,7 @@ FACADE_METHOD_MAP = {
     "_refresh_resume_picker": "refresh_resume_picker",
     "_close_resume_picker": "close_resume_picker",
     "_resume_execute_selected": "resume_execute_selected",
+    "_resume_execute_selected_immediate": "resume_execute_selected_immediate",
     "_resume_edit_selected": "resume_edit_selected",
     "_resume_toggle_default_selected": "resume_toggle_default_selected",
     "_load_market_json": "load_market_json",

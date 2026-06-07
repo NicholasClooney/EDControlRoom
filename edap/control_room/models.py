@@ -73,8 +73,12 @@ class PromptState:
     haul_prompt_defaults: dict[str, str] = field(default_factory=dict)
     haul_prompt_step: str = ""
     haul_confirm_buy_station: str = ""
+    haul_prompt_raw_command: str = ""
+    haul_prompt_skip_delay: bool = False
     dest_prompt_destination: str = ""
     dest_prompt_settle_default: float | None = None
+    dest_prompt_raw_command: str = ""
+    dest_prompt_skip_delay: bool = False
 
 
 @dataclass

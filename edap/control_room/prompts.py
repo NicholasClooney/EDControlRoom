@@ -18,12 +18,28 @@ class PromptHost(Protocol):
     _haul_prompt_defaults: dict[str, str]
     _haul_prompt_step: str
     _haul_confirm_buy_station: str
+    _haul_prompt_raw_command: str
+    _haul_prompt_skip_delay: bool
     _dest_prompt_destination: str
     _dest_prompt_settle_default: float | None
+    _dest_prompt_raw_command: str
+    _dest_prompt_skip_delay: bool
 
     def _log(self, msg: str) -> None: ...
-    def _dispatch_haul_loop(self) -> None: ...
-    def _dispatch_dest(self, destination: str, galaxy_map_settle: float) -> None: ...
+    def _dispatch_haul_loop(
+        self,
+        *,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None: ...
+    def _dispatch_dest(
+        self,
+        destination: str,
+        galaxy_map_settle: float,
+        *,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None: ...
     def query_one(self, selector: str, widget_type: type[Input]) -> Input: ...
 
 
@@ -32,6 +48,8 @@ def start_dest_prompt(
     destination: str,
     *,
     settle_default: float | None = None,
+    skip_delay: bool = False,
+    raw_command: str | None = None,
 ) -> None:
     app._dest_prompt_destination = destination
     app._dest_prompt_settle_default = (
@@ -39,6 +57,8 @@ def start_dest_prompt(
         if settle_default is not None
         else app._config.controls.galaxy_map_settle_seconds
     )
+    app._dest_prompt_raw_command = raw_command or f"{'!' if skip_delay else ''}dest {destination}"
+    app._dest_prompt_skip_delay = skip_delay
     default_settle = app._dest_prompt_settle_default
     app._log(f"Destination: [bold]{escape(destination)}[/]")
     app._log(f"[dim]Galaxy-map settle seconds? (Enter = {default_settle:.1f})[/]")
@@ -71,6 +91,8 @@ def start_haul_prompt(
     commodity: str,
     prompt_for_commodity: bool,
     seed: dict[str, str] | None = None,
+    skip_delay: bool = False,
+    raw_command: str | None = None,
 ) -> None:
     app._haul_params = {
         "commodity": commodity.strip(),
@@ -81,6 +103,8 @@ def start_haul_prompt(
         "galaxy_map_settle": "",
         "dock_timeout": "",
     }
+    app._haul_prompt_raw_command = raw_command or f"{'!' if skip_delay else ''}haul {commodity}".strip()
+    app._haul_prompt_skip_delay = skip_delay
     app._haul_prompt_defaults = saved_haul_defaults(app, seed)
     app._log("Haul loop setup — enter parameters below:")
     if prompt_for_commodity:
@@ -136,7 +160,10 @@ def handle_haul_confirm_prompt(
         app._haul_params["buy_station"] = station
         app._log(f"  Buy station confirmed: [cyan]{escape(station)}[/]")
         app.query_one("#cmd", Input).placeholder = default_placeholder
-        app._dispatch_haul_loop()
+        app._dispatch_haul_loop(
+            skip_delay=app._haul_prompt_skip_delay,
+            raw_command=app._haul_prompt_raw_command,
+        )
         return
     if answer in {"n", "no"}:
         station = app._haul_confirm_buy_station
@@ -306,7 +333,10 @@ def handle_haul_prompt(
         app._haul_prompt_step = ""
         app._haul_prompt_defaults = {}
         app.query_one("#cmd", Input).placeholder = default_placeholder
-        app._dispatch_haul_loop()
+        app._dispatch_haul_loop(
+            skip_delay=app._haul_prompt_skip_delay,
+            raw_command=app._haul_prompt_raw_command,
+        )
 
 
 def parse_optional_nonnegative_float(

@@ -23,17 +23,38 @@ class ReplayHost(Protocol):
 
     def _log(self, msg: str) -> None: ...
     def _save_saved_state(self) -> None: ...
-    def _dispatch_command(self, raw: str) -> None: ...
-    def _dispatch_haul_loop(self) -> None: ...
-    def _dispatch_dest(self, destination: str, galaxy_map_settle: float) -> None: ...
+    def _dispatch_command(self, raw: str, *, skip_delay: bool | None = None) -> None: ...
+    def _dispatch_haul_loop(
+        self,
+        *,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None: ...
+    def _dispatch_dest(
+        self,
+        destination: str,
+        galaxy_map_settle: float,
+        *,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None: ...
     def _start_haul_prompt(
         self,
         *,
         commodity: str,
         prompt_for_commodity: bool,
         seed: dict[str, str] | None = None,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
     ) -> None: ...
-    def _start_dest_prompt(self, destination: str, *, settle_default: float | None = None) -> None: ...
+    def _start_dest_prompt(
+        self,
+        destination: str,
+        *,
+        settle_default: float | None = None,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None: ...
     def set_focus(self, widget: object) -> None: ...
     def query_one(self, selector: str, widget_type: object | None = None) -> object: ...
 
@@ -53,7 +74,7 @@ def filtered_resume_entries(app: ReplayHost) -> list[ReplaySelection]:
 def refresh_resume_help(app: ReplayHost) -> None:
     filter_label = app._resume_filter or "none"
     help_text = (
-        "Replay history  |  Enter execute  |  e edit  |  * set default haul  |  "
+        "Replay history  |  Enter execute  |  ! execute now  |  e edit  |  * set default haul  |  "
         "type prefix filter  |  Backspace delete  |  Esc/q close\n"
         f"Filter: {filter_label}"
     )
@@ -128,6 +149,14 @@ def resume_execute_selected(app: ReplayHost) -> None:
     replay_history_entry(app, entry, edit=False)
 
 
+def resume_execute_selected_immediate(app: ReplayHost) -> None:
+    entry = selected_resume_entry(app)
+    if entry is None:
+        return
+    close_resume_picker(app)
+    replay_history_entry(app, entry, edit=False, skip_delay=True)
+
+
 def resume_edit_selected(app: ReplayHost) -> None:
     entry = selected_resume_entry(app)
     if entry is None:
@@ -161,6 +190,7 @@ def replay_history_entry(
     entry: CommandHistoryEntry,
     *,
     edit: bool,
+    skip_delay: bool = False,
 ) -> None:
     if edit:
         if entry.command == "haul":
@@ -168,6 +198,8 @@ def replay_history_entry(
                 commodity="",
                 prompt_for_commodity=True,
                 seed={str(key): str(value) for key, value in entry.params.items()},
+                skip_delay=skip_delay,
+                raw_command=entry.raw,
             )
             return
         if entry.command == "dest":
@@ -175,7 +207,12 @@ def replay_history_entry(
             if destination:
                 settle_value = entry.params.get("galaxy_map_settle")
                 settle_default = float(settle_value) if settle_value is not None else None
-                app._start_dest_prompt(destination, settle_default=settle_default)
+                app._start_dest_prompt(
+                    destination,
+                    settle_default=settle_default,
+                    skip_delay=skip_delay,
+                    raw_command=entry.raw,
+                )
                 return
         cmd_input = app.query_one("#cmd", Input)
         cmd_input.value = entry.raw
@@ -185,7 +222,10 @@ def replay_history_entry(
 
     if entry.command == "haul":
         app._haul_params = {str(key): str(value) for key, value in entry.params.items()}
-        app._dispatch_haul_loop()
+        app._dispatch_haul_loop(
+            skip_delay=skip_delay or entry.raw.startswith("!"),
+            raw_command=entry.raw,
+        )
         return
     if entry.command == "dest":
         destination = str(entry.params.get("destination", "")).strip()
@@ -196,7 +236,15 @@ def replay_history_entry(
                 if settle_value is not None
                 else app._config.controls.galaxy_map_settle_seconds
             )
-            app._dispatch_dest(destination, settle)
+            app._dispatch_dest(
+                destination,
+                settle,
+                skip_delay=skip_delay or entry.raw.startswith("!"),
+                raw_command=entry.raw,
+            )
         return
 
-    app._dispatch_command(entry.raw)
+    app._dispatch_command(
+        entry.raw,
+        skip_delay=(True if skip_delay else None),
+    )

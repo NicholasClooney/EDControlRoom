@@ -43,7 +43,7 @@ def _sellable_cargo(inventory: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
-def cmd_buy(app: TradeHost, rest: str) -> None:
+def cmd_buy(app: TradeHost, rest: str, *, skip_delay: bool = False) -> None:
     if not app._check_routine_ready():
         return
     parts = rest.split(None, 1)
@@ -75,6 +75,7 @@ def cmd_buy(app: TradeHost, rest: str) -> None:
     app._start_delayed_routine(
         description=f"buy {target}",
         start_message=f"Buying {amt_label} [cyan]{escape(target)}[/]...",
+        skip_delay=skip_delay,
         fn=lambda: market_buy(
             controls,
             watcher,
@@ -90,7 +91,7 @@ def cmd_buy(app: TradeHost, rest: str) -> None:
     )
 
 
-def cmd_sell(app: TradeHost, rest: str) -> None:
+def cmd_sell(app: TradeHost, rest: str, *, skip_delay: bool = False) -> None:
     if not app._check_routine_ready():
         return
     if rest:
@@ -106,7 +107,7 @@ def cmd_sell(app: TradeHost, rest: str) -> None:
             params={"target": target, "amount": amount},
             timestamp=now_iso(),
         ))
-        sell_item(app, target, amount)
+        sell_item(app, target, amount, skip_delay=skip_delay)
     else:
         app._record_history_entry(CommandHistoryEntry(
             raw="sell",
@@ -114,10 +115,10 @@ def cmd_sell(app: TradeHost, rest: str) -> None:
             params={"mode": "all"},
             timestamp=now_iso(),
         ))
-        sell_all(app)
+        sell_all(app, skip_delay=skip_delay)
 
 
-def sell_item(app: TradeHost, target: str, amount: int | str) -> None:
+def sell_item(app: TradeHost, target: str, amount: int | str, *, skip_delay: bool = False) -> None:
     progress = app._make_progress()
     controls = app._make_controls(progress)
     sleeper = app._make_sleeper()
@@ -131,6 +132,7 @@ def sell_item(app: TradeHost, target: str, amount: int | str) -> None:
     app._start_delayed_routine(
         description=f"sell {target}",
         start_message=f"Selling {amt_label} [cyan]{escape(target)}[/]...",
+        skip_delay=skip_delay,
         fn=lambda: market_sell(
             controls, watcher,
             market_path=market_path,
@@ -145,7 +147,7 @@ def sell_item(app: TradeHost, target: str, amount: int | str) -> None:
     )
 
 
-def sell_all(app: TradeHost) -> None:
+def sell_all(app: TradeHost, *, skip_delay: bool = False) -> None:
     inventory = _sellable_cargo(app._ship.cargo_inventory)
     used_fallback = False
     if not inventory:
@@ -197,5 +199,6 @@ def sell_all(app: TradeHost) -> None:
     app._start_delayed_routine(
         description="sell all cargo",
         start_message=f"Selling all cargo: [cyan]{escape(names)}[/]",
+        skip_delay=skip_delay,
         fn=run_all,
     )

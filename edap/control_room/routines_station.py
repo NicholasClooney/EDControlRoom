@@ -4,7 +4,7 @@ from __future__ import annotations
 from edap.control_room.interfaces import RoutineHost
 from edap.routines import dock, undock
 
-def cmd_dock(app: RoutineHost) -> None:
+def cmd_dock(app: RoutineHost, *, skip_delay: bool = False) -> None:
     if not app._check_routine_ready():
         return
     skip_scx = app._ship.status == "in_space"
@@ -18,6 +18,7 @@ def cmd_dock(app: RoutineHost) -> None:
     app._start_delayed_routine(
         description=label,
         start_message=f"Starting {label}, auto-refuel on...",
+        skip_delay=skip_delay,
         fn=lambda: dock(
             controls,
             watcher,
@@ -30,7 +31,7 @@ def cmd_dock(app: RoutineHost) -> None:
     )
 
 
-def cmd_undock(app: RoutineHost) -> None:
+def cmd_undock(app: RoutineHost, *, skip_delay: bool = False) -> None:
     if not app._check_routine_ready():
         return
     progress = app._make_progress()
@@ -44,6 +45,7 @@ def cmd_undock(app: RoutineHost) -> None:
     app._start_delayed_routine(
         description="undock",
         start_message="Starting undock...",
+        skip_delay=skip_delay,
         fn=lambda: undock(
             controls,
             watcher,

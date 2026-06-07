@@ -8,7 +8,7 @@ CONTROL_ROOM_COMMANDS: list[CommandHelp] = [
         name="dock",
         usage="dock",
         summary="Dock at the current station target and auto-refuel after touchdown.",
-        detail="Starts the docking routine. If you're already in normal space it skips the supercruise-exit wait; otherwise it waits for the drop, sends the docking request menu flow, and auto-refuels after docking.",
+        detail="Starts the docking routine. If you're already in normal space it skips the supercruise-exit wait; otherwise it waits for the drop, sends the docking request menu flow, and auto-refuels after docking. Prefix the command with ! to bypass the configured control-room start delay for that launch only.",
     ),
     CommandHelp(
         name="undock",
@@ -88,7 +88,7 @@ CONTROL_ROOM_COMMANDS: list[CommandHelp] = [
         name="replay",
         usage="replay",
         summary="Open the replay history browser for execute-or-edit replay.",
-        detail="Shows recent saved commands across sessions in the activity-pane replay browser. Press Enter to execute the selected entry immediately, press e to reopen it for editing, or press * on a haul entry to save or clear it as the default haul setup.",
+        detail="Shows recent saved commands across sessions in the activity-pane replay browser. Press Enter to execute the selected entry with its normal delay behavior, press ! to execute it immediately without adding a ! to the saved command, press e to reopen it for editing, or press * on a haul entry to save or clear it as the default haul setup.",
         aliases=("history",),
     ),
     CommandHelp(

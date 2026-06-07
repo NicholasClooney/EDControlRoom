@@ -8,9 +8,20 @@ from edap.control_room.history import now_iso
 from edap.control_room.interfaces import CommandHost
 from edap.control_room_state import CommandHistoryEntry
 
-def dispatch(app: CommandHost, raw: str) -> None:
+def dispatch(app: CommandHost, raw: str, *, skip_delay_override: bool | None = None) -> None:
     app._log(f"[dim]Command: {escape(raw)}[/]")
-    cmd = raw.lower()
+    skip_delay = False
+    command_raw = raw
+    if command_raw.startswith("!"):
+        skip_delay = True
+        command_raw = command_raw[1:].lstrip()
+        if not command_raw:
+            app._log("[dim]Unknown command: ![/]")
+            return
+    if skip_delay_override is not None:
+        skip_delay = skip_delay_override
+
+    cmd = command_raw.lower()
     if cmd in {"q", "quit", "exit"}:
         app._record_history_entry(CommandHistoryEntry(raw=raw, command="quit", timestamp=now_iso()))
         app._request_shutdown("quit command")
@@ -19,35 +30,35 @@ def dispatch(app: CommandHost, raw: str) -> None:
     parts = cmd.split(None, 1)
     verb = parts[0]
     rest = parts[1].strip() if len(parts) > 1 else ""
-    raw_parts = raw.split(None, 1)
+    raw_parts = command_raw.split(None, 1)
     raw_rest = raw_parts[1].strip() if len(raw_parts) > 1 else ""
 
     if verb == "dock":
         app._record_history_entry(CommandHistoryEntry(raw=raw, command="dock", timestamp=now_iso()))
-        app._cmd_dock()
+        app._cmd_dock(skip_delay=skip_delay)
     elif verb == "undock":
         app._record_history_entry(CommandHistoryEntry(raw=raw, command="undock", timestamp=now_iso()))
-        app._cmd_undock()
+        app._cmd_undock(skip_delay=skip_delay)
     elif verb == "jump":
         app._record_history_entry(CommandHistoryEntry(raw=raw, command="jump", timestamp=now_iso()))
-        app._cmd_jump()
+        app._cmd_jump(skip_delay=skip_delay)
     elif verb == "escape":
         app._record_history_entry(CommandHistoryEntry(raw=raw, command="escape", timestamp=now_iso()))
-        app._cmd_escape()
+        app._cmd_escape(skip_delay=skip_delay)
     elif verb == "boost":
         app._record_history_entry(CommandHistoryEntry(raw=raw, command="boost", timestamp=now_iso()))
-        app._cmd_boost()
+        app._cmd_boost(skip_delay=skip_delay)
     elif verb == "buy":
-        app._cmd_buy(raw_rest)
+        app._cmd_buy(raw_rest, skip_delay=skip_delay)
     elif verb == "sell":
-        app._cmd_sell(raw_rest)
+        app._cmd_sell(raw_rest, skip_delay=skip_delay)
     elif verb == "haul":
-        app._cmd_haul(raw_rest)
+        app._cmd_haul(raw_rest, skip_delay=skip_delay, raw_command=raw)
     elif verb in {"dest", "set_dest"}:
         if not raw_rest:
             app._log("[red]Usage: dest <system name>[/]")
         else:
-            app._cmd_dest(raw_rest)
+            app._cmd_dest(raw_rest, skip_delay=skip_delay, raw_command=raw)
     elif verb == "market":
         app._record_history_entry(CommandHistoryEntry(raw=raw, command="market", params={"value": raw_rest}, timestamp=now_iso()))
         cmd_market(app, raw_rest)

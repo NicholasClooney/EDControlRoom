@@ -25,17 +25,38 @@ def _station_from_confirmation_prompt(prompt: str) -> str:
     return raw_station
 
 
-def cmd_haul(app: HaulHost, rest: str) -> None:
+def cmd_haul(
+    app: HaulHost,
+    rest: str,
+    *,
+    skip_delay: bool = False,
+    raw_command: str | None = None,
+) -> None:
     if not app._check_routine_ready():
         return
     commodity = rest.strip()
     if not commodity:
-        app._start_haul_prompt(commodity="", prompt_for_commodity=True)
+        app._start_haul_prompt(
+            commodity="",
+            prompt_for_commodity=True,
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
     else:
-        app._start_haul_prompt(commodity=commodity, prompt_for_commodity=False)
+        app._start_haul_prompt(
+            commodity=commodity,
+            prompt_for_commodity=False,
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
 
 
-def dispatch_haul_loop(app: HaulHost) -> None:
+def dispatch_haul_loop(
+    app: HaulHost,
+    *,
+    skip_delay: bool = False,
+    raw_command: str | None = None,
+) -> None:
     commodity = app._haul_params.get("commodity", "")
     buy_station = app._haul_params.get("buy_station", "")
     sell_station = app._haul_params.get("sell_station", "")
@@ -97,7 +118,7 @@ def dispatch_haul_loop(app: HaulHost) -> None:
         return
 
     app._record_history_entry(CommandHistoryEntry(
-        raw=f"haul {commodity}",
+        raw=raw_command or f"{'!' if skip_delay else ''}haul {commodity}",
         command="haul",
         params={
             "commodity": commodity,
@@ -134,6 +155,7 @@ def dispatch_haul_loop(app: HaulHost) -> None:
     app._start_delayed_routine(
         description=f"haul {commodity}",
         start_message="",
+        skip_delay=skip_delay,
         fn=lambda: haul_loop(
             controls,
             watcher,

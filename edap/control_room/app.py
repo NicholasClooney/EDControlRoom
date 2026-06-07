@@ -284,6 +284,22 @@ class ControlRoomApp(App[None]):
         self._prompt_state.haul_confirm_buy_station = value
 
     @property
+    def _haul_prompt_raw_command(self) -> str:
+        return self._prompt_state.haul_prompt_raw_command
+
+    @_haul_prompt_raw_command.setter
+    def _haul_prompt_raw_command(self, value: str) -> None:
+        self._prompt_state.haul_prompt_raw_command = value
+
+    @property
+    def _haul_prompt_skip_delay(self) -> bool:
+        return self._prompt_state.haul_prompt_skip_delay
+
+    @_haul_prompt_skip_delay.setter
+    def _haul_prompt_skip_delay(self, value: bool) -> None:
+        self._prompt_state.haul_prompt_skip_delay = value
+
+    @property
     def _dest_prompt_destination(self) -> str:
         return self._prompt_state.dest_prompt_destination
 
@@ -298,6 +314,22 @@ class ControlRoomApp(App[None]):
     @_dest_prompt_settle_default.setter
     def _dest_prompt_settle_default(self, value: float | None) -> None:
         self._prompt_state.dest_prompt_settle_default = value
+
+    @property
+    def _dest_prompt_raw_command(self) -> str:
+        return self._prompt_state.dest_prompt_raw_command
+
+    @_dest_prompt_raw_command.setter
+    def _dest_prompt_raw_command(self, value: str) -> None:
+        self._prompt_state.dest_prompt_raw_command = value
+
+    @property
+    def _dest_prompt_skip_delay(self) -> bool:
+        return self._prompt_state.dest_prompt_skip_delay
+
+    @_dest_prompt_skip_delay.setter
+    def _dest_prompt_skip_delay(self, value: bool) -> None:
+        self._prompt_state.dest_prompt_skip_delay = value
 
     @property
     def _history(self) -> list[str]:
@@ -404,7 +436,7 @@ class ControlRoomApp(App[None]):
                     yield RichLog(id="activity", markup=True, highlight=True, wrap=True)
                     with Vertical(id="resume-browser"):
                         yield Static(
-                            "Replay history  |  Enter execute  |  e edit  |  * set default haul  |  Esc/q close",
+                            "Replay history  |  Enter execute  |  ! execute now  |  e edit  |  * set default haul  |  Esc/q close",
                             id="resume-help",
                         )
                         yield OptionList(id="resume-list")
@@ -522,8 +554,14 @@ class ControlRoomApp(App[None]):
     def _update_resume_detail(self) -> None:
         _replay.update_resume_detail(self)
 
-    def _replay_history_entry(self, entry: CommandHistoryEntry, *, edit: bool) -> None:
-        _replay.replay_history_entry(self, entry, edit=edit)
+    def _replay_history_entry(
+        self,
+        entry: CommandHistoryEntry,
+        *,
+        edit: bool,
+        skip_delay: bool = False,
+    ) -> None:
+        _replay.replay_history_entry(self, entry, edit=edit, skip_delay=skip_delay)
 
     # ── Market JSON ────────────────────────────────────────────────────────────
 
@@ -621,6 +659,9 @@ class ControlRoomApp(App[None]):
             elif event.key == "e" and not self._resume_filter:
                 event.prevent_default()
                 self._resume_edit_selected()
+            elif event.character == "!":
+                event.prevent_default()
+                self._resume_execute_selected_immediate()
             elif event.character == "*":
                 event.prevent_default()
                 self._resume_toggle_default_selected()
@@ -683,8 +724,17 @@ class ControlRoomApp(App[None]):
                 return
             self._dest_prompt_destination = ""
             self._dest_prompt_settle_default = None
+            raw_command = self._dest_prompt_raw_command
+            skip_delay = self._dest_prompt_skip_delay
+            self._dest_prompt_raw_command = ""
+            self._dest_prompt_skip_delay = False
             self.query_one("#cmd", Input).placeholder = _DEFAULT_COMMAND_PLACEHOLDER
-            self._dispatch_dest(destination, parsed)
+            self._dispatch_dest(
+                destination,
+                parsed,
+                skip_delay=skip_delay,
+                raw_command=raw_command,
+            )
             return
 
         if not raw:
