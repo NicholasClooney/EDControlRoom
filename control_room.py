@@ -629,21 +629,29 @@ class ControlRoomApp(App[None]):
 
         if event in {"Location", "FSDJump"} and "StarSystem" in ev:
             s.system = ev["StarSystem"]
-        if event == "Docked":
-            s.station = ev.get("StationName")
+        if event == "Docked" or (
+            event in {"Location", "CarrierJump"} and ev.get("Docked") is True
+        ):
+            s.station = ev.get("StationName", s.station)
             s.system = ev.get("StarSystem", s.system)
-        if event in {"Undocked", "SupercruiseExit"}:
+        if event in {"Undocked", "SupercruiseExit"} or (
+            event in {"Location", "CarrierJump"} and ev.get("Docked") is False
+        ):
             s.station = None
 
         if event == "StartJump":
             s.status = f"starting_{ev.get('JumpType', '').lower()}"
         elif event in {"SupercruiseEntry", "FSDJump"}:
             s.status = "in_supercruise"
-        elif event in {"SupercruiseExit", "DockingCancelled", "Undocked"}:
+        elif event in {"SupercruiseExit", "DockingCancelled", "Undocked"} or (
+            event in {"Location", "CarrierJump"} and ev.get("Docked") is False
+        ):
             s.status = "in_space"
         elif event == "DockingRequested":
             s.status = "starting_docking"
-        elif event == "Docked":
+        elif event == "Docked" or (
+            event in {"Location", "CarrierJump"} and ev.get("Docked") is True
+        ):
             s.status = "in_station"
 
         if "FuelLevel" in ev and s.ship_type != "TestBuggy":

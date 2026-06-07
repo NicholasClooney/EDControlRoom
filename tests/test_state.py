@@ -56,6 +56,26 @@ class StateTests(unittest.TestCase):
             self.assertTrue(state.is_scooping)
             self.assertGreaterEqual(state.time_since_log_update_s, 0)
 
+    def test_read_ship_state_treats_location_docked_true_as_in_station(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            log_path = Path(temp_dir) / "Journal.log"
+            _write_lines(
+                log_path,
+                [
+                    '{"event":"LoadGame","Ship":"type6"}',
+                    '{"event":"SupercruiseExit","StarSystem":"Sol"}',
+                    '{"event":"Died"}',
+                    '{"event":"Resurrect","Option":"rebuy"}',
+                    '{"event":"Location","Docked":true,"StarSystem":"Sol","StationName":"Abraham Lincoln"}',
+                ],
+            )
+            os.utime(log_path, None)
+
+            state = read_ship_state(log_path)
+
+            self.assertEqual(state.status, "in_station")
+            self.assertEqual(state.location, "Sol")
+
     def test_journal_watcher_starts_at_end_by_default_and_reads_appended_events(self) -> None:
         with TemporaryDirectory() as temp_dir:
             journal_dir = Path(temp_dir)
