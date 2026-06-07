@@ -10,7 +10,7 @@ from edap.routines._base import (
     RoutineResult,
     SupportsMarketControls,
     SupportsPollEvents,
-    _wait_for_event,
+    _wait_for_event_with_pending,
 )
 
 
@@ -280,7 +280,7 @@ def _market_trade(
         sleeper(step_delay_s)
 
     # Prime the watcher before setting quantity so the trade event is not missed
-    watcher.poll()
+    pending_events = watcher.poll()
 
     # Set quantity
     # Set quantity -- sell pre-fills with full cargo amount so no input needed
@@ -326,11 +326,12 @@ def _market_trade(
     # Wait for journal confirmation
     if progress_fn is not None:
         progress_fn(f"Waiting for {event_type} event (timeout {trade_timeout_s:.0f}s)...")
-    trade_event = _wait_for_event(
+    trade_event, _ = _wait_for_event_with_pending(
         watcher,
         predicate=lambda e: _is_market_event(e, event_type, target),
         deadline=time_fn() + trade_timeout_s,
         time_fn=time_fn,
+        pending_events=pending_events,
     )
     if trade_event is None:
         return RoutineResult(
@@ -352,7 +353,24 @@ def _market_trade(
     # Return to station menu
     if progress_fn is not None:
         progress_fn("  UI_Back x2 (return to station menu)")
-    controls.ui_back(repeat=2)
+    back_dispatch = controls.ui_back()
+    if back_dispatch.status != "ok":
+        return RoutineResult(
+            action="UI_Back",
+            dispatch=back_dispatch,
+            trigger_event=trade_event,
+            details={"phase": "return_to_station_menu"},
+        )
+    if step_delay_s > 0:
+        sleeper(step_delay_s)
+    back_dispatch = controls.ui_back()
+    if back_dispatch.status != "ok":
+        return RoutineResult(
+            action="UI_Back",
+            dispatch=back_dispatch,
+            trigger_event=trade_event,
+            details={"phase": "return_to_station_menu"},
+        )
 
     return RoutineResult(
         action=event_type,

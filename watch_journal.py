@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 
@@ -19,6 +20,10 @@ LOG_PATH = Path("artifacts/journal-watcher.log")
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Watch Elite Dangerous journal events")
+    parser.add_argument("--all", action="store_true", help="print all events, not just filtered ones")
+    args = parser.parse_args()
+
     loaded = load_config_with_fallback("config.toml")
     runtime = build_runtime_context(loaded.config)
     journal_dir = runtime.journal.effective_path
@@ -30,7 +35,10 @@ def main() -> int:
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     print(f"Watching journal dir: {journal_dir}")
     print(f"Logging all events to: {LOG_PATH}")
-    print(f"Showing only: {', '.join(sorted(INTERESTING_EVENTS))}")
+    if args.all:
+        print("Showing: all events")
+    else:
+        print(f"Showing only: {', '.join(sorted(INTERESTING_EVENTS))}")
     watcher = JournalWatcher(journal_dir, poll_interval_s=0.5)
 
     with LOG_PATH.open("a", encoding="utf-8") as log_handle:
@@ -39,7 +47,7 @@ def main() -> int:
             log_handle.write("\n")
             log_handle.flush()
 
-            if event.get("event") in INTERESTING_EVENTS:
+            if args.all or event.get("event") in INTERESTING_EVENTS:
                 print(event.get("event"), event)
 
     return 0

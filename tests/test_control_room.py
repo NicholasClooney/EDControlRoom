@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from control_room import ControlRoomApp
 from edap.config import (
@@ -139,6 +140,28 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.app._clear_routine()
 
         self.assertEqual(self.app.exit_calls, 0)
+
+    def test_undock_command_uses_configured_timeouts(self) -> None:
+        captured: dict[str, object] = {}
+
+        self.app._make_progress = lambda: (lambda _: None)
+        self.app._make_controls = lambda progress: object()
+        self.app._make_sleeper = lambda: (lambda _: None)
+        self.app._make_watcher = lambda: object()
+        self.app._run_in_thread = lambda fn: fn()
+
+        def fake_undock(controls, watcher, **kwargs):
+            captured["controls"] = controls
+            captured["watcher"] = watcher
+            captured["kwargs"] = kwargs
+            return None
+
+        with patch("control_room.undock", new=fake_undock):
+            self.app._cmd_undock()
+
+        self.assertEqual(captured["kwargs"]["undock_timeout_s"], 30.0)
+        self.assertEqual(captured["kwargs"]["in_space_timeout_s"], 180.0)
+        self.assertEqual(captured["kwargs"]["step_delay_s"], 0.3)
 
 
 if __name__ == "__main__":

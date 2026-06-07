@@ -137,6 +137,24 @@ def _wait_for_event(
     return None
 
 
+def _wait_for_event_with_pending(
+    watcher: SupportsPollEvents,
+    *,
+    predicate: Callable[[dict[str, object]], bool],
+    deadline: float,
+    time_fn: Callable[[], float],
+    pending_events: list[dict[str, object]] | None = None,
+) -> tuple[dict[str, object] | None, list[dict[str, object]]]:
+    queued_events = list(pending_events or [])
+    while time_fn() <= deadline:
+        batch = queued_events if queued_events else watcher.poll()
+        queued_events = []
+        for index, event in enumerate(batch):
+            if predicate(event):
+                return event, batch[index + 1:]
+    return None, []
+
+
 def _is_starting_hyperspace_event(event: dict[str, object]) -> bool:
     return event.get("event") == "StartJump" and str(event.get("JumpType", "")).lower() == "hyperspace"
 

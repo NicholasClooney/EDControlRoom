@@ -13,6 +13,7 @@ from edap.routines import (
     dock,
     docking_request_sequence,
     jump,
+    market_sell,
     set_gal_map_destination,
     set_speed_zero_then_wait,
     station_refuel_menu,
@@ -630,6 +631,56 @@ class RoutinesTests(unittest.TestCase):
                 {"action": "UI_Select", "repeat": 1, "hold_s": 0.0},
             ],
         )
+
+    def test_market_sell_spaces_back_presses_after_trade(self) -> None:
+        controls = FakeShipControls(
+            set_speed_zero_result=ActionDispatchResult(
+                action="UI_Select",
+                status="ok",
+                binding=NormalizedBinding(key="space", modifier=None),
+            )
+        )
+        watcher = FakeWatcher(
+            [[{"event": "MarketSell", "Type": "aluminium", "Type_Localised": "aluminium", "Count": 461, "TotalSale": 9367520}]]
+        )
+        sleep_calls: list[float] = []
+
+        with tempfile.TemporaryDirectory() as tmp:
+            market_path = Path(tmp) / "Market.json"
+            market_path.write_text(
+                json.dumps(
+                    {
+                        "StationName": "Pawelczyk Dock",
+                        "Items": [
+                            {"Category": "Metals", "Name": "aluminium", "DemandBracket": 1},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = market_sell(
+                controls,
+                watcher,
+                market_path=market_path,
+                target="aluminium",
+                amount="MAX",
+                step_delay_s=0.5,
+                trade_timeout_s=30.0,
+                skip_station_check=True,
+                time_fn=lambda: 0.0,
+                sleeper=sleep_calls.append,
+            )
+
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertEqual(
+            controls.calls[-2:],
+            [
+                {"action": "UI_Back", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Back", "repeat": 1, "hold_s": 0.0},
+            ],
+        )
+        self.assertGreaterEqual(sleep_calls.count(0.5), 3)
 
 
 _OK = ActionDispatchResult(action="ok", status="ok", binding=NormalizedBinding(key="x", modifier=None))
