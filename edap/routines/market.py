@@ -60,7 +60,7 @@ def _is_market_event(event: dict[str, object], event_type: str, target: str) -> 
     )
 
 
-def _read_last_docked_event(journal_dir: Path) -> dict[str, object] | None:
+def _read_last_docked_state(journal_dir: Path) -> dict[str, object] | None:
     journal_files = sorted(journal_dir.glob("Journal.*.log"))
     if not journal_files:
         return None
@@ -75,6 +75,8 @@ def _read_last_docked_event(journal_dir: Path) -> dict[str, object] | None:
         try:
             event = json.loads(line)
             if event.get("event") == "Docked":
+                return event
+            if event.get("event") in {"Location", "CarrierJump"} and event.get("Docked") is True:
                 return event
         except json.JSONDecodeError:
             continue
@@ -272,9 +274,12 @@ def _market_trade_attempt(
             else:
                 with market_path.open() as fh:
                     data = json.load(fh)
-                docked = _read_last_docked_event(market_path.parent)
+                docked = _read_last_docked_state(market_path.parent)
                 if docked is None:
-                    fail_reason = "no Docked event found in journal -- cannot verify current station"
+                    fail_reason = (
+                        "no docked station state found in journal "
+                        "(expected Docked or Location(Docked=true)) -- cannot verify current station"
+                    )
                 else:
                     market_id = data.get("MarketID")
                     docked_id = docked.get("MarketID")

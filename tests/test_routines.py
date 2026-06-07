@@ -14,6 +14,7 @@ from edap.routines import (
     docking_request_sequence,
     escape_mass_lock,
     jump,
+    market_buy,
     market_sell,
     set_gal_map_destination,
     set_speed_zero_then_wait,
@@ -549,6 +550,97 @@ class RoutinesTests(unittest.TestCase):
             ],
         )
         self.assertGreaterEqual(sleep_calls.count(0.5), 3)
+
+    def test_market_buy_accepts_location_docked_true_for_station_check(self) -> None:
+        controls = FakeShipControls()
+        watcher = FakeWatcher(
+            [[{"event": "MarketBuy", "Type": "aluminium", "Type_Localised": "Aluminium", "Count": 1, "TotalCost": 1234}]]
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            (journal_dir / "Journal.240101000000.01.log").write_text(
+                "\n".join([
+                    json.dumps({
+                        "timestamp": "2024-01-01T00:00:00Z",
+                        "event": "Location",
+                        "Docked": True,
+                        "StationName": "Pawelczyk Dock",
+                        "StarSystem": "HIP 58412",
+                    }),
+                ]) + "\n",
+                encoding="utf-8",
+            )
+            market_path = journal_dir / "Market.json"
+            market_path.write_text(
+                json.dumps(
+                    {
+                        "StationName": "Pawelczyk Dock",
+                        "Items": [
+                            {"Category": "Metals", "Name": "aluminium", "Stock": 10},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = market_buy(
+                controls,
+                watcher,
+                market_path=market_path,
+                target="aluminium",
+                amount=1,
+                step_delay_s=0.0,
+                nav_delay_s=0.0,
+                trade_timeout_s=30.0,
+                time_fn=lambda: 0.0,
+                sleeper=lambda _: None,
+            )
+
+        self.assertEqual(result.dispatch.status, "ok")
+
+    def test_market_buy_rejects_when_no_docked_station_state_exists(self) -> None:
+        controls = FakeShipControls()
+        watcher = FakeWatcher([])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            (journal_dir / "Journal.240101000000.01.log").write_text(
+                json.dumps({
+                    "timestamp": "2024-01-01T00:00:00Z",
+                    "event": "SupercruiseEntry",
+                    "StarSystem": "HIP 58412",
+                }) + "\n",
+                encoding="utf-8",
+            )
+            market_path = journal_dir / "Market.json"
+            market_path.write_text(
+                json.dumps(
+                    {
+                        "StationName": "Pawelczyk Dock",
+                        "Items": [
+                            {"Category": "Metals", "Name": "aluminium", "Stock": 10},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = market_buy(
+                controls,
+                watcher,
+                market_path=market_path,
+                target="aluminium",
+                amount=1,
+                step_delay_s=0.0,
+                nav_delay_s=0.0,
+                trade_timeout_s=30.0,
+                time_fn=lambda: 0.0,
+                sleeper=lambda _: None,
+            )
+
+        self.assertEqual(result.dispatch.status, "error")
+        self.assertIn("no docked station state found", result.dispatch.reason or "")
 
 
 class EscapeMassLockTests(unittest.TestCase):
