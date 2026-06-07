@@ -188,7 +188,7 @@ class ControlRoomBindingsTests(unittest.TestCase):
             captured["kwargs"] = kwargs
             return None
 
-        with patch("control_room.undock", new=fake_undock):
+        with patch("edap.control_room.routines_station.undock", new=fake_undock):
             self.app._cmd_undock()
 
         self.assertEqual(captured["kwargs"]["undock_timeout_s"], 30.0)

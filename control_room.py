@@ -60,6 +60,10 @@ from edap.control_room.history import (
     resume_summary as _resume_summary,
 )
 from edap.control_room.models import MarketData, ReplaySelection, ShipState
+from edap.control_room.routines_station import (
+    cmd_dock as _cmd_dock_impl,
+    cmd_undock as _cmd_undock_impl,
+)
 from edap.control_room_state import (
     CommandHistoryEntry,
     ControlRoomState,
@@ -67,7 +71,7 @@ from edap.control_room_state import (
     save_control_room_state,
 )
 from edap.progress_controls import ProgressShipControls
-from edap.routines import dock, escape_mass_lock, haul_loop, jump, market_buy, market_sell, set_gal_map_destination, undock, RoutineResult
+from edap.routines import escape_mass_lock, haul_loop, jump, market_buy, market_sell, set_gal_map_destination, RoutineResult
 from edap.runtime import RuntimeContext, build_runtime_context, load_config_with_fallback
 from edap.ship_controls import DEFAULT_SHIP_CONTROL_ACTIONS, ShipControls
 from edap.state import JournalWatcher, get_latest_journal_log, read_ship_state
@@ -817,48 +821,10 @@ class ControlRoomApp(App[None]):
     # ── Routine commands ───────────────────────────────────────────────────────
 
     def _cmd_dock(self) -> None:
-        if not self._check_routine_ready():
-            return
-        skip_scx = self._ship.status == "in_space"
-        progress = self._make_progress()
-        controls = self._make_controls(progress)
-        sleeper = self._make_sleeper()
-        step_delay = self._config.controls.step_delay_seconds
-        watcher = self._make_watcher()
-
-        self._routine_active = True
-        label = "dock (already in space)" if skip_scx else "dock (waiting for supercruise exit)"
-        self._log(f"Starting {label}, auto-refuel on...")
-        self._routine_worker = self._run_in_thread(lambda: dock(
-            controls,
-            watcher,
-            wait_for_supercruise_exit=not skip_scx,
-            auto_refuel=True,
-            step_delay_s=step_delay,
-            sleeper=sleeper,
-            progress_fn=progress,
-        ))
+        _cmd_dock_impl(self)
 
     def _cmd_undock(self) -> None:
-        if not self._check_routine_ready():
-            return
-        progress = self._make_progress()
-        controls = self._make_controls(progress)
-        sleeper = self._make_sleeper()
-        step_delay = self._config.controls.step_delay_seconds
-        undock_timeout = self._config.controls.undock_timeout_seconds
-        watcher = self._make_watcher()
-
-        self._routine_active = True
-        self._log("Starting undock...")
-        self._routine_worker = self._run_in_thread(lambda: undock(
-            controls,
-            watcher,
-            undock_timeout_s=undock_timeout,
-            step_delay_s=step_delay,
-            sleeper=sleeper,
-            progress_fn=progress,
-        ))
+        _cmd_undock_impl(self)
 
     def _cmd_jump(self) -> None:
         if not self._check_routine_ready():
