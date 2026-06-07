@@ -60,6 +60,10 @@ from edap.control_room.history import (
     resume_summary as _resume_summary,
 )
 from edap.control_room.models import MarketData, ReplaySelection, ShipState
+from edap.control_room.routines_haul import (
+    cmd_haul as _cmd_haul_impl,
+    dispatch_haul_loop as _dispatch_haul_loop_impl,
+)
 from edap.control_room.routines_trade import (
     cmd_buy as _cmd_buy_impl,
     cmd_sell as _cmd_sell_impl,
@@ -86,7 +90,6 @@ from edap.control_room_state import (
     save_control_room_state,
 )
 from edap.progress_controls import ProgressShipControls
-from edap.routines import haul_loop
 from edap.runtime import RuntimeContext, build_runtime_context, load_config_with_fallback
 from edap.ship_controls import DEFAULT_SHIP_CONTROL_ACTIONS, ShipControls
 from edap.state import JournalWatcher, get_latest_journal_log, read_ship_state
@@ -907,13 +910,7 @@ class ControlRoomApp(App[None]):
         _sell_all_impl(self)
 
     def _cmd_haul(self, rest: str) -> None:
-        if not self._check_routine_ready():
-            return
-        commodity = rest.strip()
-        if not commodity:
-            self._start_haul_prompt(commodity="", prompt_for_commodity=True)
-        else:
-            self._start_haul_prompt(commodity=commodity, prompt_for_commodity=False)
+        _cmd_haul_impl(self, rest)
 
     def _handle_haul_prompt(self, value: str) -> None:
         if self._haul_prompt_step == "commodity":
@@ -1029,96 +1026,7 @@ class ControlRoomApp(App[None]):
             self._dispatch_haul_loop()
 
     def _dispatch_haul_loop(self) -> None:
-        commodity = self._haul_params.get("commodity", "")
-        buy_station = self._haul_params.get("buy_station", "")
-        sell_station = self._haul_params.get("sell_station", "")
-        sell_system = self._haul_params.get("sell_system", "")
-        buy_system = self._haul_params.get("buy_system", "")
-        galaxy_map_settle_raw = self._haul_params.get("galaxy_map_settle", "")
-        dock_timeout_raw = self._haul_params.get("dock_timeout", "")
-
-        if self._ship.status != "in_station":
-            self._log("[red]Haul loop requires you to be docked at the sell station before starting.[/]")
-            return
-
-        if not sell_station and self._ship.station:
-            sell_station = self._ship.station
-            self._log(f"[dim]Sell station defaulting to current station: [cyan]{escape(sell_station)}[/][/]")
-        elif sell_station and self._ship.station:
-            if self._ship.station.lower() != sell_station.lower():
-                self._log(
-                    f"[yellow]Warning: docked at [bold]{escape(self._ship.station)}[/bold] "
-                    f"but sell station is [bold]{escape(sell_station)}[/bold] — "
-                    f"haul loop expects you to start at the sell station.[/]"
-                )
-
-        if not sell_system and self._ship.system:
-            sell_system = self._ship.system
-            self._log(f"[dim]Sell system defaulting to current system: [cyan]{escape(sell_system)}[/][/]")
-
-        progress = self._make_progress()
-        controls = self._make_controls(progress)
-        sleeper = self._make_sleeper()
-        step_delay = self._config.controls.step_delay_seconds
-        galaxy_map_settle = (
-            float(galaxy_map_settle_raw)
-            if galaxy_map_settle_raw
-            else self._config.controls.galaxy_map_settle_seconds
-        )
-        dock_timeout = (
-            float(dock_timeout_raw)
-            if dock_timeout_raw
-            else self._config.controls.haul_dock_timeout_seconds
-        )
-        journal_dir = self._journal_dir
-        watcher = self._make_watcher()
-
-        self._record_history_entry(CommandHistoryEntry(
-            raw=f"haul {commodity}",
-            command="haul",
-            params={
-                "commodity": commodity,
-                "buy_station": buy_station,
-                "sell_station": sell_station,
-                "sell_system": sell_system,
-                "buy_system": buy_system,
-                "galaxy_map_settle": str(galaxy_map_settle),
-                "dock_timeout": str(dock_timeout),
-            },
-            timestamp=_now_iso(),
-        ))
-
-        label_parts = [f"[cyan]{escape(commodity)}[/]"]
-        if buy_station:
-            label_parts.append(f"buy @ [cyan]{escape(buy_station)}[/]")
-        if sell_station:
-            label_parts.append(f"sell @ [cyan]{escape(sell_station)}[/]")
-        if buy_system:
-            label_parts.append(f"buy sys: [cyan]{escape(buy_system)}[/]")
-        if sell_system:
-            label_parts.append(f"sell sys: [cyan]{escape(sell_system)}[/]")
-        label_parts.append(f"map settle: [cyan]{galaxy_map_settle:.1f}s[/]")
-        label_parts.append(f"dock timeout: [cyan]{dock_timeout:.1f}s[/]")
-        self._log(f"Starting haul loop: {', '.join(label_parts)} (infinite)...")
-        self._routine_active = True
-
-        self._routine_worker = self._run_in_thread(lambda: haul_loop(
-            controls,
-            watcher,
-            journal_dir=journal_dir,
-            commodity=commodity,
-            buy_station=buy_station,
-            sell_station=sell_station,
-            sell_system=sell_system,
-            buy_system=buy_system,
-            step_delay_s=step_delay,
-            dock_timeout_s=dock_timeout,
-            galaxy_map_settle_s=galaxy_map_settle,
-            mass_lock_escape_safety_delay_s=self._config.controls.mass_lock_escape_safety_delay_seconds,
-            mass_lock_boost_delay_s=self._config.controls.mass_lock_boost_delay_seconds,
-            sleeper=sleeper,
-            progress_fn=progress,
-        ))
+        _dispatch_haul_loop_impl(self)
 
     # ── Quit ───────────────────────────────────────────────────────────────────
 
