@@ -319,7 +319,7 @@ def _run_transit_to_buy(ctx: _HaulCtx) -> tuple[RoutineResult | None, Phase | No
     result = dock(
         ctx.controls, ctx.watcher,
         wait_for_supercruise_exit=True,
-        auto_refuel=False,
+        auto_refuel=True,
         max_retries=ctx.max_dock_retries,
         request_timeout_s=ctx.request_timeout_s,
         dock_timeout_s=ctx.dock_timeout_s,

@@ -88,11 +88,12 @@ class HaulLoopTests(unittest.TestCase):
             # Phase 2: undock from sell station
             [],   # absorbed by undock's prime watcher.poll()
             [{"event": "Undocked", "StationName": _STATION}],
-            # Phase 3: dock at buy station (wait_for_supercruise_exit=True)
+            # Phase 3: dock at buy station (wait_for_supercruise_exit=True, auto_refuel=True)
             [{"event": "SupercruiseExit", "BodyType": "Station"}],
             [],   # absorbed by dock's prime watcher.poll() after boost
             [{"event": "DockingGranted", "LandingPad": 1, "StationName": _STATION}],
             [{"event": "Docked", "StationName": _STATION}],
+            # buy-station station_refuel_menu_sequence runs after Docked — no events needed
             # Phase 4: market_buy — event returned from prime poll (pending_events)
             [{"event": "MarketBuy", "Type": _COMMODITY_LOWER, "Type_Localised": _COMMODITY, "Count": 100, "TotalCost": 100_000}],
             # Phase 5: undock from buy station
@@ -136,6 +137,9 @@ class HaulLoopTests(unittest.TestCase):
         # HeadLookReset appears once per undock call (2 undocks total)
         head_look_calls = [c for c in controls.calls if c["action"] == "HeadLookReset"]
         self.assertEqual(len(head_look_calls), 2)
+        # Refuel menu sequence (UI_Up, UI_Select, UI_Down) now runs at both stations after Docked
+        up_calls = [c for c in controls.calls if c["action"] == "UI_Up"]
+        self.assertEqual(len(up_calls), 2)
 
     def test_aborts_when_undock_fails(self) -> None:
         """haul_loop returns an error result immediately when undock times out."""
