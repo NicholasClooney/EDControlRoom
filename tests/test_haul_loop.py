@@ -88,6 +88,8 @@ class HaulLoopTests(unittest.TestCase):
             # Phase 2: undock from sell station
             [],   # absorbed by undock's prime watcher.poll()
             [{"event": "Undocked", "StationName": _STATION}],
+            [{"event": "Music", "MusicTrack": "DockingComputer"}],
+            [{"event": "Music", "MusicTrack": "NoTrack"}],
             # Phase 3: dock at buy station (wait_for_supercruise_exit=True, auto_refuel=True)
             [{"event": "SupercruiseExit", "BodyType": "Station"}],
             [],   # absorbed by dock's prime watcher.poll() after boost
@@ -99,6 +101,8 @@ class HaulLoopTests(unittest.TestCase):
             # Phase 5: undock from buy station
             [],   # absorbed by undock's prime watcher.poll()
             [{"event": "Undocked", "StationName": _STATION}],
+            [{"event": "Music", "MusicTrack": "DockingComputer"}],
+            [{"event": "Music", "MusicTrack": "NoTrack"}],
             # Phase 6: dock at sell station (wait_for_supercruise_exit=True, auto_refuel=True)
             [{"event": "SupercruiseExit", "BodyType": "Station"}],
             [],   # absorbed by dock's prime watcher.poll() after boost
@@ -177,6 +181,8 @@ class HaulLoopTests(unittest.TestCase):
             # Phase 2: undock succeeds
             [],
             [{"event": "Undocked", "StationName": _STATION}],
+            [{"event": "Music", "MusicTrack": "DockingComputer"}],
+            [{"event": "Music", "MusicTrack": "NoTrack"}],
             # Phase 3: dock at buy — SupercruiseExit never arrives
         ])
 
@@ -342,6 +348,8 @@ class DetectPhaseResumeIntegrationTest(unittest.TestCase):
             # Phase 5: undock from buy
             [],
             [{"event": "Undocked", "StationName": _BUY_STATION}],
+            [{"event": "Music", "MusicTrack": "DockingComputer"}],
+            [{"event": "Music", "MusicTrack": "NoTrack"}],
             # Phase 6: transit to sell + dock
             [{"event": "SupercruiseExit", "BodyType": "Station"}],
             [],
@@ -411,6 +419,8 @@ class SellPhaseNarrowedToTargetTest(unittest.TestCase):
             # Phase 2: undock
             [],
             [{"event": "Undocked", "StationName": _STATION}],
+            [{"event": "Music", "MusicTrack": "DockingComputer"}],
+            [{"event": "Music", "MusicTrack": "NoTrack"}],
             # Phase 3: transit to buy + dock
             [{"event": "SupercruiseExit", "BodyType": "Station"}],
             [],
@@ -421,6 +431,8 @@ class SellPhaseNarrowedToTargetTest(unittest.TestCase):
             # Phase 5: undock
             [],
             [{"event": "Undocked", "StationName": _STATION}],
+            [{"event": "Music", "MusicTrack": "DockingComputer"}],
+            [{"event": "Music", "MusicTrack": "NoTrack"}],
             # Phase 6: transit to sell + dock
             [{"event": "SupercruiseExit", "BodyType": "Station"}],
             [],

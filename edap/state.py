@@ -136,15 +136,24 @@ def read_ship_state(log_path: Path) -> ShipState:
             elif event in {"SupercruiseEntry", "FSDJump"}:
                 ship["status"] = "in_supercruise"
             elif (
-                event in {"SupercruiseExit", "DockingCancelled", "Undocked"}
-                or (event == "Music" and ship["status"] == "in_undocking")
+                event in {"SupercruiseExit", "DockingCancelled"}
+                or (
+                    event == "Music"
+                    and log.get("MusicTrack") == "NoTrack"
+                    and ship["status"] == "in_undocking"
+                )
                 or (event in {"Location", "CarrierJump"} and log.get("Docked") is False)
             ):
                 ship["status"] = "in_space"
+            elif event == "Undocked":
+                if ship["status"] in {"in_station", "starting_undocking", "in_undocking"}:
+                    ship["status"] = "in_undocking"
+                else:
+                    ship["status"] = "in_space"
             elif event == "DockingRequested":
                 ship["status"] = "starting_docking"
             elif event == "Music" and log.get("MusicTrack") == "DockingComputer":
-                if ship["status"] == "starting_undocking":
+                if ship["status"] in {"in_station", "starting_undocking", "in_undocking"}:
                     ship["status"] = "in_undocking"
                 elif ship["status"] == "starting_docking":
                     ship["status"] = "in_docking"

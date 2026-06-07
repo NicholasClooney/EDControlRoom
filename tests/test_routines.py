@@ -19,6 +19,7 @@ from edap.routines import (
     set_speed_zero_then_wait,
     station_refuel_menu,
     station_refuel_menu_sequence,
+    undock,
 )
 from tests.fakes import FakeShipControls, FakeWatcher
 
@@ -298,6 +299,51 @@ class RoutinesTests(unittest.TestCase):
 
         self.assertEqual(result.dispatch.status, "error")
         self.assertIn("docked event", result.dispatch.reason)
+
+    def test_undock_waits_for_no_track_after_undocked(self) -> None:
+        controls = FakeShipControls()
+        watcher = FakeWatcher([
+            [],
+            [{"event": "Undocked", "StationName": "Pawelczyk Dock"}],
+            [{"event": "Music", "MusicTrack": "DockingComputer"}],
+            [{"event": "Music", "MusicTrack": "NoTrack"}],
+        ])
+        time_values = iter([0.0, 0.0, 0.1, 0.2, 0.3, 0.4])
+
+        result = undock(
+            controls,
+            watcher,
+            undock_timeout_s=1.0,
+            step_delay_s=0.0,
+            time_fn=lambda: next(time_values),
+            sleeper=lambda _: None,
+        )
+
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertEqual(result.action, "NoTrack")
+        self.assertEqual(result.trigger_event, {"event": "Music", "MusicTrack": "NoTrack"})
+        self.assertEqual(result.details["undocked_event"], {"event": "Undocked", "StationName": "Pawelczyk Dock"})
+
+    def test_undock_errors_if_no_track_never_arrives(self) -> None:
+        controls = FakeShipControls()
+        watcher = FakeWatcher([
+            [],
+            [{"event": "Undocked", "StationName": "Pawelczyk Dock"}],
+            [{"event": "Music", "MusicTrack": "DockingComputer"}],
+        ])
+        time_values = iter([0.0, 0.0, 0.1, 0.2, 0.3, 1.2])
+
+        result = undock(
+            controls,
+            watcher,
+            undock_timeout_s=1.0,
+            step_delay_s=0.0,
+            time_fn=lambda: next(time_values),
+            sleeper=lambda _: None,
+        )
+
+        self.assertEqual(result.dispatch.status, "error")
+        self.assertIn("NoTrack", result.dispatch.reason)
 
     def test_docking_request_sequence_dispatches_stream_deck_menu_walk(self) -> None:
         controls = FakeShipControls(

@@ -12,6 +12,7 @@ from edap.routines._base import (
     SupportsUndockControls,
     _is_docked_event,
     _is_docking_response_event,
+    _is_music_no_track_event,
     _is_supercruise_exit_event,
     _is_undocked_event,
     _wait_for_event,
@@ -426,9 +427,31 @@ def undock(
     if progress_fn is not None:
         station = undocked_event.get("StationName", "")
         progress_fn(f"Undocked: {station}" if station else "Undocked")
+        progress_fn(f"Waiting for NoTrack / clear of station (timeout {undock_timeout_s:.0f}s)...")
+
+    no_track_event = _wait_for_event(
+        watcher,
+        predicate=_is_music_no_track_event,
+        deadline=time_fn() + undock_timeout_s,
+        time_fn=time_fn,
+    )
+    if no_track_event is None:
+        return RoutineResult(
+            action="Undocked",
+            dispatch=ActionDispatchResult(
+                action="Undocked",
+                status="error",
+                reason=f"NoTrack music event was not observed within {undock_timeout_s:.0f}s after Undocked",
+            ),
+            trigger_event=undocked_event,
+            details={"phase": "wait_for_no_track", "undock_timeout_s": undock_timeout_s},
+        )
+
+    if progress_fn is not None:
+        progress_fn("Confirmed clear of station via NoTrack")
     return RoutineResult(
-        action="Undocked",
+        action="NoTrack",
         dispatch=launch_dispatch,
-        trigger_event=undocked_event,
-        details={"phase": "complete"},
+        trigger_event=no_track_event,
+        details={"phase": "complete", "undocked_event": undocked_event},
     )

@@ -76,6 +76,43 @@ class StateTests(unittest.TestCase):
             self.assertEqual(state.status, "in_station")
             self.assertEqual(state.location, "Sol")
 
+    def test_read_ship_state_keeps_auto_undock_in_undocking_until_no_track(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            log_path = Path(temp_dir) / "Journal.log"
+            _write_lines(
+                log_path,
+                [
+                    '{"event":"LoadGame","Ship":"type6"}',
+                    '{"event":"Location","Docked":true,"StarSystem":"Sol","StationName":"Abraham Lincoln"}',
+                    '{"event":"Undocked","StationName":"Abraham Lincoln"}',
+                    '{"event":"Music","MusicTrack":"DockingComputer"}',
+                ],
+            )
+            os.utime(log_path, None)
+
+            state = read_ship_state(log_path)
+
+            self.assertEqual(state.status, "in_undocking")
+
+    def test_read_ship_state_treats_no_track_as_in_space_after_undock(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            log_path = Path(temp_dir) / "Journal.log"
+            _write_lines(
+                log_path,
+                [
+                    '{"event":"LoadGame","Ship":"type6"}',
+                    '{"event":"Location","Docked":true,"StarSystem":"Sol","StationName":"Abraham Lincoln"}',
+                    '{"event":"Undocked","StationName":"Abraham Lincoln"}',
+                    '{"event":"Music","MusicTrack":"DockingComputer"}',
+                    '{"event":"Music","MusicTrack":"NoTrack"}',
+                ],
+            )
+            os.utime(log_path, None)
+
+            state = read_ship_state(log_path)
+
+            self.assertEqual(state.status, "in_space")
+
     def test_journal_watcher_starts_at_end_by_default_and_reads_appended_events(self) -> None:
         with TemporaryDirectory() as temp_dir:
             journal_dir = Path(temp_dir)

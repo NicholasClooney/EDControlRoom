@@ -186,3 +186,7 @@ def _is_docked_event(event: dict[str, object]) -> bool:
 
 def _is_undocked_event(event: dict[str, object]) -> bool:
     return event.get("event") == "Undocked"
+
+
+def _is_music_no_track_event(event: dict[str, object]) -> bool:
+    return event.get("event") == "Music" and event.get("MusicTrack") == "NoTrack"
