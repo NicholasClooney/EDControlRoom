@@ -40,6 +40,22 @@ What is not done:
 
 These are built to be manually exercised against a live Elite session running through CrossOver, not left unattended.
 
+## Galaxy Map Binding Requirement
+
+The current galaxy-map automation depends on Elite having arrow-key secondary
+bindings on these four actions:
+
+- `UI_Up` -> `UpArrow`
+- `UI_Down` -> `DownArrow`
+- `UI_Left` -> `LeftArrow`
+- `UI_Right` -> `RightArrow`
+
+Keep your normal primary bindings as needed, but make sure those arrow-key
+secondaries are present in the live `.binds` file. On the current Elite setup,
+`W/A/S/D` pans the galaxy map view, while arrow-key `UI_*` bindings move the
+map/menu cursor. Without those secondary arrow bindings, `dest` / galaxy-map
+automation will not navigate the map menus correctly.
+
 ## Repo Layout
 
 - `control_room.py`, `run_routine.py`, `diagnostics.py`, `ship_controls.py`: active operator and validation entrypoints

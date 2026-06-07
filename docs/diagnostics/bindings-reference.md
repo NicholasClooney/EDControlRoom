@@ -26,6 +26,24 @@ CrossOver setup. It is not written as `BoostButton`.
 If a future routine needs boost, request `UseBoostJuice` in action lists and
 binding lookups.
 
+`read_bindings()` in [edap/bindings.py](/Users/nicholasclooney/Source/Projects/EDAutoPilotMKII/edap/bindings.py:79) currently resolves only one keyboard binding per action. If both `Primary` and `Secondary` are keyboard bindings, the `Secondary` entry overwrites the `Primary` entry in the runtime lookup.
+
+This is not just display detail. It changes what `control_room.py`, `run_routine.py`, and `ship_controls.py` will actually press.
+
+Example:
+
+- if `UI_Up` is `Primary = W` and `Secondary = UpArrow`, runtime dispatch resolves to `UpArrow`
+- if `UI_Left` is `Primary = A` and `Secondary = LeftArrow`, runtime dispatch resolves to `LeftArrow`
+
+This behavior matters in the galaxy map on the current Elite setup:
+
+- `W/A/S/D` pans or moves the map view
+- arrow-key `UI_*` bindings move the map/menu cursor/focus
+
+So adding arrow-key secondaries to `UI_Up`, `UI_Down`, `UI_Left`, `UI_Right`
+causes EDAP runtime navigation to use arrows instead of `W/A/S/D`, which is
+currently what makes the galaxy-map menu/navigation flow work.
+
 ## Key Token Examples
 
 Elite key tokens are not the same strings we send to the macOS input backend.
