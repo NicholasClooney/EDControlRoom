@@ -110,6 +110,23 @@ class ShipControlsTests(unittest.TestCase):
             [{"method": "tap", "key": "j", "modifier": "left_shift", "hold_s": 1.0}],
         )
 
+    def test_boost_dispatches_through_binding_lookup(self) -> None:
+        lookup = build_binding_lookup(
+            bindings={"UseBoostJuice": Binding(key="Tab")},
+            actions=["UseBoostJuice"],
+        )
+        input_controller = FakeInputController()
+        controls = ShipControls.from_binding_lookup(lookup, input_controller)
+
+        result = controls.boost()
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.binding.to_dict(), {"key": "tab", "modifier": None})
+        self.assertEqual(
+            input_controller.calls,
+            [{"method": "tap", "key": "tab", "modifier": None, "hold_s": 0.1}],
+        )
+
     def test_roll_left_dispatches_through_binding_lookup(self) -> None:
         lookup = build_binding_lookup(
             bindings={"RollLeftButton": Binding(key="A")},

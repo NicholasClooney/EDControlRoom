@@ -13,15 +13,23 @@ def escape_mass_lock(
     controls: SupportsEscapeControls,
     *,
     journal_dir: Path,
+    safety_delay_s: float = 0.0,
     boost_delay_s: float = 5.0,
     step_delay_s: float = 0.3,
     sleeper: Callable[[float], None] = sleep,
     progress_fn: Callable[[str], None] | None = None,
 ) -> RoutineResult:
+    if safety_delay_s < 0:
+        raise ValueError("safety_delay_s must be non-negative")
     if boost_delay_s < 0:
         raise ValueError("boost_delay_s must be non-negative")
     if step_delay_s < 0:
         raise ValueError("step_delay_s must be non-negative")
+
+    if progress_fn is not None and safety_delay_s > 0:
+        progress_fn(f"Safety delay before mass-lock escape: waiting {safety_delay_s:.1f}s...")
+    if safety_delay_s > 0:
+        sleeper(safety_delay_s)
 
     if progress_fn is not None:
         progress_fn("Setting speed 100 to break auto-undock...")
@@ -42,7 +50,7 @@ def escape_mass_lock(
             progress_fn("FSD mass locked -- boosting away...")
         last_boost = controls.boost()
         if last_boost.status != "ok" and progress_fn is not None:
-            progress_fn(f"Warning: BoostButton dispatch failed: {last_boost.reason}")
+            progress_fn(f"Warning: UseBoostJuice dispatch failed: {last_boost.reason}")
         boost_count += 1
         if boost_delay_s > 0:
             sleeper(boost_delay_s)

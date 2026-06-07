@@ -99,6 +99,27 @@ class BindingLookupTests(unittest.TestCase):
             )
             self.assertEqual(lookup.resolve("UI_Back").status, "missing")
 
+    def test_load_binding_lookup_reads_use_boost_juice_binding(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            bindings_path = Path(temp_dir) / "Custom.binds"
+            bindings_path.write_text(
+                """
+<Root>
+  <UseBoostJuice>
+    <Primary Device="Keyboard" Key="Key_Tab" />
+  </UseBoostJuice>
+</Root>
+""".strip(),
+                encoding="utf-8",
+            )
+
+            lookup = load_binding_lookup(bindings_path, actions=["UseBoostJuice"])
+
+            self.assertEqual(
+                lookup.get("UseBoostJuice").to_dict(),
+                {"key": "tab", "modifier": None},
+            )
+
     def test_load_binding_lookup_reports_non_keyboard_only_binding(self) -> None:
         with TemporaryDirectory() as temp_dir:
             bindings_path = Path(temp_dir) / "Custom.binds"

@@ -402,7 +402,7 @@ class RunRoutineCliTests(unittest.TestCase):
             loaded.config,
             actions=[
                 "SetSpeedZero",
-                "BoostButton",
+                "UseBoostJuice",
                 "FocusLeftPanel",
                 "UI_Back",
                 "CycleNextPanel",

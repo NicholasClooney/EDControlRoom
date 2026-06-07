@@ -53,6 +53,7 @@ def haul_loop(
     galaxy_map_settle_s: float = 2.0,
     boost_settle_s: float = 3.0,
     deny_retry_delay_s: float = 5.0,
+    mass_lock_escape_safety_delay_s: float = 15.0,
     mass_lock_boost_delay_s: float = 5.0,
     max_dock_retries: int = 3,
     time_fn: Callable[[], float] = monotonic,
@@ -140,6 +141,7 @@ def haul_loop(
         escape_mass_lock(
             controls,
             journal_dir=journal_dir,
+            safety_delay_s=mass_lock_escape_safety_delay_s,
             step_delay_s=step_delay_s,
             boost_delay_s=mass_lock_boost_delay_s,
             sleeper=sleeper,
@@ -222,6 +224,7 @@ def haul_loop(
         escape_mass_lock(
             controls,
             journal_dir=journal_dir,
+            safety_delay_s=mass_lock_escape_safety_delay_s,
             step_delay_s=step_delay_s,
             boost_delay_s=mass_lock_boost_delay_s,
             sleeper=sleeper,

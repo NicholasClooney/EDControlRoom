@@ -41,7 +41,7 @@ class ProgressShipControls:
         return self._controls.set_speed_full(repeat=repeat, hold_s=hold_s)
 
     def boost(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
-        self._log("BoostButton", repeat)
+        self._log("UseBoostJuice", repeat)
         return self._controls.boost(repeat=repeat, hold_s=hold_s)
 
     def ui_focus(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:

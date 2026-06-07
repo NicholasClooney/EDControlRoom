@@ -114,7 +114,7 @@ class HaulLoopTests(unittest.TestCase):
 
         self.assertEqual(result.dispatch.status, "ok")
         # Boost should appear once per dock call (2 docks total)
-        boost_calls = [c for c in controls.calls if c["action"] == "BoostButton"]
+        boost_calls = [c for c in controls.calls if c["action"] == "UseBoostJuice"]
         self.assertEqual(len(boost_calls), 2)
         # HeadLookReset appears once per undock call (2 undocks total)
         head_look_calls = [c for c in controls.calls if c["action"] == "HeadLookReset"]

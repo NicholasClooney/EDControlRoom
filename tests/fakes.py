@@ -64,7 +64,7 @@ class FakeShipControls:
         return self._dispatch("CyclePreviousPanel", repeat, hold_s)
 
     def boost(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
-        return self._dispatch("BoostButton", repeat, hold_s)
+        return self._dispatch("UseBoostJuice", repeat, hold_s)
 
     def galaxy_map_open(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
         return self._dispatch("GalaxyMapOpen", repeat, hold_s)

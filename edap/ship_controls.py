@@ -13,6 +13,7 @@ DEFAULT_SHIP_CONTROL_ACTIONS = [
     "SetSpeedZero",
     "SetSpeed100",
     "HyperSuperCombination",
+    "UseBoostJuice",
     "FocusLeftPanel",
     "UI_Back",
     "UIFocus",
@@ -28,7 +29,6 @@ DEFAULT_SHIP_CONTROL_ACTIONS = [
     "UI_Select",
     "GalaxyMapOpen",
     "CamZoomIn",
-    "BoostButton",
 ]
 
 CONTINUOUS_ACTIONS = {
@@ -204,7 +204,7 @@ class ShipControls:
         return self.dispatch_action("HeadLookReset", repeat=repeat, hold_s=hold_s)
 
     def boost(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
-        return self.dispatch_action("BoostButton", repeat=repeat, hold_s=hold_s)
+        return self.dispatch_action("UseBoostJuice", repeat=repeat, hold_s=hold_s)
 
     def hyper_super_combination(self, repeat: int = 1, hold_s: float | None = None) -> ActionDispatchResult:
         return self.dispatch_action("HyperSuperCombination", repeat=repeat, hold_s=hold_s)

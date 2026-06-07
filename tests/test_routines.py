@@ -367,7 +367,7 @@ class RoutinesTests(unittest.TestCase):
         self.assertEqual(result.trigger_event, {"event": "Docked", "StationName": "Pawelczyk Dock"})
         self.assertEqual(result.details["request_event"], {"event": "DockingGranted", "LandingPad": 40})
         self.assertEqual(result.details["supercruise_exit_event"], {"event": "SupercruiseExit", "BodyType": "Station"})
-        self.assertEqual(controls.calls[0], {"action": "BoostButton", "repeat": 1, "hold_s": 0.0})
+        self.assertEqual(controls.calls[0], {"action": "UseBoostJuice", "repeat": 1, "hold_s": 0.0})
         self.assertEqual(controls.calls[-1], {"action": "SetSpeedZero", "repeat": 2, "hold_s": 0.0})
         self.assertEqual(sleep_calls, [3.0, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 1.0])
 
@@ -529,7 +529,7 @@ class EscapeMassLockTests(unittest.TestCase):
         self.assertEqual(result.action, "EscapeMassLock")
         self.assertEqual(result.dispatch.status, "ok")
         self.assertEqual(result.details["boost_count"], 0)
-        boost_calls = [c for c in controls.calls if c["action"] == "BoostButton"]
+        boost_calls = [c for c in controls.calls if c["action"] == "UseBoostJuice"]
         self.assertEqual(boost_calls, [])
         self.assertEqual(sleep_calls, [0.3])
 
@@ -557,7 +557,7 @@ class EscapeMassLockTests(unittest.TestCase):
         self.assertEqual(result.action, "EscapeMassLock")
         self.assertEqual(result.dispatch.status, "ok")
         self.assertEqual(result.details["boost_count"], 1)
-        boost_dispatches = [c for c in controls.calls if c["action"] == "BoostButton"]
+        boost_dispatches = [c for c in controls.calls if c["action"] == "UseBoostJuice"]
         self.assertEqual(len(boost_dispatches), 1)
 
     def test_rejects_negative_boost_delay(self) -> None:
@@ -565,6 +565,12 @@ class EscapeMassLockTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaisesRegex(ValueError, "boost_delay_s"):
                 escape_mass_lock(controls, journal_dir=Path(tmp), boost_delay_s=-1.0)
+
+    def test_rejects_negative_safety_delay(self) -> None:
+        controls = FakeShipControls()
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(ValueError, "safety_delay_s"):
+                escape_mass_lock(controls, journal_dir=Path(tmp), safety_delay_s=-1.0)
 
     def test_rejects_negative_step_delay(self) -> None:
         controls = FakeShipControls()
@@ -583,7 +589,7 @@ class EscapeMassLockTests(unittest.TestCase):
                 sleeper=lambda _: None,
             )
         self.assertEqual(result.details["boost_count"], 0)
-        boost_calls = [c for c in controls.calls if c["action"] == "BoostButton"]
+        boost_calls = [c for c in controls.calls if c["action"] == "UseBoostJuice"]
         self.assertEqual(boost_calls, [])
 
 

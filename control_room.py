@@ -59,22 +59,13 @@ from edap.control_room_state import (
 from edap.progress_controls import ProgressShipControls
 from edap.routines import dock, escape_mass_lock, haul_loop, jump, market_buy, market_sell, set_gal_map_destination, undock, RoutineResult
 from edap.runtime import RuntimeContext, build_runtime_context, load_config_with_fallback
-from edap.ship_controls import ShipControls
+from edap.ship_controls import DEFAULT_SHIP_CONTROL_ACTIONS, ShipControls
 from edap.state import JournalWatcher, get_latest_journal_log, read_ship_state
 
 
 # ── All actions needed across every supported routine ──────────────────────────
 
-_ALL_ROUTINE_ACTIONS = [
-    "SetSpeedZero", "HyperSuperCombination",
-    "BoostButton", "FocusLeftPanel",
-    "UI_Back", "UI_Up", "UI_Down", "UI_Select", "UI_Left", "UI_Right",
-    "CycleNextPanel", "CyclePreviousPanel",
-    "HeadLookReset",
-    # Keep galaxy-map actions in sync with edap/routines/galaxy_map.py and
-    # run_routine.py. The Odyssey destination flow also needs CamZoomIn.
-    "GalaxyMapOpen", "CamZoomIn",
-]
+_ALL_ROUTINE_ACTIONS = list(DEFAULT_SHIP_CONTROL_ACTIONS)
 
 _DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | dest <system> | market ... | q"
 
@@ -1344,6 +1335,8 @@ class ControlRoomApp(App[None]):
             step_delay_s=step_delay,
             dock_timeout_s=dock_timeout,
             galaxy_map_settle_s=galaxy_map_settle,
+            mass_lock_escape_safety_delay_s=self._config.controls.mass_lock_escape_safety_delay_seconds,
+            mass_lock_boost_delay_s=self._config.controls.mass_lock_boost_delay_seconds,
             sleeper=sleeper,
             progress_fn=progress,
         ))

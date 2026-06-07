@@ -13,6 +13,7 @@ _EXPECTED_DEFAULT_ACTIONS = {
     "SetSpeedZero",
     "SetSpeed100",
     "HyperSuperCombination",
+    "UseBoostJuice",
     "FocusLeftPanel",
     "UI_Back",
     "UIFocus",
@@ -28,7 +29,6 @@ _EXPECTED_DEFAULT_ACTIONS = {
     "UI_Select",
     "GalaxyMapOpen",
     "CamZoomIn",
-    "BoostButton",
 }
 
 

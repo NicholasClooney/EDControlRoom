@@ -2,7 +2,7 @@
 
 _This is the maintained status document for the repo. Update it at the end of each session when project understanding, port status, or next steps change. Keep it current over time rather than treating it as a frozen checkpoint._
 
-Last updated: 2026-06-07 (session 28)
+Last updated: 2026-06-07 (session 30)
 
 ## Where We Are
 
@@ -37,6 +37,8 @@ Latest live validation on the current macOS + CrossOver setup:
 - Dock routine was further extended (not yet live-validated): boost after SupercruiseExit with configurable settle time, DockingDenied retry loop with configurable delay, `ui_left` after `ui_select` to dismiss the station contact menu
 - `run_routine.py --routine undock --log-events` completed a full undock cycle from a docked state
 - Follow-up live haul testing found and fixed two routine-edge bugs in `edap/routines/`: market buy/sell now sends `UI_Back` twice with an explicit inter-tap delay after trade confirmation, and the trade / undock waiters now preserve leftover events from the same journal poll batch so immediate `MarketSell` / `Location(Docked=false)` follow-up events are not dropped after the first match
+- Follow-up haul-loop investigation found two binding/action mismatches: control-room preload was missing `SetSpeed100`, and boost was requested as `BoostButton` even though the live `.binds` files expose it as `UseBoostJuice`. Fixed by switching the canonical boost action token to `UseBoostJuice`, preloading control room from `DEFAULT_SHIP_CONTROL_ACTIONS`, and documenting the live Elite binding names in `docs/bindings-reference.md`
+- Haul-loop mass-lock escape now waits a configurable safety delay before sending `SetSpeed100` / boost. Config: `controls.mass_lock_escape_safety_delay_seconds` (default 15s). This delay applies in haul flows, not the standalone `escape` command.
 - Control-room `sell` (no item) now falls back to `Cargo.json` when the live in-memory cargo manifest is empty because no fresh `Cargo` journal event has arrived yet; this removes the mismatch where haul-loop sell could see cargo that control room sell-all could not
 - Test-running docs now consistently require `uv run python3 -m unittest ...` rather than the bare system interpreter, after a local verification run showed `python3 -m unittest` could miss project dependencies like `textual`
 - `uv run python3 control_room.py` is now live-validated for interrupt handling: `Ctrl-C` during an active routine cancels the worker without closing the TUI, and `Ctrl-C` when idle exits cleanly without the earlier extra-interrupt / stop-exception noise
@@ -67,7 +69,7 @@ The important caveat is that the real autopilot loop is still largely unported. 
 | Dock sequencing | Done | `edap/routines/` — waits on journal events, boosts after SCX and settles, drives legacy-style docking request UI walk (three `ui_left` presses after panel navigation to reset contacts cursor, then `ui_right` + `ui_select`; `ui_left` to exit contacts menu after), retries after DockingDenied with configurable delay, optionally chains station refuel menu |
 | Undock sequencing | Done | `edap/routines/` — menu walk (UI_Back x10, HeadLookReset, UI_Down, UI_Select), polls for `Undocked` event (timeout 30s); live-validated. In-space confirmation step was reverted. |
 | Status.json reader | Done | `edap/status.py` — `StatusFlags.from_int()` decodes all 32 Flags bits into named boolean fields; `ShipStatus` holds flags, pips, fuel, cargo, legal state, and balance; `read_status(journal_dir)` returns a `ShipStatus` or `None`. Wired into haul loop mass-lock escape. |
-| Mass-lock escape | Done | `edap/routines/haul.py` — `_escape_mass_lock()` runs after each undock in haul loop: sets speed 100 (breaks game auto-undock), then boosts every `mass_lock_boost_delay_s` (default 5s, config `controls.mass_lock_boost_delay_seconds`) until `Status.json` clears `fsd_mass_locked`. Dispatch failures for both speed and boost are logged via `progress_fn`. `BoostButton` added to `DEFAULT_SHIP_CONTROL_ACTIONS` (was missing, causing silent no-op). Not yet live-validated. |
+| Mass-lock escape | Done | `edap/routines/haul.py` — `_escape_mass_lock()` runs after each undock in haul loop: waits `mass_lock_escape_safety_delay_s` (default/config 15s), sets speed 100 (breaks game auto-undock), then boosts every `mass_lock_boost_delay_s` (default 5s, config `controls.mass_lock_boost_delay_seconds`) until `Status.json` clears `fsd_mass_locked`. Dispatch failures for both speed and boost are logged via `progress_fn`. The standalone `escape` command does not apply the haul safety delay. Canonical boost action token is now `UseBoostJuice` (matching live `.binds`), and control room now preloads the full `DEFAULT_SHIP_CONTROL_ACTIONS` set to avoid routine/lookup drift. Not yet live-validated. |
 | Station / docked state detection | Partial | `edap/state.py` derives coarse statuses like `in_station`, `starting_docking`, and `in_docking`, but there is no dedicated docked/station snapshot model yet |
 | Hotkey registration | Parked | `keyboard` lib doesn't work on macOS; likely future direction is a menu-bar app |
 | Legacy autopilot loop migration | Not ported | `dev_autopilot.py` remains the behavior reference; new `edap/` routines are still minimal |
@@ -90,12 +92,13 @@ Full detail: `docs/research/0004-legacy-autopilot-port-status.md`.
 
 | Plan | File | Depends on | Ready to start |
 | --- | --- | --- | --- |
+| 0006 Repo Cleanup and Product Positioning | `docs/plans/0006-repo-cleanup-and-positioning.md` | nothing | **yes — high priority** |
 | 0002 CV Pipeline Scaffold | `docs/plans/0002-cv-pipeline-scaffold.md` | nothing | yes |
 | 0003 Journal-Driven Routines | `docs/plans/0003-journal-driven-routines.md` | nothing | yes |
 | 0004 Runtime Diagnostics Dashboard | `docs/plans/0004-runtime-diagnostics-dashboard.md` | 0002/0003 helpful first | after |
 | 0005 Market Trading Routine | `docs/plans/0005-market-trading-routine.md` | 0003 (JournalWatcher) | gated on 3 open questions |
 
-Plans 0002 and 0003 are independent and can run in parallel.
+Current repo-shape / documentation priority is 0006. Plans 0002 and 0003 remain technically independent and can still run in parallel when cleanup is not the active focus.
 
 ## Ideas / Future Work
 
@@ -107,6 +110,7 @@ These are not scheduled yet but worth capturing for planning.
 - **Human-like input variation.** Add randomized dwell and inter-key delay variation to all synthetic input so sequences look less robotic. For menu-heavy flows (market buy/sell), include occasional overshoot-and-correct behavior (navigate past item, back up) to mimic human selection patterns.
 - **Monitoring and command center CLI.** Implemented in `control_room.py` (Textual TUI, `textual>=0.60` added to `pyproject.toml`). Three panels: SHIP STATUS (commander, system, station, flight status, fuel bar, credits, cargo fill, FSD target — bootstrapped from journal on startup, updated live), ACTIVITY (timestamped one-liners for jumps, docks, trades, missions, refuels — historical events suppressed), MARKET (current station from `Market.json`, auto-reloads on mtime change). Routine dispatch from the input bar: `dock`, `undock`, `jump`, `buy <item> [N]`, `sell`, `sell <item> [N]`, `haul [commodity]`, `dest <system>` / `set_dest <system>`. Market filter: `market filter <name>` (title-cased); `market` / `market clear` clears; `market lock/unlock`. Command history via up/down arrows. Ctrl-C/Ctrl-D cancel the active routine if one is running; when idle they exit the app. Input auto-focused on launch. Haul sell station defaults to current docked station. Live-validated for routine cancel vs idle exit behavior.
 - **Control room persistence follow-up.** Local JSON-backed operator state and the `replay` browser are now implemented in `control_room.py`. Next live check: verify the inline activity-pane UX, Enter-to-execute path, `e` edit path, and `*` explicit-default-haul path in the real `uv run python3 control_room.py` loop against Elite + CrossOver.
+- **Repo cleanup and positioning.** High-priority cleanup plan is now captured in `docs/plans/0006-repo-cleanup-and-positioning.md`: make macOS-first / CrossOver support explicit, shorten the README around Control Room and current routines, archive legacy Windows-era files, move scratch probes into a grouped tools area, and split low-level utility/diagnostics docs out of the root README.
 - **Re-introducing 251a841 carefully.** Commit `251a841` (`feat: restore galaxy map sequence with polled NavRoute verification`) bundled multiple galaxy-map changes at once: routine logic moved from a single fixed settle/check flow to a poll/retry flow around `NavRoute.json`, added a `CamZoomIn` (`Z`) press during result selection, adjusted CLI/test coverage, and wired the `control_room.py` destination alias. We still want the useful parts, but the bundled behavior regressed live destination selection because `Z` could land while the search field was still active. Re-add the intended behavior one change at a time with live verification after each slice: 1) isolated NavRoute poll/retry logic, 2) any map-open/readiness detection, 3) only then any extra in-map navigation or zoom inputs if they prove necessary.
 
 - Next task in 0003: `undock` is live-validated. `refuel` is the only remaining routine; it remains intentionally deferred.

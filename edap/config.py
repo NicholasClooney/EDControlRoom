@@ -29,6 +29,7 @@ class ControlsConfig:
     galaxy_map_settle_seconds: float
     haul_dock_timeout_seconds: float
     undock_timeout_seconds: float
+    mass_lock_escape_safety_delay_seconds: float
     mass_lock_boost_delay_seconds: float
 
 
@@ -188,6 +189,8 @@ def validate_config(config: AppConfig) -> AppConfig:
         raise ConfigError("Config value `controls.haul_dock_timeout_seconds` must be non-negative.")
     if config.controls.undock_timeout_seconds < 0:
         raise ConfigError("Config value `controls.undock_timeout_seconds` must be non-negative.")
+    if config.controls.mass_lock_escape_safety_delay_seconds < 0:
+        raise ConfigError("Config value `controls.mass_lock_escape_safety_delay_seconds` must be non-negative.")
     if config.controls.mass_lock_boost_delay_seconds < 0:
         raise ConfigError("Config value `controls.mass_lock_boost_delay_seconds` must be non-negative.")
     if config.screen.resolution_width <= 0:
@@ -278,6 +281,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             galaxy_map_settle_seconds=_float(controls, "galaxy_map_settle_seconds", 2.0),
             haul_dock_timeout_seconds=_float(controls, "haul_dock_timeout_seconds", 600.0),
             undock_timeout_seconds=_float(controls, "undock_timeout_seconds", 30.0),
+            mass_lock_escape_safety_delay_seconds=_float(controls, "mass_lock_escape_safety_delay_seconds", 15.0),
             mass_lock_boost_delay_seconds=_float(controls, "mass_lock_boost_delay_seconds", 5.0),
         ),
         screen=ScreenConfig(

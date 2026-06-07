@@ -400,7 +400,7 @@ def main() -> int:
     elif args.routine == ROUTINE_DOCK:
         routine_actions = [
             "SetSpeedZero",
-            "BoostButton",
+            "UseBoostJuice",
             "FocusLeftPanel",
             "UI_Back",
             "CycleNextPanel",
@@ -414,12 +414,12 @@ def main() -> int:
     elif args.routine == ROUTINE_STATION_REFUEL_MENU:
         routine_actions = ["UI_Up", "UI_Select", "UI_Down"]
     elif args.routine == ROUTINE_UNDOCK:
-        routine_actions = ["UI_Back", "HeadLookReset", "UI_Down", "UI_Select", "SetSpeed100", "BoostButton"]
+        routine_actions = ["UI_Back", "HeadLookReset", "UI_Down", "UI_Select", "SetSpeed100", "UseBoostJuice"]
     elif args.routine in {ROUTINE_MARKET_BUY, ROUTINE_MARKET_SELL}:
         routine_actions = ["UI_Select", "UI_Down", "UI_Right", "UI_Back"]
     elif args.routine == ROUTINE_HAUL_LOOP:
         routine_actions = [
-            "SetSpeedZero", "BoostButton", "FocusLeftPanel",
+            "SetSpeedZero", "SetSpeed100", "UseBoostJuice", "FocusLeftPanel",
             "UI_Back", "UI_Up", "UI_Down", "UI_Select", "UI_Left", "UI_Right",
             "CycleNextPanel", "CyclePreviousPanel", "HeadLookReset",
         ]
@@ -532,7 +532,7 @@ def main() -> int:
         _progress(f"  {_describe_binding(runtime.binding_lookup, 'SetSpeedZero')}")
     elif args.routine == ROUTINE_DOCK:
         actions = [
-            "BoostButton",
+            "UseBoostJuice",
             "FocusLeftPanel",
             "UI_Back",
             "CycleNextPanel",
@@ -552,7 +552,7 @@ def main() -> int:
         _progress(f"  {_describe_binding(runtime.binding_lookup, 'UI_Select')}")
         _progress(f"  {_describe_binding(runtime.binding_lookup, 'UI_Down')}")
     elif args.routine == ROUTINE_UNDOCK:
-        for action in ["UI_Back", "HeadLookReset", "UI_Down", "UI_Select", "SetSpeed100", "BoostButton"]:
+        for action in ["UI_Back", "HeadLookReset", "UI_Down", "UI_Select", "SetSpeed100", "UseBoostJuice"]:
             _progress(f"  {_describe_binding(runtime.binding_lookup, action)}")
     elif args.routine in {ROUTINE_MARKET_BUY, ROUTINE_MARKET_SELL}:
         for action in ["UI_Select", "UI_Down", "UI_Right", "UI_Back"]:
@@ -563,7 +563,7 @@ def main() -> int:
         iter_label = f"{args.iterations} iterations" if args.iterations > 0 else "infinite"
         _progress(f"Haul loop: {iter_label}")
         _progress(f"  Sell station{sell_label} -> buy {args.target} (MAX) -> sell station{sell_label}")
-        for action in ["SetSpeedZero", "BoostButton", "FocusLeftPanel", "UI_Back", "UI_Up", "UI_Down", "UI_Select", "UI_Left", "UI_Right", "CycleNextPanel", "CyclePreviousPanel", "HeadLookReset"]:
+        for action in ["SetSpeedZero", "SetSpeed100", "UseBoostJuice", "FocusLeftPanel", "UI_Back", "UI_Up", "UI_Down", "UI_Select", "UI_Left", "UI_Right", "CycleNextPanel", "CyclePreviousPanel", "HeadLookReset"]:
             _progress(f"  {_describe_binding(runtime.binding_lookup, action)}")
     elif args.routine == ROUTINE_SET_GAL_MAP_DESTINATION:
         _progress(f"Destination: {args.destination!r}")
@@ -675,6 +675,7 @@ def main() -> int:
                 ),
                 boost_settle_s=args.boost_settle_seconds,
                 deny_retry_delay_s=args.deny_retry_delay_seconds,
+                mass_lock_escape_safety_delay_s=loaded.config.controls.mass_lock_escape_safety_delay_seconds,
                 mass_lock_boost_delay_s=loaded.config.controls.mass_lock_boost_delay_seconds,
                 max_dock_retries=args.max_retries,
                 sleeper=logging_sleeper,

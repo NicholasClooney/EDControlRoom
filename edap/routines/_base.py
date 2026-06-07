@@ -66,7 +66,7 @@ class SupportsMarketControls(Protocol):
 
 class SupportsDockingControls(SupportsStationMenuControls, SupportsSetSpeedZero, Protocol):
     def boost(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
-        """Dispatch the BoostButton action."""
+        """Dispatch the UseBoostJuice action."""
 
     def focus_left_panel(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
         """Dispatch the FocusLeftPanel action."""
@@ -89,7 +89,7 @@ class SupportsDockingControls(SupportsStationMenuControls, SupportsSetSpeedZero,
 
 class SupportsEscapeControls(Protocol):
     def boost(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
-        """Dispatch the BoostButton action."""
+        """Dispatch the UseBoostJuice action."""
 
     def set_speed_full(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
         """Dispatch the SetSpeed100 action."""

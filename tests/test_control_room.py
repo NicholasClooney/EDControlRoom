@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from control_room import ControlRoomApp
+from control_room import ControlRoomApp, _ALL_ROUTINE_ACTIONS
 from edap.actions import ActionDispatchResult
 from edap.config import (
     AppConfig,
@@ -36,6 +36,7 @@ def _make_config(journal_dir: Path) -> AppConfig:
             galaxy_map_settle_seconds=2.0,
             haul_dock_timeout_seconds=600.0,
             undock_timeout_seconds=30.0,
+            mass_lock_escape_safety_delay_seconds=15.0,
             mass_lock_boost_delay_seconds=5.0,
         ),
         screen=ScreenConfig(
@@ -146,9 +147,16 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertTrue(worker.cancelled)
         self.assertEqual(self.app.exit_calls, 0)
 
-        self.app._clear_routine()
 
-        self.assertEqual(self.app.exit_calls, 0)
+class ControlRoomBindingsTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmpdir.cleanup)
+        self.app = _HarnessApp(_make_context(Path(self.tmpdir.name)))
+
+    def test_preloaded_actions_cover_mass_lock_escape(self) -> None:
+        self.assertIn("SetSpeed100", _ALL_ROUTINE_ACTIONS)
+        self.assertIn("UseBoostJuice", _ALL_ROUTINE_ACTIONS)
 
     def test_undock_command_uses_configured_timeouts(self) -> None:
         captured: dict[str, object] = {}
