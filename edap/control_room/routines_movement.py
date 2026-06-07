@@ -1,18 +1,10 @@
-"""Movement routine launchers (jump, escape mass lock, boost).
-
-Tightly coupled to ControlRoomApp — split for file size.
-"""
+"""Movement routine launchers (jump, escape mass lock, boost)."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
+from edap.control_room.interfaces import RoutineHost
 from edap.routines import RoutineResult, escape_mass_lock, jump
 
-if TYPE_CHECKING:
-    from control_room import ControlRoomApp
-
-
-def cmd_jump(app: ControlRoomApp) -> None:
+def cmd_jump(app: RoutineHost) -> None:
     if not app._check_routine_ready():
         return
     progress = app._make_progress()
@@ -28,7 +20,7 @@ def cmd_jump(app: ControlRoomApp) -> None:
     ))
 
 
-def cmd_escape(app: ControlRoomApp) -> None:
+def cmd_escape(app: RoutineHost) -> None:
     if not app._check_routine_ready():
         return
     progress = app._make_progress()
@@ -50,7 +42,7 @@ def cmd_escape(app: ControlRoomApp) -> None:
     ))
 
 
-def cmd_boost(app: ControlRoomApp) -> None:
+def cmd_boost(app: RoutineHost) -> None:
     if not app._check_routine_ready():
         return
     progress = app._make_progress()

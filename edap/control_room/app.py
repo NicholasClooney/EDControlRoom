@@ -1,0 +1,720 @@
+"""
+ED AutoPilot Control Room
+
+Live TUI: ship status, activity log, market tracker, and routine dispatch.
+
+Usage:
+    uv run python3 control_room.py --config config.toml
+    uv run python3 control_room.py --config config.toml --market aluminium
+
+Routine commands (type in the input bar):
+    dock               dock + auto-refuel; skips supercruise-exit wait if already in normal space
+    undock             launch from station
+    boost              fire boost three times immediately
+    escape             set speed full, then boost until Status.json says mass lock cleared
+    buy <item> [N]     buy N units (default MAX) of commodity
+    sell [item] [N]    sell commodity (default: market filter); amount default MAX
+    jump               FSD jump sequence
+    haul [commodity]   start haul loop; prompts for commodity/stations if not provided
+    dest <system>      open galaxy map and plot a route to the named system
+    set_dest <system>  alias for dest
+
+Market commands:
+    market filter <name>   filter market panel by commodity name (e.g. market filter aluminium)
+    market [clear]         clear the filter (default when no args)
+    market lock            freeze panel to current station
+    market unlock          unfreeze panel
+
+Other:
+    commands           list supported commands
+    help [command]     explain a command in plain English
+    replay             open the replay history browser
+    q / quit           cancel active work if needed, then exit
+"""
+from __future__ import annotations
+
+import argparse
+import sys
+import time
+from pathlib import Path
+from typing import Any, Callable
+
+from rich.markup import escape
+from rich.text import Text
+from textual import work
+from textual.app import App, ComposeResult
+from textual.containers import Horizontal, Vertical
+from textual.widgets import Footer, Header, Input, OptionList, RichLog, Static
+
+from edap.config import AppConfig
+from edap.control_room import (
+    bootstrap as _bootstrap,
+    commands as _commands,
+    events as _events,
+    facade as _facade,
+    haul_tracking as _haul_tracking,
+    help as _help,
+    history as _history,
+    persistence as _persistence,
+    prompts as _prompts,
+    replay as _replay,
+    rendering as _rendering,
+    routines_haul,
+    routines_movement,
+    routines_nav,
+    routines_station,
+    routines_trade,
+    workers as _workers,
+)
+from edap.control_room.models import (
+    HaulStats,
+    HistoryState,
+    MarketData,
+    PromptState,
+    ReplayBrowserState,
+    ReplaySelection,
+    RuntimeUIState,
+    ShipState,
+)
+
+# Modules eligible for in-place hot reload via the `reload` command.
+# Order matters: leaf modules first, then modules that import from them.
+_RELOADABLE_MODULES = [
+    routines_haul,
+    routines_trade,
+    routines_nav,
+    routines_movement,
+    routines_station,
+    _bootstrap,
+    _events,
+    _facade,
+    _haul_tracking,
+    _history,
+    _help,
+    _commands,
+    _persistence,
+    _prompts,
+    _replay,
+    _rendering,
+    _workers,
+]
+from edap.control_room_state import (
+    CommandHistoryEntry,
+    ControlRoomState,
+)
+from edap.runtime import RuntimeContext, build_runtime_context, load_config_with_fallback
+from edap.ship_controls import DEFAULT_SHIP_CONTROL_ACTIONS, ShipControls
+
+
+# ── All actions needed across every supported routine ──────────────────────────
+
+_ALL_ROUTINE_ACTIONS = list(DEFAULT_SHIP_CONTROL_ACTIONS)
+
+_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | dest <system> | market ... | reload | q"
+
+_RoutineCancelled = _workers.RoutineCancelled
+_CancellationProxy = _workers.CancellationProxy
+
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
+
+
+def _fmt_cr(n: int) -> str:
+    return _rendering.fmt_cr(n)
+
+
+def _fuel_bar(level: float, capacity: float) -> str:
+    return _rendering.fuel_bar(level, capacity)
+
+
+def _loc(item: dict[str, Any], key: str) -> str:
+    return _rendering.loc(item, key)
+
+
+def _hhmmss() -> str:
+    return _rendering.hhmmss()
+
+
+def _is_recent(ev: dict[str, Any], threshold_s: float = 120.0) -> bool:
+    return _rendering.is_recent(ev, threshold_s=threshold_s)
+
+
+def _fmt_duration(seconds: float | None) -> str:
+    return _rendering.fmt_duration(seconds)
+
+
+def _build_log_text(msg: str) -> Text:
+    return _rendering.build_log_text(msg)
+
+
+def _read_cargo_inventory(journal_dir: Path) -> list[dict[str, Any]]:
+    return _rendering.read_cargo_inventory(journal_dir)
+
+
+def _cargo_summary_lines(inventory: list[dict[str, Any]], *, limit: int = 3) -> list[str]:
+    return _rendering.cargo_summary_lines(inventory, limit=limit)
+
+
+# ── App ────────────────────────────────────────────────────────────────────────
+
+
+class ControlRoomApp(App[None]):
+    BINDINGS = [
+        ("ctrl+c", "request_quit", "Quit"),
+        ("ctrl+d", "request_quit", "Quit"),
+        ("ctrl+r", "open_history", "History"),
+    ]
+
+    CSS = """
+    Screen  { layout: vertical; }
+    #main   { height: 1fr; }
+    #left   { width: 58%; }
+    #right  { width: 42%; }
+    #status {
+        height: auto;
+        max-height: 14;
+        border: solid $primary;
+        padding: 0 1;
+    }
+    #activity-pane {
+        height: 1fr;
+    }
+    #activity {
+        height: 1fr;
+        border: solid $primary;
+        padding: 0 1;
+    }
+    #haul {
+        height: 1fr;
+        border: solid $primary;
+        padding: 0 1;
+    }
+    #market {
+        height: 1fr;
+        border: solid $primary;
+        padding: 0 1;
+    }
+    #cmd { height: 3; }
+    #resume-browser {
+        display: none;
+        height: 1fr;
+        border: heavy $primary;
+        padding: 1;
+    }
+    #resume-help {
+        height: auto;
+        padding: 0 0 1 0;
+    }
+    #resume-list {
+        height: 1fr;
+        border: solid $accent;
+    }
+    #resume-detail {
+        height: 6;
+        border: solid $primary;
+        padding: 0 1;
+        margin: 1 0 0 0;
+    }
+    """
+
+    def __init__(self, ctx: RuntimeContext, market_filter: str | None = None) -> None:
+        super().__init__()
+        self._ctx = ctx
+        self._config: AppConfig = ctx.config
+        self._journal_dir: Path = ctx.journal.effective_path  # type: ignore[assignment]
+        self._market_path = self._journal_dir / "Market.json"
+        self._ship = ShipState()
+        self._market = MarketData()
+        self._haul_stats = HaulStats()
+        self._market_filter = market_filter
+        self._market_mtime: float | None = None
+        self._controls: ShipControls | None = None
+        self._runtime_state = RuntimeUIState()
+        self._prompt_state = PromptState()
+        self._history_state = HistoryState()
+        self._state_path: Path = self._config.control_room.state_file
+        self._saved_state = ControlRoomState()
+        self._replay_state = ReplayBrowserState()
+        self._watcher_worker: Any | None = None
+        self._routine_worker: Any | None = None
+        self._time_fn: Callable[[], float] = time.monotonic
+        self._facade = _facade.ControlRoomFacade(
+            self,
+            default_placeholder=_DEFAULT_COMMAND_PLACEHOLDER,
+            reloadable_modules=_RELOADABLE_MODULES,
+        )
+
+    def __getattr__(self, name: str) -> Any:
+        target = _facade.FACADE_METHOD_MAP.get(name)
+        if target is None:
+            raise AttributeError(name)
+        return getattr(self._facade, target)
+
+    @property
+    def _haul_params(self) -> dict[str, str]:
+        return self._prompt_state.haul_params
+
+    @_haul_params.setter
+    def _haul_params(self, value: dict[str, str]) -> None:
+        self._prompt_state.haul_params = value
+
+    @property
+    def _haul_prompt_defaults(self) -> dict[str, str]:
+        return self._prompt_state.haul_prompt_defaults
+
+    @_haul_prompt_defaults.setter
+    def _haul_prompt_defaults(self, value: dict[str, str]) -> None:
+        self._prompt_state.haul_prompt_defaults = value
+
+    @property
+    def _haul_prompt_step(self) -> str:
+        return self._prompt_state.haul_prompt_step
+
+    @_haul_prompt_step.setter
+    def _haul_prompt_step(self, value: str) -> None:
+        self._prompt_state.haul_prompt_step = value
+
+    @property
+    def _haul_confirm_buy_station(self) -> str:
+        return self._prompt_state.haul_confirm_buy_station
+
+    @_haul_confirm_buy_station.setter
+    def _haul_confirm_buy_station(self, value: str) -> None:
+        self._prompt_state.haul_confirm_buy_station = value
+
+    @property
+    def _dest_prompt_destination(self) -> str:
+        return self._prompt_state.dest_prompt_destination
+
+    @_dest_prompt_destination.setter
+    def _dest_prompt_destination(self, value: str) -> None:
+        self._prompt_state.dest_prompt_destination = value
+
+    @property
+    def _dest_prompt_settle_default(self) -> float | None:
+        return self._prompt_state.dest_prompt_settle_default
+
+    @_dest_prompt_settle_default.setter
+    def _dest_prompt_settle_default(self, value: float | None) -> None:
+        self._prompt_state.dest_prompt_settle_default = value
+
+    @property
+    def _history(self) -> list[str]:
+        return self._history_state.entries
+
+    @_history.setter
+    def _history(self, value: list[str]) -> None:
+        self._history_state.entries = value
+
+    @property
+    def _history_pos(self) -> int:
+        return self._history_state.pos
+
+    @_history_pos.setter
+    def _history_pos(self, value: int) -> None:
+        self._history_state.pos = value
+
+    @property
+    def _history_draft(self) -> str:
+        return self._history_state.draft
+
+    @_history_draft.setter
+    def _history_draft(self, value: str) -> None:
+        self._history_state.draft = value
+
+    @property
+    def _resume_entries(self) -> list[ReplaySelection]:
+        return self._replay_state.entries
+
+    @_resume_entries.setter
+    def _resume_entries(self, value: list[ReplaySelection]) -> None:
+        self._replay_state.entries = value
+
+    @property
+    def _resume_open(self) -> bool:
+        return self._replay_state.open
+
+    @_resume_open.setter
+    def _resume_open(self, value: bool) -> None:
+        self._replay_state.open = value
+
+    @property
+    def _resume_filter(self) -> str:
+        return self._replay_state.filter_text
+
+    @_resume_filter.setter
+    def _resume_filter(self, value: str) -> None:
+        self._replay_state.filter_text = value
+
+    @property
+    def _routine_active(self) -> bool:
+        return self._runtime_state.routine_active
+
+    @_routine_active.setter
+    def _routine_active(self, value: bool) -> None:
+        self._runtime_state.routine_active = value
+
+    @property
+    def _active_routine_name(self) -> str | None:
+        return self._runtime_state.active_routine_name
+
+    @_active_routine_name.setter
+    def _active_routine_name(self, value: str | None) -> None:
+        self._runtime_state.active_routine_name = value
+
+    @property
+    def _verbose_controls(self) -> bool:
+        return self._runtime_state.verbose_controls
+
+    @_verbose_controls.setter
+    def _verbose_controls(self, value: bool) -> None:
+        self._runtime_state.verbose_controls = value
+
+    @property
+    def _shutdown_requested(self) -> bool:
+        return self._runtime_state.shutdown_requested
+
+    @_shutdown_requested.setter
+    def _shutdown_requested(self, value: bool) -> None:
+        self._runtime_state.shutdown_requested = value
+
+    @property
+    def _shutdown_finalized(self) -> bool:
+        return self._runtime_state.shutdown_finalized
+
+    @_shutdown_finalized.setter
+    def _shutdown_finalized(self, value: bool) -> None:
+        self._runtime_state.shutdown_finalized = value
+
+    def compose(self) -> ComposeResult:
+        yield Header(show_clock=True)
+        with Horizontal(id="main"):
+            with Vertical(id="left"):
+                yield Static(id="status")
+                with Vertical(id="activity-pane"):
+                    yield RichLog(id="activity", markup=True, highlight=True, wrap=True)
+                    with Vertical(id="resume-browser"):
+                        yield Static(
+                            "Replay history  |  Enter execute  |  e edit  |  * set default haul  |  Esc/q close",
+                            id="resume-help",
+                        )
+                        yield OptionList(id="resume-list")
+                        yield Static(id="resume-detail")
+            with Vertical(id="right"):
+                yield Static(id="market")
+                yield Static(id="haul")
+        yield Input(placeholder=_DEFAULT_COMMAND_PLACEHOLDER, id="cmd")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self.title = "ED Control Room"
+        self.query_one("#status", Static).border_title = "SHIP STATUS"
+        self.query_one("#activity", RichLog).border_title = "ACTIVITY"
+        self.query_one("#resume-browser", Vertical).border_title = "REPLAY HISTORY"
+        self.query_one("#haul", Static).border_title = "HAUL"
+        self.query_one("#market", Static).border_title = "MARKET"
+        self._build_controls()
+        self._load_saved_state()
+        self._bootstrap_ship_state()
+        self._load_market_json()
+        self._refresh_status()
+        self._refresh_haul_stats()
+        self._refresh_market()
+        self._watcher_worker = self._start_watcher()
+        self.set_focus(self.query_one("#cmd", Input))
+        self._update_resume_detail()
+
+    # ── Setup ──────────────────────────────────────────────────────────────────
+
+    def _build_controls(self) -> None:
+        if self._ctx.binding_lookup is None or self._ctx.input_controller is None:
+            self._log("[yellow]Bindings not loaded — routine commands (dock/undock/buy/sell) unavailable[/]")
+            return
+        self._controls = ShipControls.from_binding_lookup(
+            self._ctx.binding_lookup,
+            self._ctx.input_controller,
+            minimum_action_hold_s=self._config.controls.minimum_action_hold_seconds,
+            continuous_action_hold_s=self._config.controls.continuous_action_hold_seconds,
+        )
+
+    def _load_saved_state(self) -> None:
+        _persistence.load_saved_state(self)
+
+    def _save_saved_state(self) -> None:
+        _persistence.save_saved_state(self)
+
+    def _bootstrap_ship_state(self) -> None:
+        _bootstrap.bootstrap_ship_state(self)
+
+    # ── Rendering ──────────────────────────────────────────────────────────────
+
+    def _refresh_status(self) -> None:
+        self.query_one("#status", Static).update(
+            Text.from_markup(_rendering.status_markup(self._ship))
+        )
+
+    def _refresh_haul_stats(self) -> None:
+        widget = self.query_one("#haul", Static)
+        widget.update(Text.from_markup(
+            _rendering.haul_stats_markup(
+                self._haul_stats,
+                current_balance=self._ship.credits,
+                now_fn=self._time_fn,
+            )
+        ))
+
+    def _refresh_market(self) -> None:
+        self.query_one("#market", Static).update(
+            Text.from_markup(_rendering.market_markup(self._market, self._market_filter))
+        )
+
+    def _log(self, msg: str) -> None:
+        self.query_one("#activity", RichLog).write(_build_log_text(msg))
+
+    def _start_haul_stats(
+        self,
+        *,
+        commodity: str,
+        buy_station: str,
+        sell_station: str,
+    ) -> None:
+        _haul_tracking.start_haul_stats(
+            self,
+            commodity=commodity,
+            buy_station=buy_station,
+            sell_station=sell_station,
+        )
+
+    def _stop_haul_stats(self) -> None:
+        _haul_tracking.stop_haul_stats(self)
+
+    def _finalize_completed_haul_run(self) -> None:
+        _haul_tracking.finalize_completed_haul_run(self)
+
+    def _handle_haul_event(self, ev: dict[str, Any], *, station_before: str | None) -> None:
+        _haul_tracking.handle_haul_event(self, ev, station_before=station_before)
+
+    def _default_haul_matches(self, entry: CommandHistoryEntry) -> bool:
+        return _replay.default_haul_matches(self, entry)
+
+    def _resume_label(self, entry: CommandHistoryEntry) -> str:
+        return _history.resume_label(entry, self._saved_state.default_haul)
+
+    def _filtered_resume_entries(self) -> list[ReplaySelection]:
+        return _replay.filtered_resume_entries(self)
+
+    def _refresh_resume_help(self) -> None:
+        _replay.refresh_resume_help(self)
+
+    def _selected_resume_entry(self) -> CommandHistoryEntry | None:
+        return _replay.selected_resume_entry(self)
+
+    def _update_resume_detail(self) -> None:
+        _replay.update_resume_detail(self)
+
+    def _replay_history_entry(self, entry: CommandHistoryEntry, *, edit: bool) -> None:
+        _replay.replay_history_entry(self, entry, edit=edit)
+
+    # ── Market JSON ────────────────────────────────────────────────────────────
+
+    # ── Journal event processing ───────────────────────────────────────────────
+
+    def _handle_event(self, ev: dict[str, Any]) -> None:
+        event = ev.get("event", "")
+        station_before = self._ship.station
+        _events.apply_ship_event(self._ship, ev)
+
+        msg = self._activity_line(ev)
+        if msg:
+            self._log(msg)
+
+        if event == "Docked":
+            self._load_market_json()
+
+        self._refresh_status()
+        self._handle_haul_event(ev, station_before=station_before)
+
+    def _activity_line(self, ev: dict[str, Any]) -> str | None:
+        return _rendering.activity_line(ev)
+
+    # ── Background status watcher ──────────────────────────────────────────────
+
+    @work(thread=True, group="watchers", exclusive=True)
+    def _start_watcher(self) -> None:
+        _workers.start_watcher_loop(self)
+
+    # ── Routine dispatch ───────────────────────────────────────────────────────
+
+    @work(thread=True, group="routines", exclusive=True)
+    def _run_in_thread(self, fn: Callable[[], RoutineResult | None]) -> None:
+        _workers.run_routine_thread(self, fn)
+
+    def _clear_routine(self) -> None:
+        _workers.clear_routine(self)
+
+    # ── Quit ───────────────────────────────────────────────────────────────────
+
+    def action_request_quit(self) -> None:
+        if self._routine_active and self._routine_worker is not None:
+            self._cancel_active_routine("Ctrl-C / Ctrl-D")
+            return
+        self._request_shutdown("Ctrl-C / Ctrl-D")
+
+    def _cancel_active_routine(self, source: str) -> None:
+        self._log(f"[yellow]{escape(source)} received — cancelling active routine.[/]")
+        self._routine_worker.cancel()
+
+    def _request_shutdown(self, source: str) -> None:
+        if self._shutdown_requested:
+            return
+        self._shutdown_requested = True
+        self._log(f"[yellow]{escape(source)} received — exiting control room.[/]")
+        self._finalize_shutdown()
+
+    def _finalize_shutdown(self) -> None:
+        if self._shutdown_finalized:
+            return
+        self._shutdown_finalized = True
+        self.workers.cancel_group(self, "watchers")
+        self.workers.cancel_group(self, "routines")
+        self.exit()
+
+    def action_open_history(self) -> None:
+        if self._haul_prompt_step or self._haul_confirm_buy_station or self._dest_prompt_destination:
+            return
+        if self._resume_open:
+            self._close_resume_picker()
+            return
+        self._show_resume_picker()
+
+    # ── Command input ──────────────────────────────────────────────────────────
+
+    def on_key(self, event) -> None:
+        """Handle up/down arrow keys for readline-style command history."""
+        if event.key == "ctrl+d":
+            event.prevent_default()
+            self.action_request_quit()
+            return
+        if self._resume_open:
+            if event.key == "escape" or (event.key == "q" and not self._resume_filter):
+                event.prevent_default()
+                self._close_resume_picker()
+            elif event.key == "e" and not self._resume_filter:
+                event.prevent_default()
+                self._resume_edit_selected()
+            elif event.character == "*":
+                event.prevent_default()
+                self._resume_toggle_default_selected()
+            elif event.key == "enter":
+                event.prevent_default()
+                self._resume_execute_selected()
+            elif event.key == "backspace":
+                event.prevent_default()
+                if self._resume_filter:
+                    self._resume_filter = self._resume_filter[:-1]
+                    self._refresh_resume_picker()
+            elif event.character and event.character.isprintable() and len(event.character) == 1:
+                event.prevent_default()
+                self._resume_filter += event.character
+                self._refresh_resume_picker()
+            return
+        if self._haul_prompt_step or self._haul_confirm_buy_station or self._dest_prompt_destination:
+            return  # don't interfere with multi-step haul prompts
+        if event.key not in ("up", "down"):
+            return
+        event.prevent_default()
+        cmd_input = self.query_one("#cmd", Input)
+        if not self._history:
+            return
+        if event.key == "up":
+            if self._history_pos == len(self._history):
+                # entering history: save current draft
+                self._history_draft = cmd_input.value
+            if self._history_pos > 0:
+                self._history_pos -= 1
+                cmd_input.value = self._history[self._history_pos]
+                cmd_input.cursor_position = len(cmd_input.value)
+        else:  # down
+            if self._history_pos < len(self._history):
+                self._history_pos += 1
+                if self._history_pos == len(self._history):
+                    cmd_input.value = self._history_draft
+                else:
+                    cmd_input.value = self._history[self._history_pos]
+                cmd_input.cursor_position = len(cmd_input.value)
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        raw = event.value.strip()
+        event.input.value = ""
+
+        if self._haul_prompt_step:
+            self._handle_haul_prompt(raw)
+            return
+        if self._haul_confirm_buy_station:
+            self._handle_haul_confirm_prompt(raw)
+            return
+        if self._dest_prompt_destination:
+            destination = self._dest_prompt_destination
+            parsed = self._parse_optional_nonnegative_float(
+                raw,
+                default=self._dest_prompt_settle_default or self._config.controls.galaxy_map_settle_seconds,
+                label="Galaxy-map settle seconds",
+            )
+            if parsed is None:
+                return
+            self._dest_prompt_destination = ""
+            self._dest_prompt_settle_default = None
+            self.query_one("#cmd", Input).placeholder = _DEFAULT_COMMAND_PLACEHOLDER
+            self._dispatch_dest(destination, parsed)
+            return
+
+        if not raw:
+            return
+
+        self._dispatch_command(raw)
+
+    def _parse_optional_nonnegative_float(self, raw: str, *, default: float, label: str) -> float | None:
+        return _prompts.parse_optional_nonnegative_float(
+            self,
+            raw,
+            default=default,
+            label=label,
+        )
+
+
+    def on_option_list_option_highlighted(self, message: OptionList.OptionHighlighted) -> None:
+        if message.option_list.id == "resume-list":
+            self._update_resume_detail()
+
+    def on_option_list_option_selected(self, message: OptionList.OptionSelected) -> None:
+        if message.option_list.id == "resume-list":
+            self._resume_execute_selected()
+
+
+# ── Entry point ────────────────────────────────────────────────────────────────
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="ED AutoPilot Control Room — live TUI")
+    parser.add_argument("--config", default="config.toml")
+    parser.add_argument("--market", metavar="FILTER", help="initial market filter (e.g. --market aluminium)")
+    args = parser.parse_args()
+
+    loaded = load_config_with_fallback(args.config)
+    ctx = build_runtime_context(loaded.config, actions=_ALL_ROUTINE_ACTIONS)
+    journal_dir = ctx.journal.effective_path
+
+    if journal_dir is None:
+        print(
+            "ERROR: journal directory not found "
+            f"(source: {ctx.journal.cli_source_status()}). "
+            "Set paths.journal_dir in config.toml.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    ControlRoomApp(ctx, market_filter=args.market).run()
+
+
+if __name__ == "__main__":
+    main()

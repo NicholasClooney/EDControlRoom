@@ -1,21 +1,16 @@
-"""Market trade routine launchers (buy, sell, sell-all).
-
-Tightly coupled to ControlRoomApp — split for file size.
-"""
+"""Market trade routine launchers (buy, sell, sell-all)."""
 from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from rich.markup import escape
 
 from edap.control_room.history import now_iso
+from edap.control_room.interfaces import TradeHost
 from edap.control_room_state import CommandHistoryEntry
 from edap.routines import market_buy, market_sell
-
-if TYPE_CHECKING:
-    from control_room import ControlRoomApp
 
 
 def _parse_amount(s: str) -> int | str | None:
@@ -48,7 +43,7 @@ def _sellable_cargo(inventory: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
-def cmd_buy(app: ControlRoomApp, rest: str) -> None:
+def cmd_buy(app: TradeHost, rest: str) -> None:
     if not app._check_routine_ready():
         return
     parts = rest.split(None, 1)
@@ -93,7 +88,7 @@ def cmd_buy(app: ControlRoomApp, rest: str) -> None:
     ))
 
 
-def cmd_sell(app: ControlRoomApp, rest: str) -> None:
+def cmd_sell(app: TradeHost, rest: str) -> None:
     if not app._check_routine_ready():
         return
     if rest:
@@ -120,7 +115,7 @@ def cmd_sell(app: ControlRoomApp, rest: str) -> None:
         sell_all(app)
 
 
-def sell_item(app: ControlRoomApp, target: str, amount: int | str) -> None:
+def sell_item(app: TradeHost, target: str, amount: int | str) -> None:
     progress = app._make_progress()
     controls = app._make_controls(progress)
     sleeper = app._make_sleeper()
@@ -146,7 +141,7 @@ def sell_item(app: ControlRoomApp, target: str, amount: int | str) -> None:
     ))
 
 
-def sell_all(app: ControlRoomApp) -> None:
+def sell_all(app: TradeHost) -> None:
     inventory = _sellable_cargo(app._ship.cargo_inventory)
     used_fallback = False
     if not inventory:

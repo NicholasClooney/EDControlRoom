@@ -1,23 +1,14 @@
-"""Command dispatch and the simple, no-routine commands (commands, help,
-replay, verbose, market).
-
-Tightly coupled to ControlRoomApp — split for file size.
-"""
+"""Command dispatch and the simple, no-routine commands."""
 from __future__ import annotations
-
-from typing import TYPE_CHECKING
 
 from rich.markup import escape
 
 from edap.control_room.help import CONTROL_ROOM_COMMAND_INDEX, CONTROL_ROOM_COMMANDS
 from edap.control_room.history import now_iso
+from edap.control_room.interfaces import CommandHost
 from edap.control_room_state import CommandHistoryEntry
 
-if TYPE_CHECKING:
-    from control_room import ControlRoomApp
-
-
-def dispatch(app: ControlRoomApp, raw: str) -> None:
+def dispatch(app: CommandHost, raw: str) -> None:
     app._log(f"[dim]Command: {escape(raw)}[/]")
     cmd = raw.lower()
     if cmd in {"q", "quit", "exit"}:
@@ -78,18 +69,18 @@ def dispatch(app: ControlRoomApp, raw: str) -> None:
         app._log(f"[dim]Unknown command: {escape(raw)}[/]")
 
 
-def cmd_commands(app: ControlRoomApp) -> None:
+def cmd_commands(app: CommandHost) -> None:
     app._log("[dim]Supported commands:[/]")
     for command in CONTROL_ROOM_COMMANDS:
         aliases = f" [dim](aliases: {', '.join(command.aliases)})[/]" if command.aliases else ""
         app._log(f"[bold]{escape(command.usage)}[/] — {escape(command.summary)}{aliases}")
 
 
-def cmd_resume(app: ControlRoomApp) -> None:
+def cmd_resume(app: CommandHost) -> None:
     app._show_resume_picker()
 
 
-def cmd_help(app: ControlRoomApp, rest: str) -> None:
+def cmd_help(app: CommandHost, rest: str) -> None:
     topic = rest.strip().lower()
     if not topic:
         app._log("[dim]Use [bold]commands[/] to list everything, or [bold]help <command>[/] for one command in plain English.[/]")
@@ -108,7 +99,7 @@ def cmd_help(app: ControlRoomApp, rest: str) -> None:
     app._log(escape(command.detail))
 
 
-def cmd_verbose(app: ControlRoomApp, rest: str) -> None:
+def cmd_verbose(app: CommandHost, rest: str) -> None:
     if rest in {"on", "1", "true"}:
         app._verbose_controls = True
         app._log("[dim]Verbose key logging on — key presses will appear in the activity log.[/]")
@@ -120,7 +111,7 @@ def cmd_verbose(app: ControlRoomApp, rest: str) -> None:
         app._log(f"[dim]verbose {state}  —  use: verbose on | verbose off[/]")
 
 
-def cmd_market(app: ControlRoomApp, rest: str) -> None:
+def cmd_market(app: CommandHost, rest: str) -> None:
     rest_lower = rest.lower()
     if rest_lower == "lock":
         app._market.locked = True

@@ -65,3 +65,36 @@ class ReplaySelection:
     entry: CommandHistoryEntry
     label: str
     detail: str
+
+
+@dataclass
+class PromptState:
+    haul_params: dict[str, str] = field(default_factory=dict)
+    haul_prompt_defaults: dict[str, str] = field(default_factory=dict)
+    haul_prompt_step: str = ""
+    haul_confirm_buy_station: str = ""
+    dest_prompt_destination: str = ""
+    dest_prompt_settle_default: float | None = None
+
+
+@dataclass
+class HistoryState:
+    entries: list[str] = field(default_factory=list)
+    pos: int = 0
+    draft: str = ""
+
+
+@dataclass
+class ReplayBrowserState:
+    entries: list[ReplaySelection] = field(default_factory=list)
+    open: bool = False
+    filter_text: str = ""
+
+
+@dataclass
+class RuntimeUIState:
+    routine_active: bool = False
+    active_routine_name: str | None = None
+    verbose_controls: bool = False
+    shutdown_requested: bool = False
+    shutdown_finalized: bool = False

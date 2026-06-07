@@ -1,0 +1,147 @@
+from __future__ import annotations
+
+import time
+from typing import Any, Callable, Protocol
+
+from rich.markup import escape
+from textual.worker import get_current_worker
+
+from edap.progress_controls import ProgressShipControls
+from edap.state import JournalWatcher
+
+
+class RoutineCancelled(Exception):
+    """Raised when a control-room routine worker is cancelled."""
+
+
+class CancellationProxy:
+    def __init__(self, target: Any, check_cancelled: Callable[[], None]) -> None:
+        self._target = target
+        self._check_cancelled = check_cancelled
+
+    def __getattr__(self, name: str) -> Any:
+        attr = getattr(self._target, name)
+        if not callable(attr):
+            return attr
+
+        def wrapped(*args: Any, **kwargs: Any) -> Any:
+            self._check_cancelled()
+            return attr(*args, **kwargs)
+
+        return wrapped
+
+
+class WorkerHost(Protocol):
+    _controls: Any
+    _journal_dir: Any
+    _verbose_controls: bool
+    _routine_worker: Any | None
+    _routine_active: bool
+    _active_routine_name: str | None
+    _shutdown_requested: bool
+
+    def _log(self, msg: str) -> None: ...
+    def _handle_event(self, ev: dict[str, Any]) -> None: ...
+    def _load_market_json(self) -> None: ...
+    def _refresh_haul_stats(self) -> None: ...
+    def _stop_haul_stats(self) -> None: ...
+    def _finalize_shutdown(self) -> None: ...
+    def call_from_thread(self, callback: Callable[..., Any], *args: Any) -> None: ...
+
+
+def start_watcher_loop(app: WorkerHost) -> None:
+    worker = get_current_worker()
+    watcher = JournalWatcher(app._journal_dir)
+    last_market_check = 0.0
+    while not worker.is_cancelled:
+        try:
+            for ev in watcher.poll():
+                app.call_from_thread(app._handle_event, ev)
+            now = time.monotonic()
+            if now - last_market_check > 2.0:
+                app.call_from_thread(app._load_market_json)
+                app.call_from_thread(app._refresh_haul_stats)
+                last_market_check = now
+        except Exception:
+            time.sleep(1.0)
+
+
+def check_routine_ready(app: WorkerHost) -> bool:
+    if app._controls is None:
+        app._log("[red]Controls unavailable — check bindings config[/]")
+        return False
+    if app._routine_active:
+        app._log("[yellow]A routine is already running — wait for it to finish[/]")
+        return False
+    return True
+
+
+def raise_if_worker_cancelled() -> None:
+    worker = get_current_worker()
+    if worker.is_cancelled:
+        raise RoutineCancelled()
+
+
+def make_progress(app: WorkerHost) -> Callable[[str], None]:
+    def progress(msg: str) -> None:
+        raise_if_worker_cancelled()
+        app.call_from_thread(app._log, f"[dim]  {escape(msg)}[/]")
+
+    return progress
+
+
+def make_controls(app: WorkerHost, progress_fn: Callable[[str], None]) -> ProgressShipControls:
+    controls = ProgressShipControls(app._controls, progress_fn, verbose=app._verbose_controls)
+    return CancellationProxy(controls, raise_if_worker_cancelled)
+
+
+def make_watcher(app: WorkerHost) -> Any:
+    watcher = JournalWatcher(app._journal_dir)
+    return CancellationProxy(watcher, raise_if_worker_cancelled)
+
+
+def make_sleeper() -> Callable[[float], None]:
+    def sleeper(delay_s: float) -> None:
+        deadline = time.monotonic() + max(0.0, delay_s)
+        while True:
+            raise_if_worker_cancelled()
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return
+            time.sleep(min(0.1, remaining))
+
+    return sleeper
+
+
+def run_routine_thread(
+    app: WorkerHost,
+    fn: Callable[[], Any],
+) -> None:
+    worker = get_current_worker()
+    try:
+        result = fn()
+        if worker.is_cancelled:
+            app.call_from_thread(app._log, "[yellow]Routine cancelled.[/]")
+        elif result is not None:
+            status = result.dispatch.status
+            color = "green" if status == "ok" else "yellow"
+            app.call_from_thread(
+                app._log,
+                f"[{color}]Done: {escape(result.action)} ({escape(status)})[/]",
+            )
+    except RoutineCancelled:
+        app.call_from_thread(app._log, "[yellow]Routine cancelled.[/]")
+    except Exception as exc:
+        app.call_from_thread(app._log, f"[red]Routine error: {escape(str(exc))}[/]")
+    finally:
+        app.call_from_thread(clear_routine, app)
+
+
+def clear_routine(app: WorkerHost) -> None:
+    app._routine_active = False
+    app._routine_worker = None
+    if app._active_routine_name == "haul":
+        app._stop_haul_stats()
+    app._active_routine_name = None
+    if app._shutdown_requested:
+        app._finalize_shutdown()

@@ -1,21 +1,15 @@
-"""Haul-loop routine launcher (cmd_haul, dispatch_haul_loop).
-
-Tightly coupled to ControlRoomApp — split for file size.
-"""
+"""Haul-loop routine launcher (cmd_haul, dispatch_haul_loop)."""
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING
 
 from rich.markup import escape
 
 from edap.control_room.history import now_iso
+from edap.control_room.interfaces import HaulHost
 from edap.control_room_state import CommandHistoryEntry
 from edap.routines import haul_loop
 from edap.routines.haul import _detect_phase
-
-if TYPE_CHECKING:
-    from control_room import ControlRoomApp
 
 
 _CONFIRM_STATION_RE = re.compile(r"^Assume current station (.+) is the buy station\?$")
@@ -31,7 +25,7 @@ def _station_from_confirmation_prompt(prompt: str) -> str:
     return raw_station
 
 
-def cmd_haul(app: ControlRoomApp, rest: str) -> None:
+def cmd_haul(app: HaulHost, rest: str) -> None:
     if not app._check_routine_ready():
         return
     commodity = rest.strip()
@@ -41,7 +35,7 @@ def cmd_haul(app: ControlRoomApp, rest: str) -> None:
         app._start_haul_prompt(commodity=commodity, prompt_for_commodity=False)
 
 
-def dispatch_haul_loop(app: ControlRoomApp) -> None:
+def dispatch_haul_loop(app: HaulHost) -> None:
     commodity = app._haul_params.get("commodity", "")
     buy_station = app._haul_params.get("buy_station", "")
     sell_station = app._haul_params.get("sell_station", "")

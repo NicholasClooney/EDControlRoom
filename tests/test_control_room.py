@@ -23,6 +23,8 @@ from edap.config import (
     RuntimeConfig,
     ScreenConfig,
 )
+from edap.control_room.events import apply_ship_event
+from edap.control_room.models import ShipState
 from edap.control_room_state import CommandHistoryEntry
 from edap.routines import RoutineResult
 from edap.runtime import ResolvedPath, RuntimeContext
@@ -673,6 +675,26 @@ class ControlRoomDispatchTests(unittest.TestCase):
         entry = self._last_history()
         self.assertEqual(entry.command, "market")
         self.assertEqual(entry.params, {"value": "filter Aluminium"})
+
+
+class ControlRoomEventReducerTests(unittest.TestCase):
+    def test_undocked_waits_for_no_track_before_clearing_station(self) -> None:
+        ship = ShipState(system="HIP 58412", station="Pawelczyk Dock", status="in_station")
+
+        apply_ship_event(ship, {"event": "Undocked", "StationName": "Pawelczyk Dock"})
+
+        self.assertEqual(ship.status, "in_undocking")
+        self.assertEqual(ship.station, "Pawelczyk Dock")
+
+        apply_ship_event(ship, {"event": "Music", "MusicTrack": "DockingComputer"})
+
+        self.assertEqual(ship.status, "in_undocking")
+        self.assertEqual(ship.station, "Pawelczyk Dock")
+
+        apply_ship_event(ship, {"event": "Music", "MusicTrack": "NoTrack"})
+
+        self.assertEqual(ship.status, "in_space")
+        self.assertIsNone(ship.station)
 
 
 if __name__ == "__main__":

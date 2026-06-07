@@ -1,18 +1,10 @@
-"""Station routine launchers (dock, undock).
-
-Tightly coupled to ControlRoomApp — split for file size.
-"""
+"""Station routine launchers (dock, undock)."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
+from edap.control_room.interfaces import RoutineHost
 from edap.routines import dock, undock
 
-if TYPE_CHECKING:
-    from control_room import ControlRoomApp
-
-
-def cmd_dock(app: ControlRoomApp) -> None:
+def cmd_dock(app: RoutineHost) -> None:
     if not app._check_routine_ready():
         return
     skip_scx = app._ship.status == "in_space"
@@ -36,7 +28,7 @@ def cmd_dock(app: ControlRoomApp) -> None:
     ))
 
 
-def cmd_undock(app: ControlRoomApp) -> None:
+def cmd_undock(app: RoutineHost) -> None:
     if not app._check_routine_ready():
         return
     progress = app._make_progress()
