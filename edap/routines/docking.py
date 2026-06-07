@@ -349,6 +349,7 @@ def undock(
     watcher: SupportsPollEvents,
     *,
     undock_timeout_s: float = 30.0,
+    no_track_timeout_s: float = 60.0,
     step_delay_s: float = 0.3,
     time_fn: Callable[[], float] = monotonic,
     sleeper: Callable[[float], None] = sleep,
@@ -356,6 +357,8 @@ def undock(
 ) -> RoutineResult:
     if undock_timeout_s < 0:
         raise ValueError("undock_timeout_s must be non-negative")
+    if no_track_timeout_s < 0:
+        raise ValueError("no_track_timeout_s must be non-negative")
     if step_delay_s < 0:
         raise ValueError("step_delay_s must be non-negative")
 
@@ -427,12 +430,12 @@ def undock(
     if progress_fn is not None:
         station = undocked_event.get("StationName", "")
         progress_fn(f"Undocked: {station}" if station else "Undocked")
-        progress_fn(f"Waiting for NoTrack / clear of station (timeout {undock_timeout_s:.0f}s)...")
+        progress_fn(f"Waiting for NoTrack / clear of station (timeout {no_track_timeout_s:.0f}s)...")
 
     no_track_event = _wait_for_event(
         watcher,
         predicate=_is_music_no_track_event,
-        deadline=time_fn() + undock_timeout_s,
+        deadline=time_fn() + no_track_timeout_s,
         time_fn=time_fn,
     )
     if no_track_event is None:
@@ -441,10 +444,10 @@ def undock(
             dispatch=ActionDispatchResult(
                 action="Undocked",
                 status="error",
-                reason=f"NoTrack music event was not observed within {undock_timeout_s:.0f}s after Undocked",
+                reason=f"NoTrack music event was not observed within {no_track_timeout_s:.0f}s after Undocked",
             ),
             trigger_event=undocked_event,
-            details={"phase": "wait_for_no_track", "undock_timeout_s": undock_timeout_s},
+            details={"phase": "wait_for_no_track", "no_track_timeout_s": no_track_timeout_s},
         )
 
     if progress_fn is not None:

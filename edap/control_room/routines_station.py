@@ -36,6 +36,7 @@ def cmd_undock(app: RoutineHost) -> None:
     sleeper = app._make_sleeper()
     step_delay = app._config.controls.step_delay_seconds
     undock_timeout = app._config.controls.undock_timeout_seconds
+    no_track_timeout = app._config.controls.undock_no_track_timeout_seconds
     watcher = app._make_watcher()
 
     app._routine_active = True
@@ -44,6 +45,7 @@ def cmd_undock(app: RoutineHost) -> None:
         controls,
         watcher,
         undock_timeout_s=undock_timeout,
+        no_track_timeout_s=no_track_timeout,
         step_delay_s=step_delay,
         sleeper=sleeper,
         progress_fn=progress,

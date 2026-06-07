@@ -196,6 +196,7 @@ class _HaulCtx:
     dock_timeout_s: float
     request_timeout_s: float
     undock_timeout_s: float
+    undock_no_track_timeout_s: float
     trade_timeout_s: float
     settle_s: float
     galaxy_map_settle_s: float
@@ -279,6 +280,7 @@ def _run_undock_sell(ctx: _HaulCtx) -> tuple[RoutineResult | None, Phase | None]
     result = undock(
         ctx.controls, ctx.watcher,
         undock_timeout_s=ctx.undock_timeout_s,
+        no_track_timeout_s=ctx.undock_no_track_timeout_s,
         step_delay_s=ctx.step_delay_s,
         time_fn=ctx.time_fn,
         sleeper=ctx.sleeper,
@@ -368,6 +370,7 @@ def _run_undock_buy(ctx: _HaulCtx) -> tuple[RoutineResult | None, Phase | None]:
     result = undock(
         ctx.controls, ctx.watcher,
         undock_timeout_s=ctx.undock_timeout_s,
+        no_track_timeout_s=ctx.undock_no_track_timeout_s,
         step_delay_s=ctx.step_delay_s,
         time_fn=ctx.time_fn,
         sleeper=ctx.sleeper,
@@ -455,6 +458,7 @@ def haul_loop(
     dock_timeout_s: float = 600.0,
     request_timeout_s: float = 20.0,
     undock_timeout_s: float = 30.0,
+    undock_no_track_timeout_s: float = 60.0,
     trade_timeout_s: float = 30.0,
     settle_s: float = 2.0,
     galaxy_map_settle_s: float = 2.0,
@@ -503,6 +507,7 @@ def haul_loop(
         dock_timeout_s=dock_timeout_s,
         request_timeout_s=request_timeout_s,
         undock_timeout_s=undock_timeout_s,
+        undock_no_track_timeout_s=undock_no_track_timeout_s,
         trade_timeout_s=trade_timeout_s,
         settle_s=settle_s,
         galaxy_map_settle_s=galaxy_map_settle_s,

@@ -444,6 +444,7 @@ def main() -> int:
         if args.undock_timeout_seconds is not None
         else loaded.config.controls.undock_timeout_seconds
     )
+    undock_no_track_timeout_seconds = loaded.config.controls.undock_no_track_timeout_seconds
     journal_dir = runtime.journal.effective_path
     journal_source = runtime.journal.cli_source_status()
     routine_needs_journal = args.routine in {
@@ -620,6 +621,7 @@ def main() -> int:
                 logging_controls,
                 watcher,
                 undock_timeout_s=undock_timeout_seconds,
+                no_track_timeout_s=undock_no_track_timeout_seconds,
                 step_delay_s=step_delay_seconds,
                 sleeper=logging_sleeper,
                 progress_fn=_progress,
@@ -666,6 +668,7 @@ def main() -> int:
                 dock_timeout_s=dock_timeout_seconds,
                 request_timeout_s=args.request_timeout_seconds,
                 undock_timeout_s=undock_timeout_seconds,
+                undock_no_track_timeout_s=undock_no_track_timeout_seconds,
                 trade_timeout_s=args.trade_timeout_seconds,
                 settle_s=args.settle_seconds,
                 galaxy_map_settle_s=(
