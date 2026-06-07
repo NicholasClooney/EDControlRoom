@@ -17,9 +17,11 @@ from edap.routines.market import market_buy, market_sell
 class Phase(Enum):
     SELL = auto()
     UNDOCK_SELL = auto()
+    DEPART_SELL_SYSTEM = auto()
     TRANSIT_TO_BUY = auto()
     BUY = auto()
     UNDOCK_BUY = auto()
+    DEPART_BUY_SYSTEM = auto()
     TRANSIT_TO_SELL = auto()
 
 
@@ -174,7 +176,23 @@ def _detect_phase(
             f"expected sell={sell_station!r} or buy={buy_station!r}"
         )
 
-    # Not docked (supercruise, normal_space, unknown)
+    sell_system_lower = sell_system.lower()
+    buy_system_lower = buy_system.lower()
+    current_system_lower = current_system.lower()
+
+    if current_system_lower and sell_system_lower and current_system_lower == sell_system_lower:
+        if has_target_cargo:
+            return Phase.TRANSIT_TO_SELL, buy_station
+        if ship_status == "normal_space":
+            return Phase.DEPART_SELL_SYSTEM, buy_station
+        return Phase.TRANSIT_TO_BUY, buy_station
+
+    if current_system_lower and buy_system_lower and current_system_lower == buy_system_lower:
+        if has_target_cargo and ship_status == "normal_space":
+            return Phase.DEPART_BUY_SYSTEM, buy_station
+        return (Phase.UNDOCK_BUY if has_target_cargo else Phase.TRANSIT_TO_BUY), buy_station
+
+    # Not docked outside the configured buy/sell systems.
     if has_target_cargo:
         return Phase.TRANSIT_TO_SELL, buy_station
     return Phase.TRANSIT_TO_BUY, buy_station
@@ -315,6 +333,40 @@ def _run_undock_sell(ctx: _HaulCtx) -> tuple[RoutineResult | None, Phase | None]
     return result, Phase.TRANSIT_TO_BUY
 
 
+def _set_departure_route_and_escape(
+    ctx: _HaulCtx,
+    *,
+    destination: str,
+) -> None:
+    if destination:
+        if ctx.progress_fn is not None:
+            ctx.progress_fn(f"Setting galaxy map destination: {destination}...")
+        set_gal_map_destination(
+            ctx.controls,
+            destination=destination,
+            journal_dir=ctx.journal_dir,
+            step_delay_s=ctx.step_delay_s,
+            map_settle_s=ctx.galaxy_map_settle_s,
+            progress_fn=ctx.progress_fn,
+        )
+    escape_mass_lock(
+        ctx.controls,
+        journal_dir=ctx.journal_dir,
+        safety_delay_s=ctx.mass_lock_escape_safety_delay_s,
+        step_delay_s=ctx.step_delay_s,
+        boost_delay_s=ctx.mass_lock_boost_delay_s,
+        sleeper=ctx.sleeper,
+        progress_fn=ctx.progress_fn,
+    )
+
+
+def _run_depart_sell_system(ctx: _HaulCtx) -> tuple[RoutineResult | None, Phase | None]:
+    if ctx.progress_fn is not None:
+        ctx.progress_fn(f"Resuming from sell system{ctx.sell_label} in normal space...")
+    _set_departure_route_and_escape(ctx, destination=ctx.buy_system)
+    return None, Phase.TRANSIT_TO_BUY
+
+
 def _run_transit_to_buy(ctx: _HaulCtx) -> tuple[RoutineResult | None, Phase | None]:
     if ctx.progress_fn is not None:
         ctx.progress_fn(f"Waiting for drop near buy station{ctx.buy_label}...")
@@ -405,6 +457,13 @@ def _run_undock_buy(ctx: _HaulCtx) -> tuple[RoutineResult | None, Phase | None]:
     return result, Phase.TRANSIT_TO_SELL
 
 
+def _run_depart_buy_system(ctx: _HaulCtx) -> tuple[RoutineResult | None, Phase | None]:
+    if ctx.progress_fn is not None:
+        ctx.progress_fn(f"Resuming from buy system{ctx.buy_label} in normal space...")
+    _set_departure_route_and_escape(ctx, destination=ctx.sell_system)
+    return None, Phase.TRANSIT_TO_SELL
+
+
 def _run_transit_to_sell(ctx: _HaulCtx) -> tuple[RoutineResult | None, Phase | None]:
     if ctx.progress_fn is not None:
         ctx.progress_fn(f"Waiting for drop near sell station{ctx.sell_label}...")
@@ -435,9 +494,11 @@ def _run_transit_to_sell(ctx: _HaulCtx) -> tuple[RoutineResult | None, Phase | N
 _PHASE_RUNNERS: dict[Phase, Callable[[_HaulCtx], tuple[RoutineResult | None, Phase | None]]] = {
     Phase.SELL: _run_sell,
     Phase.UNDOCK_SELL: _run_undock_sell,
+    Phase.DEPART_SELL_SYSTEM: _run_depart_sell_system,
     Phase.TRANSIT_TO_BUY: _run_transit_to_buy,
     Phase.BUY: _run_buy,
     Phase.UNDOCK_BUY: _run_undock_buy,
+    Phase.DEPART_BUY_SYSTEM: _run_depart_buy_system,
     Phase.TRANSIT_TO_SELL: _run_transit_to_sell,
 }
 

@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from edap.routines import haul_loop
-from edap.routines.haul import Phase, _detect_phase
+from edap.routines.haul import Phase, _HaulCtx, _detect_phase, _run_depart_sell_system
 from tests.fakes import FakeShipControls, FakeWatcher
 
 _STATION = "Pawelczyk Dock"
@@ -265,6 +265,22 @@ class DetectPhaseTests(unittest.TestCase):
             phase, _ = self._call(d)
         self.assertEqual(phase, Phase.TRANSIT_TO_SELL)
 
+    def test_normal_space_in_sell_system_empty_hold_departs_to_buy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            _write_journal(d, [{"event": "SupercruiseExit", "StarSystem": "Sol"}])
+            _write_cargo(d, [])
+            phase, _ = self._call(d, sell_system="Sol", buy_system="Achenar")
+        self.assertEqual(phase, Phase.DEPART_SELL_SYSTEM)
+
+    def test_normal_space_in_buy_system_with_target_cargo_departs_to_sell(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            _write_journal(d, [{"event": "Undocked", "StarSystem": "Achenar"}])
+            _write_cargo(d, [{"Name": _COMMODITY_LOWER, "Count": 100}])
+            phase, _ = self._call(d, sell_system="Sol", buy_system="Achenar")
+        self.assertEqual(phase, Phase.DEPART_BUY_SYSTEM)
+
     def test_not_docked_empty_hold(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
@@ -404,6 +420,54 @@ class DetectPhaseResumeIntegrationTest(unittest.TestCase):
         # Only one boost (one dock call — TRANSIT_TO_SELL)
         boost_calls = [c for c in controls.calls if c["action"] == "UseBoostJuice"]
         self.assertEqual(len(boost_calls), 1)
+
+    def test_depart_sell_system_phase_sets_route_without_undocking(self) -> None:
+        controls = FakeShipControls()
+        watcher = FakeWatcher([])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            (d / "Status.json").write_text(
+                json.dumps({"Flags": 0}),
+                encoding="utf-8",
+            )
+            ctx = _HaulCtx(
+                controls,
+                watcher,
+                journal_dir=d,
+                market_path=d / "Market.json",
+                commodity=_COMMODITY,
+                sell_station=_STATION,
+                buy_station=_BUY_STATION,
+                sell_system="Sol",
+                buy_system="Achenar",
+                step_delay_s=0.0,
+                max_hold_s=10.0,
+                dock_timeout_s=30.0,
+                request_timeout_s=10.0,
+                undock_timeout_s=10.0,
+                undock_no_track_timeout_s=10.0,
+                trade_timeout_s=10.0,
+                settle_s=0.0,
+                galaxy_map_settle_s=0.0,
+                boost_settle_s=0.0,
+                deny_retry_delay_s=0.0,
+                mass_lock_escape_safety_delay_s=0.0,
+                mass_lock_boost_delay_s=0.0,
+                max_dock_retries=1,
+                time_fn=_ticking_clock(),
+                sleeper=lambda _: None,
+                progress_fn=None,
+                sell_label=f" ({_STATION})",
+                buy_label=f" ({_BUY_STATION})",
+            )
+            result, next_phase = _run_depart_sell_system(ctx)
+
+        self.assertIsNone(result)
+        self.assertEqual(next_phase, Phase.TRANSIT_TO_BUY)
+        actions = [call["action"] for call in controls.calls]
+        self.assertIn("GalaxyMapOpen", actions)
+        self.assertNotIn("HeadLookReset", actions)
 
 
 class SellPhaseNarrowedToTargetTest(unittest.TestCase):
