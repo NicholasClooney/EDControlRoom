@@ -26,7 +26,7 @@ Market commands:
 Other:
     commands           list supported commands
     help [command]     explain a command in plain English
-    resume             open the recent-command picker
+    replay             open the recent-command picker
     q / quit           cancel active work if needed, then exit
 """
 from __future__ import annotations
@@ -75,7 +75,7 @@ _ALL_ROUTINE_ACTIONS = [
     "GalaxyMapOpen", "CamZoomIn",
 ]
 
-_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | resume | dock | undock | buy <item> [N] | sell [item] | haul [commodity] | dest <system> | market ... | q"
+_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | buy <item> [N] | sell [item] | haul [commodity] | dest <system> | market ... | q"
 
 
 # ── State ──────────────────────────────────────────────────────────────────────
@@ -213,10 +213,11 @@ _COMMANDS: list[_CommandHelp] = [
         aliases=("?",),
     ),
     _CommandHelp(
-        name="resume",
-        usage="resume",
+        name="replay",
+        usage="replay",
         summary="Open the recent-command picker for execute-or-edit replay.",
         detail="Shows a scrollable list of recent saved commands across sessions. Press Enter to execute the selected entry immediately, press e to reopen it for editing, or press * on a haul entry to save or clear it as the default haul setup.",
+        aliases=("history",),
     ),
     _CommandHelp(
         name="quit",
@@ -1610,8 +1611,8 @@ class ControlRoomApp(App[None]):
         elif verb in {"help", "?"}:
             self._record_history_entry(CommandHistoryEntry(raw=raw, command="help", params={"topic": raw_rest}, timestamp=_now_iso()))
             self._cmd_help(raw_rest)
-        elif verb == "resume":
-            self._record_history_entry(CommandHistoryEntry(raw=raw, command="resume", timestamp=_now_iso()))
+        elif verb in {"replay", "history"}:
+            self._record_history_entry(CommandHistoryEntry(raw=raw, command="replay", timestamp=_now_iso()))
             self._cmd_resume()
         else:
             self._log(f"[dim]Unknown command: {escape(raw)}[/]")
