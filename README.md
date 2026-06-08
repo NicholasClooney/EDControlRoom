@@ -1,6 +1,6 @@
 # EDAutopilot MK II
 
-macOS-first Elite Dangerous automation tooling for CrossOver, with Windows input/control-room support now restored in the active runtime.
+Multiplatform Elite Dangerous automation tooling focused on a shared runtime across macOS, Windows, and Linux. The active runtime is currently validated on macOS with Elite running through CrossOver, and community testing is still needed to validate the Windows and Linux paths.
 
 The current operator surface is [`control_room.py`](control_room.py). The project is not a full autopilot yet; it is a live runtime and routine stack built around journal parsing, bindings lookup, synthetic input, and early workflow automation.
 
@@ -12,8 +12,8 @@ See [docs/STATUS.md](docs/STATUS.md) for the maintained status, validation notes
 
 What works today:
 
-- macOS journal, bindings, screen-capture, and Quartz input plumbing
-- journal-driven `jump`, `dock`, `undock`, `buy`, `sell`, `haul`, and `dest` flows
+- shared journal parsing, bindings lookup, and platform input/runtime plumbing across supported targets
+- journal-driven `haul`, `jump`, `dock`, `undock`, `buy`, `sell`, and `dest` flows
 - a live Control Room TUI with ship status, activity log, market panel, replay history, and saved default haul setup
 
 What is not done:
@@ -22,21 +22,18 @@ What is not done:
 
 ## Primary Entrypoints
 
-- `uv run python3 control_room.py --config config.toml`
-- `uv run python3 run_routine.py --config config.toml --routine haul_loop`
-- `uv run python3 diagnostics.py --config config.toml`
-- `uv run python3 ship_controls.py --config config.toml --action SetSpeedZero --delay-seconds 3`
+- `uv run python3 control_room.py`
+- `uv run python3 run_routine.py --routine haul_loop`
+- `uv run python3 diagnostics.py`
+- `uv run python3 ship_controls.py --action SetSpeedZero --delay-seconds 3`
 
 ## Routine Overview
 
-`haul` is the strongest current end-to-end routine. Around it, the active routine surface includes:
+`haul` is the strongest current end-to-end routine and the clearest example of what the active runtime is for. It automates a repeatable trade loop between two stations: resuming from the current game state, docking when needed, navigating station services, buying the target commodity, launching, plotting the return destination, and selling cargo at the other end.
 
-- `dock`
-- `undock`
-- `jump`
-- `buy`
-- `sell`
-- `dest`
+That makes it directly useful for high-volume A-to-B cargo work such as the current community goal hauling loops, where the repetitive station-to-station trading cycle is the part worth automating.
+
+Around that primary flow, the active routine surface also includes `dock`, `undock`, `jump`, `buy`, `sell`, and `dest`.
 
 These are built to be manually exercised against a live Elite session running through CrossOver, not left unattended.
 

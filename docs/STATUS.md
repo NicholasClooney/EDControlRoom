@@ -2,7 +2,7 @@
 
 _This is the maintained status document for the repo. Update it at the end of each session when project understanding, port status, or next steps change. Keep it current over time rather than treating it as a frozen checkpoint._
 
-Last updated: 2026-06-08 (session 48)
+Last updated: 2026-06-08 (session 49)
 
 ## Where We Are
 
@@ -167,6 +167,10 @@ These are not scheduled yet but worth capturing for planning.
 - Consider a dedicated market-state helper if market locking/filtering/loading grows beyond the current simple flow.
 - Add more focused tests around facade/protocol behavior if future refactors start removing compatibility shims.
 - **Repo cleanup and positioning.** Plan 0006 is implemented: macOS-first / CrossOver support is now explicit in the README, Control Room is the primary entrypoint, the live screenshot is tracked under `docs/assets/control-room.png`, legacy Windows-era files are archived under `archive/legacy-windows/`, scratch probes live under `tools/scratch/`, and low-level utility detail moved into `docs/getting-started/`, `docs/operators/`, and `docs/diagnostics/`.
+- **README positioning follow-up.** The intro copy now frames EDAP as multiplatform automation tooling with a shared runtime across macOS, Windows, and Linux, while stating that the active runtime is currently validated on macOS + CrossOver and still needs community validation on Windows and Linux.
+- **README wording cleanup.** The current-surface summary no longer leads with macOS-specific plumbing; it now describes the shared journal/bindings/input runtime in platform-neutral terms.
+- **README entrypoint cleanup.** Primary entrypoint examples no longer redundantly pass `--config config.toml`; the scripts already default to `config.toml` and use the example config as a fallback when the default file is absent.
+- **README haul positioning cleanup.** The README now leads with `haul` as the primary operator-facing routine, explains the station-to-station trade loop it automates, and calls out the community-goal cargo-hauling use case instead of just listing related commands.
 - **Re-introducing 251a841 carefully.** Commit `251a841` (`feat: restore galaxy map sequence with polled NavRoute verification`) bundled multiple galaxy-map changes at once: routine logic moved from a single fixed settle/check flow to a poll/retry flow around `NavRoute.json`, added a `CamZoomIn` (`Z`) press during result selection, adjusted CLI/test coverage, and wired the `control_room.py` destination alias. We still want the useful parts, but the bundled behavior regressed live destination selection because `Z` could land while the search field was still active. Re-add the intended behavior one change at a time with live verification after each slice: 1) isolated NavRoute poll/retry logic, 2) any map-open/readiness detection, 3) only then any extra in-map navigation or zoom inputs if they prove necessary.
 
 - Next task in 0003: `undock` is live-validated. `refuel` is the only remaining routine; it remains intentionally deferred.
