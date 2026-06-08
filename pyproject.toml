@@ -10,18 +10,18 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Legacy / parked deps intentionally not included in any install extra:
+# "requests~=2.21.0",
+# "colorlog~=4.0.2",
+# "pystray~=0.14.4",
+# "PyAutoGUI~=0.9.42",
+# "kthread~=0.2.2",
+# "keyboard~=0.13.3",
 dev = [
   "numpy>=1.26",
   "opencv-python>=4.8",
   "pytesseract>=0.3.10",
   "Pillow>=9.0; sys_platform == 'darwin'",
-  # Legacy / parked surfaces kept installable for local experiments and archive work.
-  "requests~=2.21.0",
-  "colorlog~=4.0.2",
-  "pystray~=0.14.4",
-  "PyAutoGUI~=0.9.42",
-  "kthread~=0.2.2",
-  "keyboard~=0.13.3",
 ]
 
 [tool.uv]
