@@ -88,6 +88,19 @@ Examples:
 - `docs: update README for macOS-first roadmap`
 - `fix: handle missing bindings file gracefully`
 
+### Mixed Changesets
+
+- If a commit/review diff mixes concerns or includes unrelated edits, tell the user before committing.
+- Offer two options:
+
+1. Detailed approach
+- Separate and commit only the relevant hunks/files.
+
+2. Rough approach
+- Commit the broader tracked change set to save time/tokens.
+
+- Default to detailed unless the user explicitly prefers speed.
+
 ## Release Style
 
 - Tag stable releases as semantic versions like `v1.0.0`.
