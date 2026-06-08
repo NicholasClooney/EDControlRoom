@@ -46,33 +46,42 @@ name = "edautopilot"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'" },
+    { name = "rich" },
+    { name = "textual" },
+]
+
+[package.optional-dependencies]
+dev = [
     { name = "colorlog" },
     { name = "keyboard" },
     { name = "kthread" },
     { name = "numpy" },
     { name = "opencv-python" },
-    { name = "pillow" },
+    { name = "pillow", marker = "sys_platform == 'darwin'" },
     { name = "pyautogui" },
     { name = "pystray" },
     { name = "pytesseract" },
     { name = "requests" },
-    { name = "textual" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "colorlog", specifier = "~=4.0.2" },
-    { name = "keyboard", specifier = "~=0.13.3" },
-    { name = "kthread", specifier = "~=0.2.2" },
-    { name = "numpy", specifier = ">=1.26" },
-    { name = "opencv-python", specifier = ">=4.8" },
-    { name = "pillow", specifier = ">=9.0" },
-    { name = "pyautogui", specifier = "~=0.9.42" },
-    { name = "pystray", specifier = "~=0.14.4" },
-    { name = "pytesseract", specifier = ">=0.3.10" },
-    { name = "requests", specifier = "~=2.21.0" },
+    { name = "colorlog", marker = "extra == 'dev'", specifier = "~=4.0.2" },
+    { name = "keyboard", marker = "extra == 'dev'", specifier = "~=0.13.3" },
+    { name = "kthread", marker = "extra == 'dev'", specifier = "~=0.2.2" },
+    { name = "numpy", marker = "extra == 'dev'", specifier = ">=1.26" },
+    { name = "opencv-python", marker = "extra == 'dev'", specifier = ">=4.8" },
+    { name = "pillow", marker = "sys_platform == 'darwin' and extra == 'dev'", specifier = ">=9.0" },
+    { name = "pyautogui", marker = "extra == 'dev'", specifier = "~=0.9.42" },
+    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'", specifier = ">=12.1" },
+    { name = "pystray", marker = "extra == 'dev'", specifier = "~=0.14.4" },
+    { name = "pytesseract", marker = "extra == 'dev'", specifier = ">=0.3.10" },
+    { name = "requests", marker = "extra == 'dev'", specifier = "~=2.21.0" },
+    { name = "rich", specifier = ">=14.0" },
     { name = "textual", specifier = ">=0.60.0" },
 ]
+provides-extras = ["dev"]
 
 [[package]]
 name = "idna"

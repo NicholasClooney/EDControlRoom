@@ -1,12 +1,19 @@
-opencv_python~=4.11.0
-requests~=2.32.3
-numpy~=2.2.0
-colorlog~=6.9.0
-pystray~=0.19.5
-PyAutoGUI~=0.9.54
-kthread~=0.2.3
-keyboard~=0.13.5
-Pillow~=11.1.0
-pyobjc-framework-Quartz~=12.1; sys_platform == "darwin"
 rich~=14.0
+textual~=0.60
+pyobjc-framework-Quartz~=12.1; sys_platform == "darwin"
 
+# Optional macOS-only diagnostics / capture extras.
+# Pillow~=11.1.0
+
+# Optional CV / OCR extras used by scratch probes, not by control room or direct controls.
+# numpy~=2.2.0
+# opencv_python~=4.11.0
+# pytesseract~=0.3.10
+
+# Legacy / parked deps from the Windows-era prototype. Keep commented unless you are reviving those surfaces.
+# requests~=2.32.3
+# colorlog~=6.9.0
+# pystray~=0.19.5
+# PyAutoGUI~=0.9.54
+# kthread~=0.2.3
+# keyboard~=0.13.5
