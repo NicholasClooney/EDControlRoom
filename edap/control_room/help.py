@@ -13,8 +13,8 @@ CONTROL_ROOM_COMMANDS: list[CommandHelp] = [
     CommandHelp(
         name="undock",
         usage="undock",
-        summary="Launch from the current station and wait for the Undocked journal event.",
-        detail="Runs the station launch menu flow, then waits for the journal to confirm that the ship has actually undocked before reporting success.",
+        summary="Launch from the current station and wait until the ship is clear of the station.",
+        detail="Runs the station launch menu flow, waits for the Undocked journal event, then waits for the NoTrack music event that confirms the ship has cleared the station before reporting success.",
     ),
     CommandHelp(
         name="jump",

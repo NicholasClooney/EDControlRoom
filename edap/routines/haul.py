@@ -8,7 +8,7 @@ from time import monotonic, sleep
 from typing import Callable
 
 from edap.routines._base import RoutineResult, SupportsHaulControls, SupportsPollEvents
-from edap.routines.docking import dock, undock
+from edap.routines.docking import _undock_until_undocked, _wait_for_clear_of_station, dock
 from edap.routines.escape import escape_mass_lock
 from edap.routines.galaxy_map import set_gal_map_destination
 from edap.routines.market import market_buy, market_sell
@@ -220,7 +220,6 @@ class _HaulCtx:
     galaxy_map_settle_s: float
     boost_settle_s: float
     deny_retry_delay_s: float
-    mass_lock_escape_safety_delay_s: float
     mass_lock_boost_delay_s: float
     max_dock_retries: int
     time_fn: Callable[[], float]
@@ -295,10 +294,10 @@ def _run_sell(ctx: _HaulCtx) -> tuple[RoutineResult | None, Phase | None]:
 def _run_undock_sell(ctx: _HaulCtx) -> tuple[RoutineResult | None, Phase | None]:
     if ctx.progress_fn is not None:
         ctx.progress_fn(f"Undocking from sell station{ctx.sell_label}...")
-    result = undock(
-        ctx.controls, ctx.watcher,
+    result, pending_events = _undock_until_undocked(
+        ctx.controls,
+        ctx.watcher,
         undock_timeout_s=ctx.undock_timeout_s,
-        no_track_timeout_s=ctx.undock_no_track_timeout_s,
         step_delay_s=ctx.step_delay_s,
         time_fn=ctx.time_fn,
         sleeper=ctx.sleeper,
@@ -320,17 +319,26 @@ def _run_undock_sell(ctx: _HaulCtx) -> tuple[RoutineResult | None, Phase | None]
             map_settle_s=ctx.galaxy_map_settle_s,
             progress_fn=ctx.progress_fn,
         )
+    clear_result = _wait_for_clear_of_station(
+        ctx.watcher,
+        undocked_event=result.trigger_event,
+        no_track_timeout_s=ctx.undock_no_track_timeout_s,
+        time_fn=ctx.time_fn,
+        progress_fn=ctx.progress_fn,
+        pending_events=pending_events,
+    )
+    if clear_result.dispatch.status != "ok" and ctx.progress_fn is not None:
+        ctx.progress_fn(f"Warning: {clear_result.dispatch.reason}; continuing with mass-lock escape")
     escape_mass_lock(
         ctx.controls,
         journal_dir=ctx.journal_dir,
-        safety_delay_s=ctx.mass_lock_escape_safety_delay_s,
         step_delay_s=ctx.step_delay_s,
         boost_delay_s=ctx.mass_lock_boost_delay_s,
         sleeper=ctx.sleeper,
         progress_fn=ctx.progress_fn,
     )
 
-    return result, Phase.TRANSIT_TO_BUY
+    return clear_result if clear_result.dispatch.status == "ok" else result, Phase.TRANSIT_TO_BUY
 
 
 def _set_departure_route_and_escape(
@@ -352,7 +360,6 @@ def _set_departure_route_and_escape(
     escape_mass_lock(
         ctx.controls,
         journal_dir=ctx.journal_dir,
-        safety_delay_s=ctx.mass_lock_escape_safety_delay_s,
         step_delay_s=ctx.step_delay_s,
         boost_delay_s=ctx.mass_lock_boost_delay_s,
         sleeper=ctx.sleeper,
@@ -419,10 +426,10 @@ def _run_buy(ctx: _HaulCtx) -> tuple[RoutineResult | None, Phase | None]:
 def _run_undock_buy(ctx: _HaulCtx) -> tuple[RoutineResult | None, Phase | None]:
     if ctx.progress_fn is not None:
         ctx.progress_fn(f"Undocking from buy station{ctx.buy_label}...")
-    result = undock(
-        ctx.controls, ctx.watcher,
+    result, pending_events = _undock_until_undocked(
+        ctx.controls,
+        ctx.watcher,
         undock_timeout_s=ctx.undock_timeout_s,
-        no_track_timeout_s=ctx.undock_no_track_timeout_s,
         step_delay_s=ctx.step_delay_s,
         time_fn=ctx.time_fn,
         sleeper=ctx.sleeper,
@@ -444,17 +451,26 @@ def _run_undock_buy(ctx: _HaulCtx) -> tuple[RoutineResult | None, Phase | None]:
             map_settle_s=ctx.galaxy_map_settle_s,
             progress_fn=ctx.progress_fn,
         )
+    clear_result = _wait_for_clear_of_station(
+        ctx.watcher,
+        undocked_event=result.trigger_event,
+        no_track_timeout_s=ctx.undock_no_track_timeout_s,
+        time_fn=ctx.time_fn,
+        progress_fn=ctx.progress_fn,
+        pending_events=pending_events,
+    )
+    if clear_result.dispatch.status != "ok" and ctx.progress_fn is not None:
+        ctx.progress_fn(f"Warning: {clear_result.dispatch.reason}; continuing with mass-lock escape")
     escape_mass_lock(
         ctx.controls,
         journal_dir=ctx.journal_dir,
-        safety_delay_s=ctx.mass_lock_escape_safety_delay_s,
         step_delay_s=ctx.step_delay_s,
         boost_delay_s=ctx.mass_lock_boost_delay_s,
         sleeper=ctx.sleeper,
         progress_fn=ctx.progress_fn,
     )
 
-    return result, Phase.TRANSIT_TO_SELL
+    return clear_result if clear_result.dispatch.status == "ok" else result, Phase.TRANSIT_TO_SELL
 
 
 def _run_depart_buy_system(ctx: _HaulCtx) -> tuple[RoutineResult | None, Phase | None]:
@@ -525,7 +541,6 @@ def haul_loop(
     galaxy_map_settle_s: float = 2.0,
     boost_settle_s: float = 3.0,
     deny_retry_delay_s: float = 5.0,
-    mass_lock_escape_safety_delay_s: float = 15.0,
     mass_lock_boost_delay_s: float = 5.0,
     max_dock_retries: int = 3,
     time_fn: Callable[[], float] = monotonic,
@@ -574,7 +589,6 @@ def haul_loop(
         galaxy_map_settle_s=galaxy_map_settle_s,
         boost_settle_s=boost_settle_s,
         deny_retry_delay_s=deny_retry_delay_s,
-        mass_lock_escape_safety_delay_s=mass_lock_escape_safety_delay_s,
         mass_lock_boost_delay_s=mass_lock_boost_delay_s,
         max_dock_retries=max_dock_retries,
         time_fn=time_fn,

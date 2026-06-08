@@ -21,8 +21,6 @@ haul_dock_timeout_seconds = 600.0
 undock_timeout_seconds = 30.0
 # Time to wait after Undocked for the music NoTrack event that confirms the ship has cleared the station.
 undock_no_track_timeout_seconds = 60.0
-# Safety delay after undock before the mass-lock escape routine starts input.
-mass_lock_escape_safety_delay_seconds = 15.0
 # Default time to wait after Undocked for a stricter in-space confirmation event.
 undock_in_space_timeout_seconds = 180.0
 # Delay between each boost attempt while waiting for FSD mass lock to clear.

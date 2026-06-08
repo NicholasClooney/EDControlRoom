@@ -168,7 +168,6 @@ def dispatch_haul_loop(
             step_delay_s=step_delay,
             dock_timeout_s=dock_timeout,
             galaxy_map_settle_s=galaxy_map_settle,
-            mass_lock_escape_safety_delay_s=app._config.controls.mass_lock_escape_safety_delay_seconds,
             mass_lock_boost_delay_s=app._config.controls.mass_lock_boost_delay_seconds,
             sleeper=sleeper,
             progress_fn=progress,

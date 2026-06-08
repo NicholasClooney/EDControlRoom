@@ -326,6 +326,31 @@ class RoutinesTests(unittest.TestCase):
         self.assertEqual(result.trigger_event, {"event": "Music", "MusicTrack": "NoTrack"})
         self.assertEqual(result.details["undocked_event"], {"event": "Undocked", "StationName": "Pawelczyk Dock"})
 
+    def test_undock_preserves_same_batch_no_track_after_undocked(self) -> None:
+        controls = FakeShipControls()
+        watcher = FakeWatcher([
+            [],
+            [
+                {"event": "Undocked", "StationName": "Pawelczyk Dock"},
+                {"event": "Music", "MusicTrack": "NoTrack"},
+            ],
+        ])
+        time_values = iter([0.0, 0.0, 0.1, 0.2])
+
+        result = undock(
+            controls,
+            watcher,
+            undock_timeout_s=1.0,
+            no_track_timeout_s=1.0,
+            step_delay_s=0.0,
+            time_fn=lambda: next(time_values),
+            sleeper=lambda _: None,
+        )
+
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertEqual(result.action, "NoTrack")
+        self.assertEqual(result.trigger_event, {"event": "Music", "MusicTrack": "NoTrack"})
+
     def test_undock_errors_if_no_track_never_arrives(self) -> None:
         controls = FakeShipControls()
         watcher = FakeWatcher([
@@ -705,12 +730,6 @@ class EscapeMassLockTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaisesRegex(ValueError, "boost_delay_s"):
                 escape_mass_lock(controls, journal_dir=Path(tmp), boost_delay_s=-1.0)
-
-    def test_rejects_negative_safety_delay(self) -> None:
-        controls = FakeShipControls()
-        with tempfile.TemporaryDirectory() as tmp:
-            with self.assertRaisesRegex(ValueError, "safety_delay_s"):
-                escape_mass_lock(controls, journal_dir=Path(tmp), safety_delay_s=-1.0)
 
     def test_rejects_negative_step_delay(self) -> None:
         controls = FakeShipControls()

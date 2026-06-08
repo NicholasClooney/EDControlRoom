@@ -16,6 +16,7 @@ from edap.routines._base import (
     _is_supercruise_exit_event,
     _is_undocked_event,
     _wait_for_event,
+    _wait_for_event_with_pending,
 )
 
 
@@ -355,10 +356,49 @@ def undock(
     sleeper: Callable[[float], None] = sleep,
     progress_fn: Callable[[str], None] | None = None,
 ) -> RoutineResult:
+    result, pending_events = _undock_until_undocked(
+        controls,
+        watcher,
+        undock_timeout_s=undock_timeout_s,
+        step_delay_s=step_delay_s,
+        time_fn=time_fn,
+        sleeper=sleeper,
+        progress_fn=progress_fn,
+    )
+    if result.dispatch.status != "ok":
+        return result
+
+    clear_result = _wait_for_clear_of_station(
+        watcher,
+        undocked_event=result.trigger_event,
+        no_track_timeout_s=no_track_timeout_s,
+        time_fn=time_fn,
+        progress_fn=progress_fn,
+        pending_events=pending_events,
+    )
+    if clear_result.dispatch.status != "ok":
+        return clear_result
+
+    return RoutineResult(
+        action="NoTrack",
+        dispatch=result.dispatch,
+        trigger_event=clear_result.trigger_event,
+        details={"phase": "complete", "undocked_event": result.trigger_event},
+    )
+
+
+def _undock_until_undocked(
+    controls: SupportsUndockControls,
+    watcher: SupportsPollEvents,
+    *,
+    undock_timeout_s: float = 30.0,
+    step_delay_s: float = 0.3,
+    time_fn: Callable[[], float] = monotonic,
+    sleeper: Callable[[float], None] = sleep,
+    progress_fn: Callable[[str], None] | None = None,
+) -> tuple[RoutineResult, list[dict[str, object]]]:
     if undock_timeout_s < 0:
         raise ValueError("undock_timeout_s must be non-negative")
-    if no_track_timeout_s < 0:
-        raise ValueError("no_track_timeout_s must be non-negative")
     if step_delay_s < 0:
         raise ValueError("step_delay_s must be non-negative")
 
@@ -370,7 +410,7 @@ def undock(
             action="UI_Back",
             dispatch=dispatch,
             details={"phase": "reset"},
-        )
+        ), []
     if step_delay_s > 0:
         sleeper(step_delay_s)
 
@@ -380,7 +420,7 @@ def undock(
             action="HeadLookReset",
             dispatch=dispatch,
             details={"phase": "reset"},
-        )
+        ), []
     if step_delay_s > 0:
         sleeper(step_delay_s)
 
@@ -392,7 +432,7 @@ def undock(
             action="UI_Down",
             dispatch=dispatch,
             details={"phase": "navigate"},
-        )
+        ), []
     if step_delay_s > 0:
         sleeper(step_delay_s)
 
@@ -402,19 +442,20 @@ def undock(
             action="UI_Select",
             dispatch=launch_dispatch,
             details={"phase": "launch"},
-        )
+        ), []
 
     # Prime the watcher before waiting so events written during the menu walk
     # are not missed on the first poll.
-    watcher.poll()
+    pending_events = watcher.poll()
 
     if progress_fn is not None:
         progress_fn(f"Waiting for Undocked (timeout {undock_timeout_s:.0f}s)...")
-    undocked_event = _wait_for_event(
+    undocked_event, pending_events = _wait_for_event_with_pending(
         watcher,
         predicate=_is_undocked_event,
         deadline=time_fn() + undock_timeout_s,
         time_fn=time_fn,
+        pending_events=pending_events,
     )
     if undocked_event is None:
         return RoutineResult(
@@ -425,18 +466,41 @@ def undock(
                 reason=f"Undocked event was not observed within {undock_timeout_s:.0f}s — menu walk may have missed Launch",
             ),
             details={"phase": "wait_for_undocked", "undock_timeout_s": undock_timeout_s},
-        )
+        ), []
 
     if progress_fn is not None:
         station = undocked_event.get("StationName", "")
         progress_fn(f"Undocked: {station}" if station else "Undocked")
+
+    return RoutineResult(
+        action="Undocked",
+        dispatch=launch_dispatch,
+        trigger_event=undocked_event,
+        details={"phase": "wait_for_no_track"},
+    ), pending_events
+
+
+def _wait_for_clear_of_station(
+    watcher: SupportsPollEvents,
+    *,
+    undocked_event: dict[str, object] | None,
+    no_track_timeout_s: float = 60.0,
+    time_fn: Callable[[], float] = monotonic,
+    progress_fn: Callable[[str], None] | None = None,
+    pending_events: list[dict[str, object]] | None = None,
+) -> RoutineResult:
+    if no_track_timeout_s < 0:
+        raise ValueError("no_track_timeout_s must be non-negative")
+
+    if progress_fn is not None:
         progress_fn(f"Waiting for NoTrack / clear of station (timeout {no_track_timeout_s:.0f}s)...")
 
-    no_track_event = _wait_for_event(
+    no_track_event, _ = _wait_for_event_with_pending(
         watcher,
         predicate=_is_music_no_track_event,
         deadline=time_fn() + no_track_timeout_s,
         time_fn=time_fn,
+        pending_events=pending_events,
     )
     if no_track_event is None:
         return RoutineResult(
@@ -454,7 +518,7 @@ def undock(
         progress_fn("Confirmed clear of station via NoTrack")
     return RoutineResult(
         action="NoTrack",
-        dispatch=launch_dispatch,
+        dispatch=ActionDispatchResult(action="NoTrack", status="ok"),
         trigger_event=no_track_event,
         details={"phase": "complete", "undocked_event": undocked_event},
     )

@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from edap.routines import haul_loop
-from edap.routines.haul import Phase, _HaulCtx, _detect_phase, _run_depart_sell_system
+from edap.routines.haul import Phase, _HaulCtx, _detect_phase, _run_depart_sell_system, _run_undock_sell
 from tests.fakes import FakeShipControls, FakeWatcher
 
 _STATION = "Pawelczyk Dock"
@@ -452,7 +452,6 @@ class DetectPhaseResumeIntegrationTest(unittest.TestCase):
                 galaxy_map_settle_s=0.0,
                 boost_settle_s=0.0,
                 deny_retry_delay_s=0.0,
-                mass_lock_escape_safety_delay_s=0.0,
                 mass_lock_boost_delay_s=0.0,
                 max_dock_retries=1,
                 time_fn=_ticking_clock(),
@@ -468,6 +467,55 @@ class DetectPhaseResumeIntegrationTest(unittest.TestCase):
         actions = [call["action"] for call in controls.calls]
         self.assertIn("GalaxyMapOpen", actions)
         self.assertNotIn("HeadLookReset", actions)
+
+    def test_run_undock_sell_sets_route_before_escape_and_soft_fails_no_track(self) -> None:
+        messages: list[str] = []
+        controls = FakeShipControls()
+        watcher = FakeWatcher([
+            [],
+            [{"event": "Undocked", "StationName": _STATION}],
+        ])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            _write_fixtures(d, cargo_items=[])
+            (d / "Status.json").write_text(json.dumps({"Flags": 0}), encoding="utf-8")
+            ctx = _HaulCtx(
+                controls,
+                watcher,
+                journal_dir=d,
+                market_path=d / "Market.json",
+                commodity=_COMMODITY,
+                sell_station=_STATION,
+                buy_station=_BUY_STATION,
+                sell_system="Sol",
+                buy_system="Achenar",
+                step_delay_s=0.0,
+                max_hold_s=10.0,
+                dock_timeout_s=30.0,
+                request_timeout_s=10.0,
+                undock_timeout_s=10.0,
+                undock_no_track_timeout_s=0.0,
+                trade_timeout_s=10.0,
+                settle_s=0.0,
+                galaxy_map_settle_s=0.0,
+                boost_settle_s=0.0,
+                deny_retry_delay_s=0.0,
+                mass_lock_boost_delay_s=0.0,
+                max_dock_retries=1,
+                time_fn=_ticking_clock(),
+                sleeper=lambda _: None,
+                progress_fn=messages.append,
+                sell_label=f" ({_STATION})",
+                buy_label=f" ({_BUY_STATION})",
+            )
+            result, next_phase = _run_undock_sell(ctx)
+
+        self.assertEqual(next_phase, Phase.TRANSIT_TO_BUY)
+        self.assertEqual(result.dispatch.status, "ok")
+        actions = [call["action"] for call in controls.calls]
+        self.assertLess(actions.index("GalaxyMapOpen"), actions.index("SetSpeed100"))
+        self.assertTrue(any("continuing with mass-lock escape" in message for message in messages))
 
 
 class SellPhaseNarrowedToTargetTest(unittest.TestCase):

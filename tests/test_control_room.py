@@ -45,7 +45,6 @@ def _make_config(journal_dir: Path) -> AppConfig:
             haul_dock_timeout_seconds=600.0,
             undock_timeout_seconds=30.0,
             undock_no_track_timeout_seconds=60.0,
-            mass_lock_escape_safety_delay_seconds=15.0,
             mass_lock_boost_delay_seconds=5.0,
             market_nav_delay_seconds=0.1,
             market_trade_max_attempts=3,
