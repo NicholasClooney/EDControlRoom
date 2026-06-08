@@ -5,6 +5,13 @@ from json import loads
 from pathlib import Path
 
 
+def _optional_text(value: object) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 @dataclass(frozen=True)
 class StatusFlags:
     docked: bool
@@ -92,6 +99,9 @@ class ShipStatus:
     cargo: float | None
     legal_state: str | None
     balance: int | None
+    destination_system: str | None
+    destination_body: str | None
+    destination_name: str | None
 
 
 def read_status(journal_dir: Path) -> ShipStatus | None:
@@ -107,6 +117,7 @@ def read_status(journal_dir: Path) -> ShipStatus | None:
     raw_flags = data.get("Flags", 0)
     pips = data.get("Pips")
     fuel = data.get("Fuel") or {}
+    destination = data.get("Destination") or {}
 
     return ShipStatus(
         flags=StatusFlags.from_int(raw_flags),
@@ -121,4 +132,7 @@ def read_status(journal_dir: Path) -> ShipStatus | None:
         cargo=data.get("Cargo"),
         legal_state=data.get("LegalState"),
         balance=data.get("Balance"),
+        destination_system=_optional_text(destination.get("System")),
+        destination_body=_optional_text(destination.get("Body")),
+        destination_name=_optional_text(destination.get("Name")),
     )

@@ -25,6 +25,7 @@ from edap.config import (
     TTSConfig,
 )
 from edap.control_room.events import apply_ship_event
+from edap.control_room import rendering as control_room_rendering
 from edap.control_room.models import ShipState
 from edap.control_room_state import CommandHistoryEntry
 from edap.routines import RoutineResult
@@ -73,6 +74,7 @@ def _make_config(journal_dir: Path) -> AppConfig:
             state_file=journal_dir / ".control_room_state.json",
             history_limit=20,
             command_delay_seconds=0.0,
+            status_refresh_seconds=2.0,
         ),
         tts=TTSConfig(enabled=False, title="captain", disabled_messages=(), phrases={}),
     )
@@ -248,6 +250,11 @@ class ControlRoomCommandTests(unittest.TestCase):
                 "Fuel": {"FuelMain": 16.0, "FuelReservoir": 0.5},
                 "Cargo": 24,
                 "Balance": 123456789,
+                "Destination": {
+                    "System": "Achenar",
+                    "Body": "Dawes Hub",
+                    "Name": "Dawes Hub",
+                },
             }),
             encoding="utf-8",
         )
@@ -266,7 +273,45 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertEqual(self.app._ship.system, "HIP 58412")
         self.assertEqual(self.app._ship.credits, 123456789)
         self.assertEqual(self.app._ship.cargo_count, 24)
+        self.assertEqual(self.app._ship.destination_system, "Achenar")
+        self.assertEqual(self.app._ship.destination_body, "Dawes Hub")
+        self.assertEqual(self.app._ship.destination_name, "Dawes Hub")
         self.assertEqual(len(self.app._ship.cargo_inventory), 2)
+
+    def test_sync_status_snapshot_refreshes_destination_without_journal_event(self) -> None:
+        journal_dir = Path(self.tmpdir.name)
+        (journal_dir / "Status.json").write_text(
+            json.dumps({
+                "Flags": 0,
+                "Destination": {
+                    "System": "Shinrarta Dezhra",
+                    "Body": "Jameson Memorial",
+                    "Name": "Jameson Memorial",
+                },
+            }),
+            encoding="utf-8",
+        )
+
+        self.app._sync_status_snapshot()
+
+        self.assertEqual(self.app._ship.destination_system, "Shinrarta Dezhra")
+        self.assertEqual(self.app._ship.destination_body, "Jameson Memorial")
+        self.assertEqual(self.app._ship.destination_name, "Jameson Memorial")
+
+    def test_status_markup_shows_destination_summary(self) -> None:
+        ship = ShipState(
+            system="Sol",
+            status="in_supercruise",
+            destination_system="Achenar",
+            destination_body="Dawes Hub",
+            destination_name="Dawes Hub",
+        )
+
+        markup = control_room_rendering.status_markup(ship)
+
+        self.assertIn("Destination", markup)
+        self.assertIn("Achenar / Dawes Hub / Dawes Hub", markup)
+        self.assertIn("\n[dim]Destination[/]  [yellow]Achenar / Dawes Hub / Dawes Hub[/]", markup)
 
     def test_load_market_json_seeds_ship_station_when_in_station(self) -> None:
         journal_dir = Path(self.tmpdir.name)

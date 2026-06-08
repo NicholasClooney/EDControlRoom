@@ -72,6 +72,11 @@ class ReadStatusTests(unittest.TestCase):
                 "Cargo": 32.0,
                 "LegalState": "Clean",
                 "Balance": 1000000,
+                "Destination": {
+                    "System": "Achenar",
+                    "Body": "Dawes Hub",
+                    "Name": "Dawes Hub",
+                },
             }
             (Path(tmp) / "Status.json").write_text(json.dumps(data), encoding="utf-8")
             result = read_status(Path(tmp))
@@ -88,6 +93,9 @@ class ReadStatusTests(unittest.TestCase):
             self.assertEqual(result.cargo, 32.0)
             self.assertEqual(result.legal_state, "Clean")
             self.assertEqual(result.balance, 1000000)
+            self.assertEqual(result.destination_system, "Achenar")
+            self.assertEqual(result.destination_body, "Dawes Hub")
+            self.assertEqual(result.destination_name, "Dawes Hub")
             self.assertEqual(result.raw_flags, (1 << 16) | (1 << 3))
 
     def test_parses_minimal_status(self) -> None:
@@ -100,3 +108,24 @@ class ReadStatusTests(unittest.TestCase):
             self.assertEqual(result.raw_flags, 0)
             self.assertIsNone(result.pips_sys)
             self.assertIsNone(result.fuel_main)
+
+    def test_coerces_numeric_destination_fields_to_text(self) -> None:
+        with TemporaryDirectory() as tmp:
+            data = {
+                "timestamp": "2024-01-01T00:00:00Z",
+                "event": "Status",
+                "Flags": 0,
+                "Destination": {
+                    "System": 670149518737,
+                    "Body": 31,
+                    "Name": "Pawelczyk Dock",
+                },
+            }
+            (Path(tmp) / "Status.json").write_text(json.dumps(data), encoding="utf-8")
+
+            result = read_status(Path(tmp))
+
+            self.assertIsNotNone(result)
+            self.assertEqual(result.destination_system, "670149518737")
+            self.assertEqual(result.destination_body, "31")
+            self.assertEqual(result.destination_name, "Pawelczyk Dock")

@@ -11,7 +11,7 @@ uv run python3 control_room.py --config config.toml --market aluminium
 
 ## Panels
 
-- `SHIP STATUS`: commander, system, station, flight state, fuel, credits, cargo, FSD target
+- `SHIP STATUS`: commander, system, station, flight state, fuel, credits, cargo, `Destination` from `Status.json` (`system/body/name`), and journal `FSD target`
 - `ACTIVITY`: live event log plus routine progress lines
 - `MARKET`: commodity table from `Market.json`, with filtering and lock/unlock controls
 
@@ -42,6 +42,8 @@ uv run python3 control_room.py --config config.toml --market aluminium
 ## Notes
 
 - Only one routine runs at a time.
+- `control_room.status_refresh_seconds` controls how often control room re-reads `Status.json` and refreshes market/haul side state; default `2.0`.
+- Live observation on 2026-06-08: `Status.json` `Destination` does show in `SHIP STATUS` during supercruise, and also appears in normal space after dropping from supercruise, while docking, and while docked.
 - `Ctrl-R` opens replay/history from the command bar.
 - In replay/history, typing applies a simple prefix filter; `Backspace` deletes the filter.
 - `Ctrl-C` and `Ctrl-D` cancel the active routine without closing the TUI; when idle they exit the app.

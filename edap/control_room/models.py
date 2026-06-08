@@ -20,6 +20,9 @@ class ShipState:
     cargo_capacity: int | None = None
     cargo_inventory: list[dict[str, Any]] = field(default_factory=list)
     target: str | None = None
+    destination_system: str | None = None
+    destination_body: str | None = None
+    destination_name: str | None = None
 
 
 @dataclass

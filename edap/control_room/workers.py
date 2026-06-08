@@ -48,6 +48,7 @@ class WorkerHost(Protocol):
     def _log(self, msg: str) -> None: ...
     def _handle_event(self, ev: dict[str, Any]) -> None: ...
     def _load_market_json(self) -> None: ...
+    def _sync_status_snapshot(self) -> None: ...
     def _refresh_haul_stats(self) -> None: ...
     def _stop_haul_stats(self) -> None: ...
     def _make_sleeper(self) -> Callable[[float], None]: ...
@@ -59,13 +60,15 @@ class WorkerHost(Protocol):
 def start_watcher_loop(app: WorkerHost) -> None:
     worker = get_current_worker()
     watcher = JournalWatcher(app._journal_dir)
+    refresh_interval_s = app._config.control_room.status_refresh_seconds
     last_market_check = 0.0
     while not worker.is_cancelled:
         try:
             for ev in watcher.poll():
                 app.call_from_thread(app._handle_event, ev)
             now = time.monotonic()
-            if now - last_market_check > 2.0:
+            if now - last_market_check > refresh_interval_s:
+                app.call_from_thread(app._sync_status_snapshot)
                 app.call_from_thread(app._load_market_json)
                 app.call_from_thread(app._refresh_haul_stats)
                 last_market_check = now

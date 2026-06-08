@@ -25,6 +25,7 @@ Last updated: 2026-06-08
 - When haul telemetry ignores a station-1 sale because tracking has not yet reached a clean departure, control room now logs that the sale profit is being discarded from the prior run instead of dropping it silently.
 - Control room: live Textual UI with ship status, market panel, haul stats, replay/history, persisted state, and routine dispatch.
 - Control room: live Textual UI with ship status, market panel, haul stats, replay/history, persisted state, routine dispatch, and queued cross-platform TTS announcements for haul/navigation milestones.
+- Control room ship status now shows `Status.json` `Destination` as `system/body/name` alongside the journal `FSDTarget`, and the background refresh cadence is configurable with `control_room.status_refresh_seconds` (default `2.0`).
 - Market buy/sell now logs station supply/demand levels, warns and speaks when the current level is critically low relative to cargo capacity, and lets operators tune that threshold with `controls.market_critical_level_multiplier`.
 - TTS/config: announcement IDs are typed in code, while default phrase text now lives in `defaults/tts.toml` and merges with user `config.toml` overrides under `[tts]`.
 - Platform scope: macOS + CrossOver is the only live-validated operator path. Windows and Linux input/runtime paths exist with unit-test and CI coverage, but not live validation.

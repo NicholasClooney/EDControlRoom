@@ -505,6 +505,9 @@ class ControlRoomApp(App[None]):
     def _bootstrap_ship_state(self) -> None:
         _bootstrap.bootstrap_ship_state(self)
 
+    def _sync_status_snapshot(self) -> None:
+        _bootstrap.sync_status_snapshot(self)
+
     # ── Rendering ──────────────────────────────────────────────────────────────
 
     def _refresh_status(self) -> None:
@@ -627,6 +630,7 @@ class ControlRoomApp(App[None]):
         event = ev.get("event", "")
         station_before = self._ship.station
         _events.apply_ship_event(self._ship, ev)
+        self._sync_status_snapshot()
 
         msg = self._activity_line(ev)
         if msg:

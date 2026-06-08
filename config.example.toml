@@ -84,6 +84,8 @@ state_file = ".control_room_state.json"
 history_limit = 20
 # Delay before ship-affecting control-room commands begin execution.
 command_delay_seconds = 5.0
+# Poll cadence for Status.json refreshes and market/haul panel upkeep.
+status_refresh_seconds = 2.0
 
 [tts]
 enabled = true

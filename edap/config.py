@@ -91,6 +91,7 @@ class ControlRoomConfig:
     state_file: Path
     history_limit: int
     command_delay_seconds: float
+    status_refresh_seconds: float = 2.0
 
 
 @dataclass(frozen=True)
@@ -291,6 +292,8 @@ def validate_config(config: AppConfig) -> AppConfig:
         raise ConfigError("Config value `control_room.history_limit` must be greater than 0.")
     if config.control_room.command_delay_seconds < 0:
         raise ConfigError("Config value `control_room.command_delay_seconds` must be non-negative.")
+    if config.control_room.status_refresh_seconds < 0:
+        raise ConfigError("Config value `control_room.status_refresh_seconds` must be non-negative.")
     if not config.tts.title.strip():
         raise ConfigError("Config value `tts.title` cannot be empty.")
 
@@ -408,6 +411,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             state_file=Path(_string(control_room, "state_file", ".control_room_state.json")).expanduser(),
             history_limit=_integer(control_room, "history_limit", 20),
             command_delay_seconds=_float(control_room, "command_delay_seconds", 5.0),
+            status_refresh_seconds=_float(control_room, "status_refresh_seconds", 2.0),
         ),
         tts=TTSConfig(
             enabled=_boolean(tts, "enabled", _boolean(default_tts, "enabled", True)),

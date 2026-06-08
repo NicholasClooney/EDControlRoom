@@ -56,6 +56,7 @@ class LoadConfigTests(unittest.TestCase):
             self.assertEqual(config.control_room.state_file, Path(".control_room_state.json"))
             self.assertEqual(config.control_room.history_limit, 20)
             self.assertEqual(config.control_room.command_delay_seconds, 5.0)
+            self.assertEqual(config.control_room.status_refresh_seconds, 2.0)
             self.assertTrue(config.tts.enabled)
             self.assertEqual(config.tts.title, "commander")
             self.assertEqual(config.tts.phrases["destination_set"], "Setting destination to {system_name}.")
@@ -234,6 +235,28 @@ command_delay_seconds = -0.1
             )
 
             with self.assertRaisesRegex(ConfigError, "control_room.command_delay_seconds"):
+                load_config(config_path)
+
+    def test_rejects_negative_control_room_status_refresh(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            _write_config(
+                config_path,
+                """
+[paths]
+
+[controls]
+
+[screen]
+
+[runtime]
+
+[control_room]
+status_refresh_seconds = -0.1
+""".strip(),
+            )
+
+            with self.assertRaisesRegex(ConfigError, "control_room.status_refresh_seconds"):
                 load_config(config_path)
 
     def test_rejects_non_positive_market_critical_level_multiplier(self) -> None:

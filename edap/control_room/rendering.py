@@ -89,9 +89,22 @@ def cargo_summary_lines(inventory: list[dict[str, Any]], *, limit: int = 3) -> l
     return result
 
 
+def destination_summary(ship: ShipState) -> str | None:
+    parts = [
+        ship.destination_system or None,
+        ship.destination_body or None,
+        ship.destination_name or None,
+    ]
+    filtered = [escape(str(part)) for part in parts if part]
+    if not filtered:
+        return None
+    return " / ".join(filtered)
+
+
 def status_markup(ship: ShipState) -> str:
     left_rows: list[str] = []
     right_rows: list[str] = []
+    full_width_rows: list[str] = []
 
     def left_row(label: str, value: str) -> None:
         left_rows.append(f"[dim]{label:<11}[/]  {value}")
@@ -107,6 +120,9 @@ def status_markup(ship: ShipState) -> str:
     left_row("Status", escape(ship.status or "—"))
     if ship.fuel_level is not None and ship.fuel_capacity:
         left_row("Fuel", fuel_bar(ship.fuel_level, ship.fuel_capacity))
+    destination = destination_summary(ship)
+    if destination:
+        full_width_rows.append(f"[dim]Destination[/]  [yellow]{destination}[/]")
     if ship.target:
         left_row("Target", f"[yellow]{escape(ship.target)}[/]")
 
@@ -133,7 +149,8 @@ def status_markup(ship: ShipState) -> str:
         left_plain = Text.from_markup(left).plain if left else ""
         gap = " " * max(4, left_width - len(left_plain) + 4)
         paired.append(f"{left}{gap}{right}" if right else left)
-    return "\n".join(paired) if paired else "[dim]No data yet[/]"
+    rows = paired + full_width_rows
+    return "\n".join(rows) if rows else "[dim]No data yet[/]"
 
 
 def haul_stats_markup(

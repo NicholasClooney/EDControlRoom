@@ -20,6 +20,24 @@ class BootstrapHost(Protocol):
     def _refresh_market(self) -> None: ...
 
 
+def sync_status_snapshot(app: BootstrapHost) -> None:
+    try:
+        status = read_status(app._journal_dir)
+    except Exception:
+        status = None
+
+    if status is None:
+        return
+
+    if status.balance is not None:
+        app._ship.credits = status.balance
+    if status.cargo is not None:
+        app._ship.cargo_count = int(status.cargo)
+    app._ship.destination_system = status.destination_system
+    app._ship.destination_body = status.destination_body
+    app._ship.destination_name = status.destination_name
+
+
 def bootstrap_ship_state(app: BootstrapHost) -> None:
     log = get_latest_journal_log(app._journal_dir)
     if log is not None:
@@ -34,16 +52,7 @@ def bootstrap_ship_state(app: BootstrapHost) -> None:
         except Exception:
             pass
 
-    try:
-        status = read_status(app._journal_dir)
-    except Exception:
-        status = None
-
-    if status is not None:
-        if status.balance is not None:
-            app._ship.credits = status.balance
-        if status.cargo is not None:
-            app._ship.cargo_count = int(status.cargo)
+    sync_status_snapshot(app)
     app._ship.cargo_inventory = _rendering.read_cargo_inventory(app._journal_dir)
 
 
