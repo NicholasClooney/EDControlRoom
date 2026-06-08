@@ -4,7 +4,8 @@ _This is the rolling short-form log for recent sessions. Keep entries concise an
 
 ## 2026-06-08
 
-- Market sell no longer filters out zero-demand `Market.json` rows when the station still publishes a sell price; this fixes `sell` / `sell all` skipping cargo like `Food Cartridges` at stations that buy at zero displayed demand, and the control-room market panel now shows the same rows.
+- Market sell now orders zero-demand priced `Market.json` rows after the normal demand list to match the in-game SELL tab, fixing the cursor index for cargo like `Food Cartridges`; the control-room market panel shows the same rows in the same grouped order.
+- Market sell now sends `UI_Back x4` to reset the menu stack before each attempt, requires a current docked journal state before it starts, and re-checks that docked state after the trade back-out.
 - Control-room command parsing now treats only the final token of `buy`/`sell` as an amount candidate, so multi-word commodities like `buy food cartridges` default to `MAX` correctly; unknown and invalid commands are also recorded into saved replay history now.
 - Market `buy ... max` now scales the `UI_Right` hold from free cargo space instead of using a fixed 10-second press; the new `controls.market_buy_hold_seconds_per_ton` setting defaults to `0.01` and falls back to the old cap when cargo space cannot be derived from `Cargo.json` plus journal capacity.
 - Market buy/sell now checks station supply or demand against cargo capacity, logs normal levels, warns plus TTS-announces critically low levels, and makes the threshold configurable via `controls.market_critical_level_multiplier`.

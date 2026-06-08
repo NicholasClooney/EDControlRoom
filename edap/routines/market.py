@@ -36,15 +36,26 @@ def _is_sell_market_item(item: dict) -> bool:
     return demand_bracket > 0 or sell_price > 0
 
 
+def _sell_market_sort_key(item: dict) -> tuple[int, str, str]:
+    demand_bracket = int(item.get("DemandBracket", 0) or 0)
+    category = _market_localised(item, "Category").lower()
+    name = _market_localised(item, "Name").lower()
+    # The in-game SELL tab keeps zero-demand priced rows after the normal
+    # demand list instead of merging them into one flat alphabetical list.
+    zero_demand_group = 0 if demand_bracket > 0 else 1
+    return (zero_demand_group, category, name)
+
+
 def _market_sell_list(items: list[dict]) -> list[tuple[str, str]]:
     # Some legitimate sell rows fall to DemandBracket=0 while still exposing a
     # sell price in the in-game market. Placeholder rows still lack both.
+    sell_items = [item for item in items if _is_sell_market_item(item)]
+    sell_items.sort(key=_sell_market_sort_key)
     rows = [
         (_market_localised(it, "Category"), _market_localised(it, "Name"))
-        for it in items
-        if _is_sell_market_item(it)
+        for it in sell_items
     ]
-    return sorted(rows, key=lambda r: (r[0].lower(), r[1].lower()))
+    return rows
 
 
 def _market_item_index(sorted_items: list[tuple[str, str]], target: str) -> int:
@@ -90,6 +101,43 @@ def _read_last_docked_state(journal_dir: Path) -> dict[str, object] | None:
         except json.JSONDecodeError:
             continue
     return None
+
+
+def _read_latest_position_state(journal_dir: Path) -> dict[str, object] | None:
+    journal_files = sorted(journal_dir.glob("Journal.*.log"))
+    if not journal_files:
+        return None
+    position_event_types = {"Docked", "Undocked", "SupercruiseEntry", "SupercruiseExit", "Location", "FSDJump"}
+    for journal_file in reversed(journal_files):
+        try:
+            lines = journal_file.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        for line in reversed(lines):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if event.get("event") in position_event_types:
+                return event
+    return None
+
+
+def _is_currently_docked(journal_dir: Path) -> tuple[bool, str]:
+    latest_position = _read_latest_position_state(journal_dir)
+    if latest_position is None:
+        return False, "no current station state found in journal"
+    event_name = str(latest_position.get("event", ""))
+    if event_name == "Docked":
+        return True, ""
+    if event_name == "Location":
+        if latest_position.get("Docked") is True:
+            return True, ""
+        return False, "latest position event is Location(Docked=false)"
+    return False, f"latest position event is {event_name}"
 
 
 def _read_last_cargo_capacity(journal_dir: Path) -> int | None:
@@ -204,6 +252,22 @@ def _market_error(action: str, reason: str) -> RoutineResult:
         action=action,
         dispatch=ActionDispatchResult(action=action, status="error", reason=reason),
     )
+
+
+def _market_ui_reset(
+    controls: SupportsMarketControls,
+    *,
+    step_delay_s: float,
+    sleeper: Callable[[float], None],
+    progress_fn: Callable[[str], None] | None,
+) -> ActionDispatchResult:
+    if progress_fn is not None:
+        progress_fn("Resetting UI state...")
+        progress_fn("  UI_Back x4 (reset to station menu)")
+    dispatch = controls.ui_back(repeat=4)
+    if dispatch.status == "ok" and step_delay_s > 0:
+        sleeper(step_delay_s)
+    return dispatch
 
 
 def market_buy(
@@ -362,6 +426,20 @@ def _market_trade_attempt(
     announce_fn: Callable[..., None] | None,
     critical_level_multiplier: float,
 ) -> RoutineResult:
+    if side == "sell":
+        docked, reason = _is_currently_docked(market_path.parent)
+        if not docked:
+            return _market_error(event_type, f"sell requires an in-station start: {reason}")
+
+    dispatch = _market_ui_reset(
+        controls,
+        step_delay_s=step_delay_s,
+        sleeper=sleeper,
+        progress_fn=progress_fn,
+    )
+    if dispatch.status != "ok":
+        return RoutineResult(action="UI_Back", dispatch=dispatch, details={"phase": "reset"})
+
     # Navigate to commodities market first -- the game writes Market.json when the screen opens
     if progress_fn is not None:
         progress_fn("Navigating to commodities market...")
@@ -590,8 +668,8 @@ def _market_trade_attempt(
 
     # Return to station menu
     if progress_fn is not None:
-        progress_fn("  UI_Back x2 (return to station menu)")
-    back_dispatch = controls.ui_back()
+        progress_fn("  UI_Back x4 (return to station menu)")
+    back_dispatch = controls.ui_back(repeat=4)
     if back_dispatch.status != "ok":
         return RoutineResult(
             action="UI_Back",
@@ -601,14 +679,19 @@ def _market_trade_attempt(
         )
     if step_delay_s > 0:
         sleeper(step_delay_s)
-    back_dispatch = controls.ui_back()
-    if back_dispatch.status != "ok":
-        return RoutineResult(
-            action="UI_Back",
-            dispatch=back_dispatch,
-            trigger_event=trade_event,
-            details={"phase": "return_to_station_menu"},
-        )
+    if side == "sell":
+        docked, reason = _is_currently_docked(market_path.parent)
+        if not docked:
+            return RoutineResult(
+                action=event_type,
+                dispatch=ActionDispatchResult(
+                    action=event_type,
+                    status="error",
+                    reason=f"sell return-to-station check failed: {reason}",
+                ),
+                trigger_event=trade_event,
+                details={"phase": "return_to_station_menu"},
+            )
 
     return RoutineResult(
         action=event_type,

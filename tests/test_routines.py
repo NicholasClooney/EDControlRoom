@@ -584,7 +584,12 @@ class RoutinesTests(unittest.TestCase):
         sleep_calls: list[float] = []
 
         with tempfile.TemporaryDirectory() as tmp:
-            market_path = Path(tmp) / "Market.json"
+            journal_dir = Path(tmp)
+            (journal_dir / "Journal.240101000000.01.log").write_text(
+                json.dumps({"timestamp": "2024-01-01T00:00:00Z", "event": "Docked", "StationName": "Pawelczyk Dock"}) + "\n",
+                encoding="utf-8",
+            )
+            market_path = journal_dir / "Market.json"
             market_path.write_text(
                 json.dumps(
                     {
@@ -612,13 +617,107 @@ class RoutinesTests(unittest.TestCase):
 
         self.assertEqual(result.dispatch.status, "ok")
         self.assertEqual(
-            controls.calls[-2:],
+            [controls.calls[0], controls.calls[-1]],
             [
-                {"action": "UI_Back", "repeat": 1, "hold_s": 0.0},
-                {"action": "UI_Back", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Back", "repeat": 4, "hold_s": 0.0},
+                {"action": "UI_Back", "repeat": 4, "hold_s": 0.0},
             ],
         )
         self.assertGreaterEqual(sleep_calls.count(0.5), 3)
+
+    def test_market_sell_requires_current_docked_state(self) -> None:
+        controls = FakeShipControls()
+        watcher = FakeWatcher([])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            (journal_dir / "Journal.240101000000.01.log").write_text(
+                json.dumps({"timestamp": "2024-01-01T00:00:00Z", "event": "Undocked", "StarSystem": "HIP 58412"}) + "\n",
+                encoding="utf-8",
+            )
+            market_path = journal_dir / "Market.json"
+            market_path.write_text(
+                json.dumps(
+                    {
+                        "StationName": "Pawelczyk Dock",
+                        "Items": [
+                            {"Category": "Metals", "Name": "aluminium", "DemandBracket": 1, "SellPrice": 1000},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = market_sell(
+                controls,
+                watcher,
+                market_path=market_path,
+                target="aluminium",
+                amount="MAX",
+                step_delay_s=0.0,
+                trade_timeout_s=30.0,
+                skip_station_check=True,
+                time_fn=lambda: 0.0,
+                sleeper=lambda _: None,
+            )
+
+        self.assertEqual(result.dispatch.status, "error")
+        self.assertIn("sell requires an in-station start", result.dispatch.reason or "")
+
+    def test_market_sell_rechecks_current_docked_state_after_backing_out(self) -> None:
+        controls = FakeShipControls()
+        watcher = FakeWatcher(
+            [
+                [],
+                [{"event": "MarketSell", "Type": "aluminium", "Type_Localised": "Aluminium", "Count": 10, "TotalSale": 1234}],
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            journal_path = journal_dir / "Journal.240101000000.01.log"
+            journal_path.write_text(
+                json.dumps({"timestamp": "2024-01-01T00:00:00Z", "event": "Docked", "StationName": "Pawelczyk Dock"}) + "\n",
+                encoding="utf-8",
+            )
+            market_path = journal_dir / "Market.json"
+            market_path.write_text(
+                json.dumps(
+                    {
+                        "StationName": "Pawelczyk Dock",
+                        "Items": [
+                            {"Category": "Metals", "Name": "aluminium", "DemandBracket": 1, "SellPrice": 1000},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            def sleeper(_: float) -> None:
+                if "Undocked" not in journal_path.read_text(encoding="utf-8"):
+                    journal_path.write_text(
+                        "\n".join([
+                            json.dumps({"timestamp": "2024-01-01T00:00:00Z", "event": "Docked", "StationName": "Pawelczyk Dock"}),
+                            json.dumps({"timestamp": "2024-01-01T00:00:01Z", "event": "Undocked", "StarSystem": "HIP 58412"}),
+                        ]) + "\n",
+                        encoding="utf-8",
+                    )
+
+            result = market_sell(
+                controls,
+                watcher,
+                market_path=market_path,
+                target="aluminium",
+                amount="MAX",
+                step_delay_s=0.0,
+                trade_timeout_s=30.0,
+                skip_station_check=True,
+                time_fn=lambda: 0.0,
+                sleeper=sleeper,
+            )
+
+        self.assertEqual(result.dispatch.status, "error")
+        self.assertIn("sell return-to-station check failed", result.dispatch.reason or "")
 
     def test_market_buy_accepts_location_docked_true_for_station_check(self) -> None:
         controls = FakeShipControls()
@@ -856,11 +955,18 @@ class RoutinesTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             journal_dir = Path(tmp)
             (journal_dir / "Journal.240101000000.01.log").write_text(
-                json.dumps({
-                    "timestamp": "2024-01-01T00:00:01Z",
-                    "event": "Loadout",
-                    "CargoCapacity": 64,
-                }) + "\n",
+                "\n".join([
+                    json.dumps({
+                        "timestamp": "2024-01-01T00:00:00Z",
+                        "event": "Docked",
+                        "StationName": "Pawelczyk Dock",
+                    }),
+                    json.dumps({
+                        "timestamp": "2024-01-01T00:00:01Z",
+                        "event": "Loadout",
+                        "CargoCapacity": 64,
+                    }),
+                ]) + "\n",
                 encoding="utf-8",
             )
             market_path = journal_dir / "Market.json"
@@ -922,6 +1028,10 @@ class RoutinesTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             journal_dir = Path(tmp)
+            (journal_dir / "Journal.240101000000.01.log").write_text(
+                json.dumps({"timestamp": "2024-01-01T00:00:00Z", "event": "Docked", "StationName": "Pawelczyk Dock"}) + "\n",
+                encoding="utf-8",
+            )
             market_path = journal_dir / "Market.json"
             market_path.write_text(
                 json.dumps(
@@ -963,6 +1073,66 @@ class RoutinesTests(unittest.TestCase):
             "Station demand for Food Cartridges is 0 units; cargo capacity unavailable, skipping low-level threshold check.",
             progress,
         )
+
+    def test_market_sell_indexes_zero_demand_priced_rows_after_normal_demand_rows(self) -> None:
+        controls = FakeShipControls()
+        watcher = FakeWatcher(
+            [[{"event": "MarketSell", "Type": "foodcartridges", "Type_Localised": "Food Cartridges", "Count": 64, "TotalSale": 123456}]]
+        )
+        progress: list[str] = []
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            (journal_dir / "Journal.240101000000.01.log").write_text(
+                json.dumps({"timestamp": "2024-01-01T00:00:00Z", "event": "Docked", "StationName": "Pawelczyk Dock"}) + "\n",
+                encoding="utf-8",
+            )
+            market_path = journal_dir / "Market.json"
+            market_path.write_text(
+                json.dumps(
+                    {
+                        "StationName": "Pawelczyk Dock",
+                        "Items": [
+                            {
+                                "Category": "Metals",
+                                "Name": "gold",
+                                "Name_Localised": "Gold",
+                                "Demand": 12,
+                                "DemandBracket": 1,
+                                "SellPrice": 10000,
+                            },
+                            {
+                                "Category": "Foods",
+                                "Name": "foodcartridges",
+                                "Name_Localised": "Food Cartridges",
+                                "Demand": 0,
+                                "DemandBracket": 0,
+                                "SellPrice": 1929,
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = market_sell(
+                controls,
+                watcher,
+                market_path=market_path,
+                target="Food Cartridges",
+                amount="MAX",
+                step_delay_s=0.0,
+                nav_delay_s=0.0,
+                trade_timeout_s=30.0,
+                skip_station_check=True,
+                time_fn=lambda: 0.0,
+                sleeper=lambda _: None,
+                progress_fn=progress.append,
+            )
+
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertIn("Target 'Food Cartridges' at position 1 in sell list (2 items)", progress)
+        self.assertIn("  UI_Down x1 (navigate to 'Food Cartridges')", progress)
 
 
 class EscapeMassLockTests(unittest.TestCase):

@@ -9,7 +9,7 @@ from rich.markup import escape
 from rich.text import Text
 
 from edap.control_room.models import HaulStats, MarketData, ShipState
-from edap.routines.market import _is_sell_market_item
+from edap.routines.market import _is_sell_market_item, _sell_market_sort_key
 
 
 def fmt_cr(n: int) -> str:
@@ -243,9 +243,11 @@ def market_markup(market: MarketData, market_filter: str | None) -> str:
         (loc(item, "Name"), item.get("Stock", 0), item.get("BuyPrice", 0))
         for item in items if item.get("Stock", 0) > 0
     ]
+    sell_items = [item for item in items if _is_sell_market_item(item)]
+    sell_items.sort(key=_sell_market_sort_key)
     sell = [
         (loc(item, "Name"), item.get("Demand", 0), item.get("SellPrice", 0))
-        for item in items if _is_sell_market_item(item)
+        for item in sell_items
     ]
 
     sections: list[str] = [header]
@@ -262,7 +264,7 @@ def market_markup(market: MarketData, market_filter: str | None) -> str:
         sections.append("\n[bold]  SELL TO MARKET[/]")
         sections.append(f"  [dim]{'Item':<{col}}  {'Demand':>10}  {'Sell CR':>10}[/]")
         sections.append(f"  [dim]{'─' * (col + 24)}[/]")
-        for name, demand, price in sorted(sell, key=lambda row: row[0].lower()):
+        for name, demand, price in sell:
             sections.append(f"  {escape(name):<{col}}  {demand:>10,}  {price:>8,}")
 
     if not buy and not sell:

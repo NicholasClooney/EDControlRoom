@@ -338,6 +338,35 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertIn("0", markup)
         self.assertIn("1,929", markup)
 
+    def test_market_markup_lists_zero_demand_priced_sell_rows_after_normal_demand_rows(self) -> None:
+        market = MarketData(
+            station="Pawelczyk Dock",
+            system="HIP 58412",
+            timestamp="2026-06-08T20:09:46Z",
+            items=[
+                {
+                    "Category": "Foods",
+                    "Name": "foodcartridges",
+                    "Name_Localised": "Food Cartridges",
+                    "Demand": 0,
+                    "DemandBracket": 0,
+                    "SellPrice": 1929,
+                },
+                {
+                    "Category": "Metals",
+                    "Name": "gold",
+                    "Name_Localised": "Gold",
+                    "Demand": 12,
+                    "DemandBracket": 1,
+                    "SellPrice": 10000,
+                },
+            ],
+        )
+
+        markup = control_room_rendering.market_markup(market, None)
+
+        self.assertLess(markup.index("Gold"), markup.index("Food Cartridges"))
+
     def test_load_market_json_seeds_ship_station_when_in_station(self) -> None:
         journal_dir = Path(self.tmpdir.name)
         (journal_dir / "Journal.240101000000.01.log").write_text(
