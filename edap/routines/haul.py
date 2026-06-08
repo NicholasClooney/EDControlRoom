@@ -551,7 +551,7 @@ def haul_loop(
     dock_timeout_s: float = 600.0,
     request_timeout_s: float = 20.0,
     undock_timeout_s: float = 30.0,
-    undock_no_track_timeout_s: float = 60.0,
+    undock_no_track_timeout_s: float = 600.0,
     trade_timeout_s: float = 30.0,
     settle_s: float = 2.0,
     galaxy_map_settle_s: float = 2.0,

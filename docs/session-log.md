@@ -15,3 +15,4 @@ _This is the rolling short-form log for recent sessions. Keep entries concise an
 - Shortened default TTS jump/arrival phrases to avoid speaking long system names: "Jumping to the next system." and "Arrived."
 - Shortened the haul-aborted TTS line to just "Haul aborted." and moved the recovery guidance into the haul log message: `replay / ctrl-r`.
 - Fixed the control-room HAUL panel regression from the one-way -> two-way transition: cycle profit/time now follow the two-way station flow, finalize on the return sale at station 1, and carry the next run's station-1 buy cost into the clean departure instead of dropping it.
+- Fixed control-room haul launch wiring so the configured `undock_no_track_timeout_seconds=600` reaches `haul_loop_two_way`; the live NoTrack progress line no longer falls back to the stale `60s` default.

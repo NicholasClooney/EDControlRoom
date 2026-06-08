@@ -471,6 +471,8 @@ class ControlRoomBindingsTests(unittest.TestCase):
             self.app._dispatch_haul_loop()
 
         self.assertIn("kwargs", captured)
+        self.assertEqual(captured["kwargs"]["undock_timeout_s"], 30.0)
+        self.assertEqual(captured["kwargs"]["undock_no_track_timeout_s"], 600.0)
         self.assertIn("Starting haul loop:", "\n".join(self.app.logged))
         self.assertEqual(self.app._active_routine_name, "haul")
         self.assertEqual(self.app._haul_stats.station_1_buying, "Aluminium")

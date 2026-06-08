@@ -64,6 +64,8 @@ def dispatch_haul_loop(
     controls = app._make_controls(progress)
     sleeper = app._make_sleeper()
     step_delay = app._config.controls.step_delay_seconds
+    undock_timeout = app._config.controls.undock_timeout_seconds
+    undock_no_track_timeout = app._config.controls.undock_no_track_timeout_seconds
     galaxy_map_settle = (
         float(galaxy_map_settle_raw)
         if galaxy_map_settle_raw
@@ -129,6 +131,8 @@ def dispatch_haul_loop(
             station_2_system=station_2_system,
             step_delay_s=step_delay,
             dock_timeout_s=dock_timeout,
+            undock_timeout_s=undock_timeout,
+            undock_no_track_timeout_s=undock_no_track_timeout,
             galaxy_map_settle_s=galaxy_map_settle,
             mass_lock_boost_delay_s=app._config.controls.mass_lock_boost_delay_seconds,
             post_sell_settle_s=app._config.controls.haul_post_sell_settle_seconds,
