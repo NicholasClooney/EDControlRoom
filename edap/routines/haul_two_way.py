@@ -9,7 +9,7 @@ from typing import Callable
 
 from edap.actions import ActionDispatchResult
 from edap.routines._base import RoutineResult, SupportsHaulControls, SupportsPollEvents
-from edap.routines.docking import _undock_until_undocked, _wait_for_clear_of_station, dock
+from edap.routines.docking import _undock_until_undocked, _wait_for_clear_of_station, dock, station_refuel_menu
 from edap.routines.escape import escape_mass_lock
 from edap.routines.galaxy_map import set_gal_map_destination
 from edap.routines.market import market_buy, market_sell
@@ -62,6 +62,44 @@ def _read_latest_journal_events(journal_dir: Path) -> list[dict]:
     except OSError:
         pass
     return events
+
+
+class _TransitResumeState(Enum):
+    NONE = auto()
+    POST_DROP_NEAR_STATION = auto()
+    AWAITING_DOCKED = auto()
+
+
+def _detect_transit_resume_state(events: list[dict], destination_leg: StationLeg) -> _TransitResumeState:
+    destination_station = destination_leg.station.lower()
+    destination_system = destination_leg.system.lower()
+
+    for event in reversed(events):
+        evt_name = str(event.get("event", ""))
+
+        if evt_name in {"DockingRequested", "DockingGranted"}:
+            station_name = str(event.get("StationName", "")).lower()
+            return (
+                _TransitResumeState.AWAITING_DOCKED
+                if destination_station and station_name == destination_station
+                else _TransitResumeState.NONE
+            )
+
+        if evt_name == "SupercruiseExit":
+            body_type = str(event.get("BodyType", "")).lower()
+            system_name = str(event.get("StarSystem", "")).lower()
+            if body_type != "station":
+                return _TransitResumeState.NONE
+            return (
+                _TransitResumeState.POST_DROP_NEAR_STATION
+                if not destination_system or not system_name or system_name == destination_system
+                else _TransitResumeState.NONE
+            )
+
+        if evt_name in {"SupercruiseEntry", "FSDJump", "Undocked"}:
+            return _TransitResumeState.NONE
+
+    return _TransitResumeState.NONE
 
 
 def _inventory_has_commodity(inventory: list[dict], commodity: str) -> bool:
@@ -402,12 +440,34 @@ def _run_transit(
     destination_leg: StationLeg,
     next_phase: Phase,
 ) -> tuple[RoutineResult, Phase]:
+    recent_events = _read_latest_journal_events(ctx.journal_dir)
+    resume_state = _detect_transit_resume_state(recent_events, destination_leg)
     if ctx.progress_fn is not None:
-        ctx.progress_fn(f"Waiting for drop near {destination_leg.label}...")
+        if resume_state == _TransitResumeState.AWAITING_DOCKED:
+            ctx.progress_fn(f"Docking already in progress for {destination_leg.label} - waiting for Docked.")
+        elif resume_state == _TransitResumeState.POST_DROP_NEAR_STATION:
+            ctx.progress_fn(f"Already in normal space near {destination_leg.label} - skipping drop wait.")
+        else:
+            ctx.progress_fn(f"Waiting for drop near {destination_leg.label}...")
+
+    if resume_state == _TransitResumeState.AWAITING_DOCKED:
+        return (
+            station_refuel_menu(
+                ctx.controls,
+                ctx.watcher,
+                dock_timeout_s=ctx.dock_timeout_s,
+                settle_s=ctx.settle_s,
+                time_fn=ctx.time_fn,
+                sleeper=ctx.sleeper,
+                progress_fn=ctx.progress_fn,
+            ),
+            next_phase,
+        )
+
     result = dock(
         ctx.controls,
         ctx.watcher,
-        wait_for_supercruise_exit=True,
+        wait_for_supercruise_exit=resume_state == _TransitResumeState.NONE,
         auto_refuel=True,
         max_retries=ctx.max_dock_retries,
         request_timeout_s=ctx.request_timeout_s,

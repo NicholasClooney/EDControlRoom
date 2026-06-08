@@ -319,6 +319,95 @@ class TwoWayHaulLoopTests(unittest.TestCase):
         self.assertEqual(result.dispatch.status, "ok")
         self.assertEqual(market_calls[0], ("buy", _CARGO_2))
 
+    def test_auto_detects_station_2_drop_and_skips_supercruise_exit_wait(self) -> None:
+        controls = FakeShipControls()
+        watcher = FakeWatcher([])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            _write_journal(
+                journal_dir,
+                {"event": "SupercruiseExit", "BodyType": "Station", "StarSystem": _SYSTEM_2},
+            )
+            _write_cargo(journal_dir, [{"Name": "aluminium", "Count": 64, "Stolen": 0}])
+
+            with patch("edap.routines.haul_two_way.dock") as dock_mock:
+                dock_mock.return_value = RoutineResult(
+                    action="dock",
+                    dispatch=ActionDispatchResult(action="dock", status="error", reason="stop after first dock call"),
+                )
+                result = haul_loop_two_way(
+                    controls,
+                    watcher,
+                    journal_dir=journal_dir,
+                    station_1=_STATION_1,
+                    station_1_buying=_CARGO_1,
+                    station_1_system=_SYSTEM_1,
+                    station_2=_STATION_2,
+                    station_2_buying=_CARGO_2,
+                    station_2_system=_SYSTEM_2,
+                    iterations=1,
+                    step_delay_s=0.0,
+                    settle_s=0.0,
+                    boost_settle_s=0.0,
+                    dock_timeout_s=30.0,
+                    request_timeout_s=10.0,
+                    undock_timeout_s=10.0,
+                    trade_timeout_s=10.0,
+                    time_fn=_ticking_clock(),
+                    sleeper=lambda _: None,
+                )
+
+        self.assertEqual(result.dispatch.status, "error")
+        self.assertEqual(dock_mock.call_count, 1)
+        self.assertFalse(dock_mock.call_args.kwargs["wait_for_supercruise_exit"])
+
+    def test_auto_detects_station_2_docking_grant_and_waits_for_docked(self) -> None:
+        controls = FakeShipControls()
+        watcher = FakeWatcher([])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            _write_journal(
+                journal_dir,
+                {"event": "SupercruiseExit", "BodyType": "Station", "StarSystem": _SYSTEM_2},
+                {"event": "DockingGranted", "StationName": _STATION_2, "LandingPad": 7},
+            )
+            _write_cargo(journal_dir, [{"Name": "aluminium", "Count": 64, "Stolen": 0}])
+
+            with patch("edap.routines.haul_two_way.dock") as dock_mock, patch(
+                "edap.routines.haul_two_way.station_refuel_menu"
+            ) as station_refuel_menu_mock:
+                station_refuel_menu_mock.return_value = RoutineResult(
+                    action="UI_Down",
+                    dispatch=ActionDispatchResult(action="UI_Down", status="error", reason="stop after wait-for-docked path"),
+                )
+                result = haul_loop_two_way(
+                    controls,
+                    watcher,
+                    journal_dir=journal_dir,
+                    station_1=_STATION_1,
+                    station_1_buying=_CARGO_1,
+                    station_1_system=_SYSTEM_1,
+                    station_2=_STATION_2,
+                    station_2_buying=_CARGO_2,
+                    station_2_system=_SYSTEM_2,
+                    iterations=1,
+                    step_delay_s=0.0,
+                    settle_s=0.0,
+                    boost_settle_s=0.0,
+                    dock_timeout_s=30.0,
+                    request_timeout_s=10.0,
+                    undock_timeout_s=10.0,
+                    trade_timeout_s=10.0,
+                    time_fn=_ticking_clock(),
+                    sleeper=lambda _: None,
+                )
+
+        self.assertEqual(result.dispatch.status, "error")
+        dock_mock.assert_not_called()
+        station_refuel_menu_mock.assert_called_once()
+
     def test_auto_detects_station_2_from_market_json_when_journal_lacks_position(self) -> None:
         controls = FakeShipControls()
         market_calls: list[tuple[str, str]] = []
