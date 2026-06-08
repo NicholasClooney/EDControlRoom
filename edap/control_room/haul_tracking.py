@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Callable, Protocol
 
 from edap.control_room.models import HaulStats, ShipState
+from edap.tts import AnnouncementId, format_credits_short
 
 
 class HaulTrackingHost(Protocol):
@@ -11,6 +12,7 @@ class HaulTrackingHost(Protocol):
     _time_fn: Callable[[], float]
 
     def _refresh_haul_stats(self) -> None: ...
+    def _announce_tts(self, message_id: AnnouncementId, /, **values: object) -> None: ...
 
 
 def start_haul_stats(
@@ -43,6 +45,12 @@ def start_haul_stats(
 def stop_haul_stats(app: HaulTrackingHost) -> None:
     if not app._haul_stats.station_1_buying:
         return
+    if app._haul_stats.completed_runs > 0:
+        app._announce_tts(
+            AnnouncementId.SESSION_COMPLETE,
+            cycle_count=app._haul_stats.completed_runs,
+            total_profit_short=format_credits_short(app._haul_stats.accumulated_profit),
+        )
     app._haul_stats.active = False
     app._refresh_haul_stats()
 
@@ -67,6 +75,11 @@ def finalize_completed_haul_run(app: HaulTrackingHost) -> None:
     stats.docked_back_at_station_1 = False
     stats.waiting_for_station_1_departure = False
     stats.resumed_mid_run = False
+    app._announce_tts(
+        AnnouncementId.ROUTE_COMPLETE,
+        cycle_count=stats.completed_runs,
+        total_profit_short=format_credits_short(stats.accumulated_profit),
+    )
 
 
 def handle_haul_event(

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 import sys
 import tomllib
@@ -8,6 +8,7 @@ import tomllib
 
 DEFAULT_CONFIG_PATH = Path("config.toml")
 EXAMPLE_CONFIG_PATH = Path("config.example.toml")
+DEFAULT_TTS_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "tts.toml"
 
 VALID_PLATFORMS = {"linux", "macos", "windows"}
 VALID_CAPTURE_MODES = {"fullscreen", "region"}
@@ -90,16 +91,36 @@ class ControlRoomConfig:
 
 
 @dataclass(frozen=True)
+class TTSConfig:
+    enabled: bool = True
+    title: str = "commander"
+    disabled_messages: tuple[str, ...] = ()
+    phrases: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class AppConfig:
     paths: PathsConfig
     controls: ControlsConfig
     screen: ScreenConfig
     runtime: RuntimeConfig
     control_room: ControlRoomConfig
+    tts: TTSConfig = field(default_factory=TTSConfig)
 
 
 class ConfigError(ValueError):
     """Raised when config parsing or validation fails."""
+
+
+def _load_default_tts_table() -> dict[str, object]:
+    with DEFAULT_TTS_CONFIG_PATH.open("rb") as handle:
+        raw = tomllib.load(handle)
+    if not isinstance(raw, dict):
+        raise ConfigError("Default TTS config root must be a TOML table.")
+    value = raw.get("tts", {})
+    if not isinstance(value, dict):
+        raise ConfigError("Default TTS config section `tts` must be a table.")
+    return value
 
 
 def _optional_path(value: object) -> Path | None:
@@ -148,6 +169,30 @@ def _boolean(raw: dict[str, object], key: str, default: bool) -> bool:
     if not isinstance(value, bool):
         raise ConfigError(f"Config value `{key}` must be true or false.")
     return value
+
+
+def _string_list(raw: dict[str, object], key: str) -> tuple[str, ...]:
+    value = raw.get(key, [])
+    if not isinstance(value, list):
+        raise ConfigError(f"Config value `{key}` must be a list of strings.")
+    result: list[str] = []
+    for index, item in enumerate(value):
+        if not isinstance(item, str):
+            raise ConfigError(f"Config value `{key}[{index}]` must be a string.")
+        result.append(item)
+    return tuple(result)
+
+
+def _string_dict(raw: dict[str, object], key: str) -> dict[str, str]:
+    value = raw.get(key, {})
+    if not isinstance(value, dict):
+        raise ConfigError(f"Config section `{key}` must be a table.")
+    result: dict[str, str] = {}
+    for sub_key, sub_value in value.items():
+        if not isinstance(sub_key, str) or not isinstance(sub_value, str):
+            raise ConfigError(f"Config section `{key}` must contain only string values.")
+        result[sub_key] = sub_value
+    return result
 
 
 def _validate_path_shape(path: Path | None, *, key: str, should_be_dir: bool) -> None:
@@ -237,6 +282,8 @@ def validate_config(config: AppConfig) -> AppConfig:
         raise ConfigError("Config value `control_room.history_limit` must be greater than 0.")
     if config.control_room.command_delay_seconds < 0:
         raise ConfigError("Config value `control_room.command_delay_seconds` must be non-negative.")
+    if not config.tts.title.strip():
+        raise ConfigError("Config value `tts.title` cannot be empty.")
 
     _validate_path_shape(config.paths.journal_dir, key="paths.journal_dir", should_be_dir=True)
     _validate_path_shape(config.paths.bindings_file, key="paths.bindings_file", should_be_dir=False)
@@ -271,6 +318,8 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
     screen_capture_regions = _optional_table(screen_capture, "regions")
     runtime = _require_table(raw, "runtime")
     control_room = _optional_table(raw, "control_room")
+    tts = _optional_table(raw, "tts")
+    default_tts = _load_default_tts_table()
 
     capture_regions: dict[str, CaptureRegionConfig] = {
         "center": CaptureRegionConfig(
@@ -343,6 +392,19 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             state_file=Path(_string(control_room, "state_file", ".control_room_state.json")).expanduser(),
             history_limit=_integer(control_room, "history_limit", 20),
             command_delay_seconds=_float(control_room, "command_delay_seconds", 5.0),
+        ),
+        tts=TTSConfig(
+            enabled=_boolean(tts, "enabled", _boolean(default_tts, "enabled", True)),
+            title=_string(tts, "title", _string(default_tts, "title", "commander")),
+            disabled_messages=(
+                _string_list(tts, "disabled_messages")
+                if "disabled_messages" in tts
+                else _string_list(default_tts, "disabled_messages")
+            ),
+            phrases={
+                **_string_dict(default_tts, "phrases"),
+                **_string_dict(tts, "phrases"),
+            },
         ),
     )
     return validate_config(config)

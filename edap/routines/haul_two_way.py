@@ -18,6 +18,7 @@ from edap.routines.docking import _undock_until_undocked, _wait_for_clear_of_sta
 from edap.routines.escape import escape_mass_lock
 from edap.routines.galaxy_map import set_gal_map_destination
 from edap.routines.market import market_buy, market_sell
+from edap.tts import AnnouncementId
 
 
 def _read_cargo_json(journal_dir: Path) -> list[dict]:
@@ -181,6 +182,7 @@ class _HaulCtx:
     time_fn: Callable[[], float]
     sleeper: Callable[[float], None]
     progress_fn: Callable[[str], None] | None
+    announce_fn: Callable[..., None] | None
 
 
 def _engage_hyperspace_after_escape(ctx: _HaulCtx) -> None:
@@ -188,6 +190,8 @@ def _engage_hyperspace_after_escape(ctx: _HaulCtx) -> None:
         return
     if ctx.progress_fn is not None:
         ctx.progress_fn('Mass lock cleared - engaging hyperspace via raw key "k"...')
+    if ctx.announce_fn is not None:
+        ctx.announce_fn(AnnouncementId.STATION_CLEARED)
     ctx.controls.tap_key("k")
 
 
@@ -343,6 +347,8 @@ def _run_market_sell(
         )
     if ctx.progress_fn is not None:
         ctx.progress_fn(f"Selling {leg.sell_commodity} at {leg.label} (MAX)...")
+    if ctx.announce_fn is not None:
+        ctx.announce_fn(AnnouncementId.SELLING_CARGO, commodity_name=leg.sell_commodity)
     result = market_sell(
         ctx.controls,
         ctx.watcher,
@@ -377,6 +383,8 @@ def _run_market_buy(
 ) -> tuple[RoutineResult, Phase]:
     if ctx.progress_fn is not None:
         ctx.progress_fn(f"Buying {leg.buy_commodity} at {leg.label} (MAX)...")
+    if ctx.announce_fn is not None:
+        ctx.announce_fn(AnnouncementId.BUYING_CARGO, commodity_name=leg.buy_commodity)
     result = market_buy(
         ctx.controls,
         ctx.watcher,
@@ -419,6 +427,8 @@ def _undock_and_route(
     if destination_system:
         if ctx.progress_fn is not None:
             ctx.progress_fn(f"Setting galaxy map destination: {destination_system}...")
+        if ctx.announce_fn is not None:
+            ctx.announce_fn(AnnouncementId.DESTINATION_SET, system_name=destination_system)
         set_gal_map_destination(
             ctx.controls,
             destination=destination_system,
@@ -466,6 +476,8 @@ def _depart_system(
     if destination_system:
         if ctx.progress_fn is not None:
             ctx.progress_fn(f"Setting galaxy map destination: {destination_system}...")
+        if ctx.announce_fn is not None:
+            ctx.announce_fn(AnnouncementId.DESTINATION_SET, system_name=destination_system)
         set_gal_map_destination(
             ctx.controls,
             destination=destination_system,
@@ -662,6 +674,7 @@ def haul_loop_two_way(
     time_fn: Callable[[], float] = monotonic,
     sleeper: Callable[[float], None] = sleep,
     progress_fn: Callable[[str], None] | None = None,
+    announce_fn: Callable[..., None] | None = None,
 ) -> RoutineResult:
     if iterations < 0:
         raise ValueError("iterations must be non-negative (0 = infinite)")
@@ -712,6 +725,7 @@ def haul_loop_two_way(
         time_fn=time_fn,
         sleeper=sleeper,
         progress_fn=progress_fn,
+        announce_fn=announce_fn,
     )
 
     resolved_start_phase = start_phase or _detect_start_phase(

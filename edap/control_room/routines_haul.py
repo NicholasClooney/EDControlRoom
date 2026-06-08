@@ -138,6 +138,7 @@ def dispatch_haul_loop(
             ),
             sleeper=sleeper,
             progress_fn=progress,
+            announce_fn=app._announce_tts,
         ),
         active_routine_name="haul",
         on_start=on_start,

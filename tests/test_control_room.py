@@ -22,12 +22,14 @@ from edap.config import (
     PathsConfig,
     RuntimeConfig,
     ScreenConfig,
+    TTSConfig,
 )
 from edap.control_room.events import apply_ship_event
 from edap.control_room.models import ShipState
 from edap.control_room_state import CommandHistoryEntry
 from edap.routines import RoutineResult
 from edap.runtime import ResolvedPath, RuntimeContext
+from edap.tts import AnnouncementId
 from edap.control_room.workers import PendingRoutineCancelled, RoutineCancelled
 
 
@@ -49,6 +51,8 @@ def _make_config(journal_dir: Path) -> AppConfig:
             market_nav_delay_seconds=0.1,
             market_trade_max_attempts=3,
             haul_post_sell_settle_seconds=2.0,
+            haul_two_way_auto_hyperspace_engage=True,
+            haul_two_way_open_nav_panel_after_hyperspace_arrival=True,
         ),
         screen=ScreenConfig(
             resolution_width=1920,
@@ -67,6 +71,7 @@ def _make_config(journal_dir: Path) -> AppConfig:
             history_limit=20,
             command_delay_seconds=0.0,
         ),
+        tts=TTSConfig(enabled=False, title="captain", disabled_messages=(), phrases={}),
     )
 
 
@@ -122,6 +127,9 @@ class _HarnessApp(ControlRoomApp):
     def _refresh_haul_stats(self) -> None:  # type: ignore[override]
         return None
 
+    def _refresh_status(self) -> None:  # type: ignore[override]
+        return None
+
     def _show_resume_picker(self) -> None:  # type: ignore[override]
         if not self._saved_state.history:
             self._log("[dim]No saved command history yet.[/]")
@@ -135,6 +143,17 @@ class _InputStub:
         self.placeholder = ""
         self.value = ""
         self.cursor_position = 0
+
+
+class _FakeTTS:
+    def __init__(self) -> None:
+        self.calls: list[tuple[AnnouncementId, dict[str, object]]] = []
+
+    def announce(self, message_id: AnnouncementId, **values: object) -> None:
+        self.calls.append((message_id, values))
+
+    def close(self) -> None:
+        return None
 
 
 class ControlRoomCommandTests(unittest.TestCase):
@@ -587,6 +606,7 @@ class ControlRoomBindingsTests(unittest.TestCase):
         ])
 
     def test_haul_stats_track_clean_cycle_profit_and_time(self) -> None:
+        self.app._tts = _FakeTTS()
         self.app._ship.status = "in_station"
         self.app._ship.station = "Pawelczyk Dock"
         self.app._ship.credits = 1_000_000
@@ -626,6 +646,10 @@ class ControlRoomBindingsTests(unittest.TestCase):
         self.assertEqual(self.app._haul_stats.accumulated_profit, 150_000)
         self.assertEqual(self.app._haul_stats.last_run_elapsed_s, 210.0)
         self.assertEqual(self.app._haul_stats.current_run_started_at, 320.0)
+        self.assertIn(
+            (AnnouncementId.ROUTE_COMPLETE, {"cycle_count": 1, "total_profit_short": "150 thousand credits"}),
+            self.app._tts.calls,
+        )
 
     def test_haul_stats_ignore_partial_resume_until_next_clean_departure(self) -> None:
         self.app._ship.status = "in_supercruise"
@@ -649,6 +673,29 @@ class ControlRoomBindingsTests(unittest.TestCase):
         self.assertFalse(self.app._haul_stats.clean_run_active)
         self.assertEqual(self.app._haul_stats.current_run_elapsed_s, 150.0)
         self.assertEqual(self.app._haul_stats.completed_runs, 0)
+
+    def test_stop_haul_stats_announces_session_summary(self) -> None:
+        self.app._tts = _FakeTTS()
+        self.app._haul_stats.station_1_buying = "Aluminium"
+        self.app._haul_stats.completed_runs = 2
+        self.app._haul_stats.accumulated_profit = 1_250_000
+
+        self.app._stop_haul_stats()
+
+        self.assertIn(
+            (AnnouncementId.SESSION_COMPLETE, {"cycle_count": 2, "total_profit_short": "1.2 million credits"}),
+            self.app._tts.calls,
+        )
+
+    def test_handle_event_announces_destination_and_docking(self) -> None:
+        self.app._tts = _FakeTTS()
+        self.app._ship.station = "Pawelczyk Dock"
+
+        self.app._handle_event({"event": "FSDTarget", "Name": "Achenar"})
+        self.app._handle_event({"event": "DockingRequested", "StationName": "Hutton Orbital"})
+
+        self.assertIn((AnnouncementId.DESTINATION_SET, {"system_name": "Achenar"}), self.app._tts.calls)
+        self.assertIn((AnnouncementId.DOCKING_REQUEST, {"station_name": "Hutton Orbital"}), self.app._tts.calls)
 
 
 class ControlRoomDispatchTests(unittest.TestCase):

@@ -60,6 +60,7 @@ from edap.control_room import (
     prompts as _prompts,
     replay as _replay,
     rendering as _rendering,
+    tts as _tts_module,
     routines_haul,
     routines_movement,
     routines_nav,
@@ -97,6 +98,7 @@ _RELOADABLE_MODULES = [
     _prompts,
     _replay,
     _rendering,
+    _tts_module,
     _workers,
 ]
 from edap.control_room_state import (
@@ -105,6 +107,7 @@ from edap.control_room_state import (
 )
 from edap.runtime import RuntimeContext, build_runtime_context, load_config_with_fallback
 from edap.ship_controls import DEFAULT_SHIP_CONTROL_ACTIONS, ShipControls
+from edap.tts import AnnouncementId, TTSAnnouncer, format_credits_short
 
 
 # ── All actions needed across every supported routine ──────────────────────────
@@ -239,6 +242,7 @@ class ControlRoomApp(App[None]):
         self._watcher_worker: Any | None = None
         self._routine_worker: Any | None = None
         self._time_fn: Callable[[], float] = time.monotonic
+        self._tts = TTSAnnouncer(self._config.tts, platform_name=self._config.runtime.platform)
         self._facade = _facade.ControlRoomFacade(
             self,
             default_placeholder=_DEFAULT_COMMAND_PLACEHOLDER,
@@ -551,6 +555,47 @@ class ControlRoomApp(App[None]):
     def _handle_haul_event(self, ev: dict[str, Any], *, station_before: str | None) -> None:
         _haul_tracking.handle_haul_event(self, ev, station_before=station_before)
 
+    def _announce_tts(self, message_id: AnnouncementId, /, **values: object) -> None:
+        self._tts.announce(message_id, **values)
+
+    def _announce_tts_for_event(self, ev: dict[str, Any], *, station_before: str | None) -> None:
+        event = str(ev.get("event", ""))
+        if event == "FSDTarget":
+            system_name = str(ev.get("Name", "")).strip()
+            if system_name:
+                self._announce_tts(AnnouncementId.DESTINATION_SET, system_name=system_name)
+        elif event == "DockingRequested":
+            station_name = str(ev.get("StationName", "")).strip() or str(self._ship.station or "").strip()
+            if station_name:
+                self._announce_tts(AnnouncementId.DOCKING_REQUEST, station_name=station_name)
+        elif event == "Docked":
+            self._announce_tts(AnnouncementId.DOCKING_COMPLETE)
+        elif event == "Undocked" and station_before:
+            self._announce_tts(AnnouncementId.UNDOCKING)
+        elif event == "StartJump" and str(ev.get("JumpType", "")).lower() == "hyperspace":
+            system_name = str(ev.get("StarSystem", "")).strip() or str(self._ship.target or "").strip()
+            if system_name:
+                self._announce_tts(AnnouncementId.JUMP_INITIATED, system_name=system_name)
+        elif event == "FSDJump":
+            system_name = str(ev.get("StarSystem", "")).strip()
+            if system_name:
+                self._announce_tts(AnnouncementId.ARRIVAL, system_name=system_name)
+        elif event == "SupercruiseExit":
+            station_name = (
+                str(ev.get("StationName", "")).strip()
+                or str(ev.get("Body", "")).strip()
+                or str(ev.get("BodyName", "")).strip()
+            )
+            if station_name:
+                self._announce_tts(AnnouncementId.APPROACHING_STATION, station_name=station_name)
+        elif event == "MarketBuy":
+            self._announce_tts(AnnouncementId.CARGO_LOADED)
+        elif event == "MarketSell" and "TotalSale" in ev:
+            self._announce_tts(
+                AnnouncementId.SALE_PROFIT,
+                profit_short=format_credits_short(int(ev["TotalSale"])),
+            )
+
     def _default_haul_matches(self, entry: CommandHistoryEntry) -> bool:
         return _replay.default_haul_matches(self, entry)
 
@@ -596,6 +641,7 @@ class ControlRoomApp(App[None]):
 
         self._refresh_status()
         self._handle_haul_event(ev, station_before=station_before)
+        self._announce_tts_for_event(ev, station_before=station_before)
 
     def _activity_line(self, ev: dict[str, Any]) -> str | None:
         return _rendering.activity_line(ev)
@@ -647,6 +693,7 @@ class ControlRoomApp(App[None]):
         if self._shutdown_finalized:
             return
         self._shutdown_finalized = True
+        self._tts.close()
         self.workers.cancel_group(self, "watchers")
         self.workers.cancel_group(self, "routines")
         self.exit()

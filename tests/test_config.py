@@ -52,6 +52,39 @@ class LoadConfigTests(unittest.TestCase):
             self.assertEqual(config.control_room.state_file, Path(".control_room_state.json"))
             self.assertEqual(config.control_room.history_limit, 20)
             self.assertEqual(config.control_room.command_delay_seconds, 5.0)
+            self.assertTrue(config.tts.enabled)
+            self.assertEqual(config.tts.title, "commander")
+            self.assertEqual(config.tts.phrases["destination_set"], "Setting destination to {system_name}.")
+
+    def test_tts_partial_override_keeps_default_phrases(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            _write_config(
+                config_path,
+                """
+[paths]
+
+[controls]
+
+[screen]
+
+[runtime]
+
+[tts]
+title = "captain"
+disabled_messages = ["arrival"]
+
+[tts.phrases]
+station_cleared = "Station cleared, {title}."
+""".strip(),
+            )
+
+            config = load_config(config_path)
+
+            self.assertEqual(config.tts.title, "captain")
+            self.assertEqual(config.tts.disabled_messages, ("arrival",))
+            self.assertEqual(config.tts.phrases["station_cleared"], "Station cleared, {title}.")
+            self.assertEqual(config.tts.phrases["destination_set"], "Setting destination to {system_name}.")
 
     def test_defaults_runtime_platform_from_host_when_omitted(self) -> None:
         with TemporaryDirectory() as temp_dir:

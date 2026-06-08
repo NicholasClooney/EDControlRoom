@@ -19,6 +19,8 @@ Last updated: 2026-06-08
 - Two-way haul departures now auto-tap raw key `k` after mass lock clears to engage hyperspace FSD by default; `controls.haul_two_way_auto_hyperspace_engage` disables it when needed.
 - Two-way haul transit now opens the left external panel on hyperspace arrival by default so the nav page is ready for station approach; `controls.haul_two_way_open_nav_panel_after_hyperspace_arrival` disables it when needed.
 - Control room: live Textual UI with ship status, market panel, haul stats, replay/history, persisted state, and routine dispatch.
+- Control room: live Textual UI with ship status, market panel, haul stats, replay/history, persisted state, routine dispatch, and queued cross-platform TTS announcements for haul/navigation milestones.
+- TTS/config: announcement IDs are typed in code, while default phrase text now lives in `defaults/tts.toml` and merges with user `config.toml` overrides under `[tts]`.
 - Platform scope: macOS + CrossOver is the only live-validated operator path. Windows and Linux input/runtime paths exist with unit-test and CI coverage, but not live validation.
 - CI: cross-platform unittest workflow exists in GitHub Actions, and a timing guard now enforces a 10-second ceiling on `tests/test_haul_loop.py`.
 
@@ -26,14 +28,16 @@ Last updated: 2026-06-08
 
 - The legacy autopilot loop is still not ported. This repo is currently automation/runtime tooling plus a growing set of journal-driven routines, not a complete autopilot.
 - Two-way hauling is the active operator path, but it still needs more live validation around startup/resume/station-role detection after the latest fixes.
+- TTS is implemented for macOS (`say`) plus Linux/Windows fallbacks, but only macOS is expected to be live-validated soon; wording/noise level still needs operator feedback after in-game use.
 - CV is still at validation/scaffolding stage. Template matching has been re-baked against CrossOver captures, but there is no real continuous alignment loop yet.
 - Timing enforcement is intentionally narrow for now: only `tests/test_haul_loop.py` has a hard runtime budget because it was the clear outlier.
 
 ## Current Next Steps
 
 1. Live-validate the updated two-way haul startup path, especially station-2 starts and `Market.json` fallback behavior.
-2. Keep the timing guard in place and expand it only after measuring stable CI variance on other candidate suites.
-3. Continue the next portability follow-up slice: CV capture/performance measurement, journal latency measurement, and diagnostics/dashboard work from plans 0002-0004.
+2. Live-test the new queued TTS callouts on macOS and trim or reword noisy announcements based on operator feedback.
+3. Keep the timing guard in place and expand it only after measuring stable CI variance on other candidate suites.
+4. Continue the next portability follow-up slice: CV capture/performance measurement, journal latency measurement, and diagnostics/dashboard work from plans 0002-0004.
 
 ## Handoff Links
 
