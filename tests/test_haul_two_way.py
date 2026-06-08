@@ -282,6 +282,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
 
     def test_transit_opens_nav_panel_after_hyperspace_arrival_by_default(self) -> None:
         controls = FakeShipControls()
+        sleep_calls: list[float] = []
         watcher = FakeWatcher([
             [{"event": "FSDJump", "StarSystem": _SYSTEM_2}],
             [{"event": "SupercruiseExit", "BodyType": "Station"}],
@@ -326,16 +327,18 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                     undock_timeout_s=10.0,
                     trade_timeout_s=10.0,
                     time_fn=_ticking_clock(),
-                    sleeper=lambda _: None,
+                    sleeper=lambda s: sleep_calls.append(s),
                 )
 
         self.assertEqual(result.dispatch.status, "error")
         actions = [call["action"] for call in controls.calls]
         self.assertEqual(actions.count("FocusLeftPanel"), 2)
         self.assertLess(actions.index("FocusLeftPanel"), actions.index("UseBoostJuice"))
+        self.assertIn(3.0, sleep_calls)
 
     def test_transit_skips_nav_panel_when_disabled(self) -> None:
         controls = FakeShipControls()
+        sleep_calls: list[float] = []
         watcher = FakeWatcher([
             [{"event": "FSDJump", "StarSystem": _SYSTEM_2}],
             [{"event": "SupercruiseExit", "BodyType": "Station"}],
@@ -381,11 +384,67 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                     trade_timeout_s=10.0,
                     open_nav_panel_after_hyperspace_arrival=False,
                     time_fn=_ticking_clock(),
-                    sleeper=lambda _: None,
+                    sleeper=lambda s: sleep_calls.append(s),
                 )
 
         self.assertEqual(result.dispatch.status, "error")
         self.assertEqual([call["action"] for call in controls.calls].count("FocusLeftPanel"), 1)
+        self.assertNotIn(3.0, sleep_calls)
+
+    def test_transit_uses_configured_nav_panel_open_delay(self) -> None:
+        controls = FakeShipControls()
+        sleep_calls: list[float] = []
+        watcher = FakeWatcher([
+            [{"event": "FSDJump", "StarSystem": _SYSTEM_2}],
+            [{"event": "SupercruiseExit", "BodyType": "Station"}],
+            [],
+            [{"event": "DockingGranted", "LandingPad": 1, "StationName": _STATION_2}],
+            [{"event": "Docked", "StationName": _STATION_2}],
+        ])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            _write_market(
+                journal_dir,
+                _STATION_1,
+                [
+                    {"Category": "Metals", "Name": "aluminium", "Name_Localised": _CARGO_1, "DemandBracket": 1, "Stock": 1000},
+                    {"Category": "Minerals", "Name": "bertrandite", "Name_Localised": _CARGO_2, "DemandBracket": 1, "Stock": 1000},
+                ],
+            )
+            _write_cargo(journal_dir, [])
+            with patch("edap.routines.haul_two_way.market_sell") as market_sell_mock:
+                market_sell_mock.return_value = RoutineResult(
+                    action="market_sell",
+                    dispatch=ActionDispatchResult(action="market_sell", status="error", reason="stop after transit"),
+                )
+                result = haul_loop_two_way(
+                    controls,
+                    watcher,
+                    journal_dir=journal_dir,
+                    station_1=_STATION_1,
+                    station_1_buying=_CARGO_1,
+                    station_1_system=_SYSTEM_1,
+                    station_2=_STATION_2,
+                    station_2_buying=_CARGO_2,
+                    station_2_system=_SYSTEM_2,
+                    iterations=1,
+                    start_phase=Phase.TRANSIT_TO_STATION_2,
+                    step_delay_s=0.0,
+                    settle_s=0.0,
+                    boost_settle_s=0.0,
+                    dock_timeout_s=30.0,
+                    request_timeout_s=10.0,
+                    undock_timeout_s=10.0,
+                    trade_timeout_s=10.0,
+                    nav_panel_open_delay_s=1.5,
+                    time_fn=_ticking_clock(),
+                    sleeper=lambda s: sleep_calls.append(s),
+                )
+
+        self.assertEqual(result.dispatch.status, "error")
+        self.assertIn(1.5, sleep_calls)
+        self.assertNotIn(3.0, sleep_calls)
 
     def test_resume_in_destination_supercruise_opens_nav_without_waiting_for_new_jump(self) -> None:
         controls = FakeShipControls()

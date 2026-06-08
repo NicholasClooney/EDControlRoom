@@ -178,6 +178,7 @@ class _HaulCtx:
     post_sell_settle_s: float
     auto_hyperspace_engage: bool
     open_nav_panel_after_hyperspace_arrival: bool
+    nav_panel_open_delay_s: float
     max_dock_retries: int
     time_fn: Callable[[], float]
     sleeper: Callable[[float], None]
@@ -198,6 +199,10 @@ def _engage_hyperspace_after_escape(ctx: _HaulCtx) -> None:
 def _open_navigation_panel_after_arrival(ctx: _HaulCtx) -> None:
     if not ctx.open_nav_panel_after_hyperspace_arrival:
         return
+    if ctx.nav_panel_open_delay_s > 0:
+        if ctx.progress_fn is not None:
+            ctx.progress_fn(f"Waiting {ctx.nav_panel_open_delay_s:.1f}s before opening navigation panel...")
+        ctx.sleeper(ctx.nav_panel_open_delay_s)
     if ctx.progress_fn is not None:
         ctx.progress_fn("Hyperspace complete - opening left panel for navigation...")
     dispatch = ctx.controls.focus_left_panel()
@@ -670,6 +675,7 @@ def haul_loop_two_way(
     post_sell_settle_s: float = 2.0,
     auto_hyperspace_engage: bool = True,
     open_nav_panel_after_hyperspace_arrival: bool = True,
+    nav_panel_open_delay_s: float = 3.0,
     max_dock_retries: int = 3,
     time_fn: Callable[[], float] = monotonic,
     sleeper: Callable[[float], None] = sleep,
@@ -721,6 +727,7 @@ def haul_loop_two_way(
         post_sell_settle_s=post_sell_settle_s,
         auto_hyperspace_engage=auto_hyperspace_engage,
         open_nav_panel_after_hyperspace_arrival=open_nav_panel_after_hyperspace_arrival,
+        nav_panel_open_delay_s=nav_panel_open_delay_s,
         max_dock_retries=max_dock_retries,
         time_fn=time_fn,
         sleeper=sleeper,

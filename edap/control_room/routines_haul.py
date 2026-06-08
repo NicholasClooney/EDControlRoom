@@ -136,6 +136,7 @@ def dispatch_haul_loop(
             open_nav_panel_after_hyperspace_arrival=(
                 app._config.controls.haul_two_way_open_nav_panel_after_hyperspace_arrival
             ),
+            nav_panel_open_delay_s=app._config.controls.haul_two_way_nav_panel_open_delay_seconds,
             sleeper=sleeper,
             progress_fn=progress,
             announce_fn=app._announce_tts,

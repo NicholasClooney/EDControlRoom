@@ -51,6 +51,7 @@ class ControlsConfig:
     haul_post_sell_settle_seconds: float
     haul_two_way_auto_hyperspace_engage: bool
     haul_two_way_open_nav_panel_after_hyperspace_arrival: bool
+    haul_two_way_nav_panel_open_delay_seconds: float
 
 
 @dataclass(frozen=True)
@@ -264,6 +265,8 @@ def validate_config(config: AppConfig) -> AppConfig:
         raise ConfigError("Config value `controls.market_trade_max_attempts` must be at least 1.")
     if config.controls.haul_post_sell_settle_seconds < 0:
         raise ConfigError("Config value `controls.haul_post_sell_settle_seconds` must be non-negative.")
+    if config.controls.haul_two_way_nav_panel_open_delay_seconds < 0:
+        raise ConfigError("Config value `controls.haul_two_way_nav_panel_open_delay_seconds` must be non-negative.")
     if config.screen.resolution_width <= 0:
         raise ConfigError("Config value `screen.resolution_width` must be greater than 0.")
     if config.screen.resolution_height <= 0:
@@ -368,6 +371,11 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
                 controls,
                 "haul_two_way_open_nav_panel_after_hyperspace_arrival",
                 True,
+            ),
+            haul_two_way_nav_panel_open_delay_seconds=_float(
+                controls,
+                "haul_two_way_nav_panel_open_delay_seconds",
+                3.0,
             ),
         ),
         screen=ScreenConfig(

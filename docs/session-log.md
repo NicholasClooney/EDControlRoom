@@ -9,4 +9,5 @@ _This is the rolling short-form log for recent sessions. Keep entries concise an
 - Trimmed `docs/STATUS.md` into a compact handoff document and moved long-form status/history into `docs/status-archive.md`.
 - Two-way haul now taps raw `k` after mass-lock escape by default to engage hyperspace FSD; added `controls.haul_two_way_auto_hyperspace_engage` to disable that behavior per config.
 - Two-way haul now opens the left external/nav panel on hyperspace arrival by default, with buffered journal handoff into docking so arrival detection does not consume `SupercruiseExit`/`Docked` events.
+- Added `controls.haul_two_way_nav_panel_open_delay_seconds` with a default 3.0-second wait before the post-jump nav-panel open.
 - Added queued TTS announcements for haul/control-room milestones, with typed announcement IDs in code and repo-shipped default phrases in `defaults/tts.toml` merged with user `[tts]` overrides from `config.toml`.
