@@ -245,6 +245,53 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertEqual(self.app._ship.cargo_count, 24)
         self.assertEqual(len(self.app._ship.cargo_inventory), 2)
 
+    def test_load_market_json_seeds_ship_station_when_in_station(self) -> None:
+        journal_dir = Path(self.tmpdir.name)
+        (journal_dir / "Journal.240101000000.01.log").write_text(
+            json.dumps({"event": "Docked"}) + "\n",
+            encoding="utf-8",
+        )
+        (journal_dir / "Market.json").write_text(
+            json.dumps({
+                "StationName": "Pawelczyk Dock",
+                "StarSystem": "HIP 58412",
+                "timestamp": "2026-06-07T21:10:39Z",
+                "Items": [],
+            }),
+            encoding="utf-8",
+        )
+
+        self.app._bootstrap_ship_state()
+        self.assertEqual(self.app._ship.status, "in_station")
+        self.assertFalse(self.app._ship.station)
+        self.assertFalse(self.app._ship.system)
+
+        self.app._load_market_json()
+
+        self.assertEqual(self.app._ship.station, "Pawelczyk Dock")
+        self.assertEqual(self.app._ship.system, "HIP 58412")
+
+    def test_load_market_json_does_not_seed_when_not_in_station(self) -> None:
+        journal_dir = Path(self.tmpdir.name)
+        (journal_dir / "Journal.240101000000.01.log").write_text(
+            json.dumps({"event": "SupercruiseEntry"}) + "\n",
+            encoding="utf-8",
+        )
+        (journal_dir / "Market.json").write_text(
+            json.dumps({
+                "StationName": "Pawelczyk Dock",
+                "StarSystem": "HIP 58412",
+                "timestamp": "2026-06-07T21:10:39Z",
+                "Items": [],
+            }),
+            encoding="utf-8",
+        )
+
+        self.app._bootstrap_ship_state()
+        self.app._load_market_json()
+
+        self.assertFalse(self.app._ship.station)
+
 
 class ControlRoomBindingsTests(unittest.TestCase):
     def setUp(self) -> None:

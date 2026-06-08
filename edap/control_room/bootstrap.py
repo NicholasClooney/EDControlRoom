@@ -67,4 +67,11 @@ def load_market_json(app: BootstrapHost) -> None:
         items=data.get("Items", []),
         locked=app._market.locked,
     )
+    if app._ship.status == "in_station":
+        market_station = app._market.station
+        if not app._ship.station and market_station and market_station != "?":
+            app._ship.station = market_station
+        market_system = app._market.system
+        if not app._ship.system and market_system and market_system != "?":
+            app._ship.system = market_system
     app._refresh_market()
