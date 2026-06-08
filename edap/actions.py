@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from time import sleep
+from typing import Callable
 
 from edap.binding_lookup import BindingLookup, BindingLookupResult, NormalizedBinding
 from edap.platform.input.base import InputController
@@ -23,9 +25,18 @@ class ActionDispatchResult:
 
 
 class ActionDispatcher:
-    def __init__(self, binding_lookup: BindingLookup, input_controller: InputController) -> None:
+    def __init__(
+        self,
+        binding_lookup: BindingLookup,
+        input_controller: InputController,
+        *,
+        repeat_delay_s: float = 0.1,
+        sleeper: Callable[[float], None] = sleep,
+    ) -> None:
         self._binding_lookup = binding_lookup
         self._input_controller = input_controller
+        self._repeat_delay_s = repeat_delay_s
+        self._sleeper = sleeper
 
     def tap_action(self, action: str, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
         if repeat < 1:
@@ -37,12 +48,14 @@ class ActionDispatcher:
         if resolved.status != "ok" or resolved.binding is None:
             return self._result_from_lookup(resolved, repeat=repeat, hold_s=hold_s)
 
-        for _ in range(repeat):
+        for index in range(repeat):
             self._input_controller.tap_key(
                 resolved.binding.key,
                 modifier=resolved.binding.modifier,
                 hold_s=hold_s,
             )
+            if index < repeat - 1:
+                self._sleeper(self._repeat_delay_s)
         return ActionDispatchResult(
             action=action,
             status="ok",
@@ -60,8 +73,10 @@ class ActionDispatcher:
         if hold_s < 0:
             raise ValueError("hold_s must be non-negative")
 
-        for _ in range(repeat):
+        for index in range(repeat):
             self._input_controller.tap_key(key, modifier=modifier, hold_s=hold_s)
+            if index < repeat - 1:
+                self._sleeper(self._repeat_delay_s)
         return ActionDispatchResult(
             action=f"raw:{key}",
             status="ok",

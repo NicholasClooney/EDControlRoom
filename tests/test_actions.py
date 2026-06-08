@@ -36,7 +36,8 @@ class ActionDispatcherTests(unittest.TestCase):
             actions=["YawLeftButton"],
         )
         input_controller = FakeInputController()
-        dispatcher = ActionDispatcher(lookup, input_controller)
+        sleep_calls: list[float] = []
+        dispatcher = ActionDispatcher(lookup, input_controller, repeat_delay_s=0.1, sleeper=sleep_calls.append)
 
         result = dispatcher.tap_action("YawLeftButton", repeat=2, hold_s=0.05)
 
@@ -49,6 +50,26 @@ class ActionDispatcherTests(unittest.TestCase):
                 {"method": "tap", "key": "a", "modifier": "left_shift", "hold_s": 0.05},
             ],
         )
+        self.assertEqual(sleep_calls, [0.1])
+
+    def test_tap_key_repeats_with_spacing(self) -> None:
+        lookup = build_binding_lookup(bindings={}, actions=[])
+        input_controller = FakeInputController()
+        sleep_calls: list[float] = []
+        dispatcher = ActionDispatcher(lookup, input_controller, repeat_delay_s=0.2, sleeper=sleep_calls.append)
+
+        result = dispatcher.tap_key("k", repeat=3, hold_s=0.05)
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(
+            input_controller.calls,
+            [
+                {"method": "tap", "key": "k", "modifier": None, "hold_s": 0.05},
+                {"method": "tap", "key": "k", "modifier": None, "hold_s": 0.05},
+                {"method": "tap", "key": "k", "modifier": None, "hold_s": 0.05},
+            ],
+        )
+        self.assertEqual(sleep_calls, [0.2, 0.2])
 
     def test_tap_action_reports_missing_without_dispatching_input(self) -> None:
         lookup = build_binding_lookup(bindings={}, actions=["UI_Back"])

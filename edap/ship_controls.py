@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import math
-from dataclasses import replace
 from dataclasses import dataclass
 from pathlib import Path
 from time import sleep
-from typing import Callable
 
 from edap.actions import ActionDispatchResult, ActionDispatcher
 from edap.binding_lookup import BindingLookup, load_binding_lookup
@@ -65,12 +63,10 @@ class ShipControls:
         *,
         minimum_action_hold_s: float = 0.1,
         continuous_action_hold_s: float = 0.2,
-        sleeper: Callable[[float], None] = sleep,
     ) -> None:
         self._dispatcher = dispatcher
         self._minimum_action_hold_s = minimum_action_hold_s
         self._continuous_action_hold_s = continuous_action_hold_s
-        self._sleeper = sleeper
 
     @classmethod
     def from_binding_lookup(
@@ -82,10 +78,14 @@ class ShipControls:
         continuous_action_hold_s: float = 0.2,
     ) -> ShipControls:
         return cls(
-            ActionDispatcher(binding_lookup, input_controller),
+            ActionDispatcher(
+                binding_lookup,
+                input_controller,
+                repeat_delay_s=minimum_action_hold_s,
+                sleeper=sleep,
+            ),
             minimum_action_hold_s=minimum_action_hold_s,
             continuous_action_hold_s=continuous_action_hold_s,
-            sleeper=sleep,
         )
 
     @classmethod
@@ -145,15 +145,7 @@ class ShipControls:
             raise ValueError("repeat must be at least 1")
         if hold_s < 0:
             raise ValueError("hold_s must be non-negative")
-        result: ActionDispatchResult | None = None
-        for index in range(repeat):
-            result = self._dispatcher.tap_action(action, repeat=1, hold_s=hold_s)
-            if result.status != "ok":
-                return replace(result, repeat=repeat)
-            if index < repeat - 1:
-                self._sleeper(self._minimum_action_hold_s)
-        assert result is not None
-        return replace(result, repeat=repeat)
+        return self._dispatcher.tap_action(action, repeat=repeat, hold_s=hold_s)
 
     def dispatch_action(
         self,
@@ -248,12 +240,4 @@ class ShipControls:
         hold_s: float | None = None,
     ) -> ActionDispatchResult:
         plan = self.plan_action(f"raw:{key}", repeat=repeat, hold_s=hold_s)
-        result: ActionDispatchResult | None = None
-        for index in range(plan.repeat):
-            result = self._dispatcher.tap_key(key, modifier=modifier, repeat=1, hold_s=plan.hold_s)
-            if result.status != "ok":
-                return replace(result, repeat=plan.repeat)
-            if index < plan.repeat - 1:
-                self._sleeper(self._minimum_action_hold_s)
-        assert result is not None
-        return replace(result, repeat=plan.repeat)
+        return self._dispatcher.tap_key(key, modifier=modifier, repeat=plan.repeat, hold_s=plan.hold_s)
