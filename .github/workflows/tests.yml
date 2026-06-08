@@ -25,3 +25,17 @@ jobs:
         run: uv sync --extra dev
       - name: Run tests
         run: uv run python -m unittest discover -s tests
+
+  test_timing:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: uv sync --extra dev
+      - name: Guard haul-loop test timing
+        run: uv run python3 tools/check_test_timing.py tests/test_haul_loop.py --max-seconds 10

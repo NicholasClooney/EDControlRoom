@@ -25,6 +25,16 @@ def _read_cargo_json(journal_dir: Path) -> list[dict]:
         return []
 
 
+def _read_market_station(journal_dir: Path) -> tuple[str, str]:
+    market_path = journal_dir / "Market.json"
+    try:
+        with market_path.open(encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        return "", ""
+    return str(data.get("StationName", "")), str(data.get("StarSystem", ""))
+
+
 def _sellable_cargo(inventory: list[dict]) -> list[dict]:
     return [
         item for item in inventory
@@ -32,6 +42,38 @@ def _sellable_cargo(inventory: list[dict]) -> list[dict]:
         and item.get("Stolen", 0) == 0
         and "MissionID" not in item
     ]
+
+
+def _read_latest_journal_events(journal_dir: Path) -> list[dict]:
+    journals = sorted(journal_dir.glob("Journal.*.log"), key=lambda p: p.stat().st_mtime)
+    if not journals:
+        return []
+    events: list[dict] = []
+    try:
+        with journals[-1].open(encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    events.append(json.loads(line))
+                except json.JSONDecodeError:
+                    pass
+    except OSError:
+        pass
+    return events
+
+
+def _inventory_has_commodity(inventory: list[dict], commodity: str) -> bool:
+    commodity_lower = commodity.lower()
+    return any(
+        item.get("Count", 0) > 0
+        and (
+            str(item.get("Name", "")).lower() == commodity_lower
+            or str(item.get("Name_Localised", "")).lower() == commodity_lower
+        )
+        for item in inventory
+    )
 
 
 class Phase(Enum):
@@ -85,6 +127,109 @@ class _HaulCtx:
     time_fn: Callable[[], float]
     sleeper: Callable[[float], None]
     progress_fn: Callable[[str], None] | None
+
+
+def _detect_start_phase(
+    journal_dir: Path,
+    *,
+    station_1: StationLeg,
+    station_2: StationLeg,
+    progress_fn: Callable[[str], None] | None = None,
+) -> Phase:
+    events = _read_latest_journal_events(journal_dir)
+    position_event_types = {"Docked", "Undocked", "SupercruiseEntry", "SupercruiseExit", "Location", "FSDJump"}
+    latest_position: dict | None = None
+    for event in reversed(events):
+        if event.get("event") in position_event_types:
+            latest_position = event
+            break
+
+    if latest_position is None:
+        ship_status = "unknown"
+        current_station = ""
+        current_system = ""
+    else:
+        evt_name = str(latest_position.get("event", ""))
+        if evt_name == "Docked":
+            ship_status = "docked"
+            current_station = str(latest_position.get("StationName", ""))
+            current_system = str(latest_position.get("StarSystem", ""))
+        elif evt_name in {"SupercruiseEntry", "FSDJump"}:
+            ship_status = "supercruise"
+            current_station = ""
+            current_system = str(latest_position.get("StarSystem", ""))
+        elif evt_name in {"SupercruiseExit", "Undocked"}:
+            ship_status = "normal_space"
+            current_station = ""
+            current_system = str(latest_position.get("StarSystem", ""))
+        elif evt_name == "Location":
+            docked = bool(latest_position.get("Docked", False))
+            ship_status = "docked" if docked else "normal_space"
+            current_station = str(latest_position.get("StationName", "")) if docked else ""
+            current_system = str(latest_position.get("StarSystem", ""))
+        else:
+            ship_status = "unknown"
+            current_station = ""
+            current_system = ""
+
+    inventory = _read_cargo_json(journal_dir)
+    has_station_1_cargo = _inventory_has_commodity(inventory, station_1.buy_commodity)
+    has_station_2_cargo = _inventory_has_commodity(inventory, station_2.buy_commodity)
+    market_station, market_system = _read_market_station(journal_dir)
+
+    if ship_status in {"docked", "unknown"}:
+        if not current_station and market_station:
+            current_station = market_station
+        if not current_system and market_system:
+            current_system = market_system
+        if current_station:
+            ship_status = "docked"
+
+    if progress_fn is not None:
+        progress_fn(
+            "Two-way phase detect: "
+            f"status={ship_status}, station={current_station!r}, system={current_system!r}, "
+            f"has_station_1_cargo={has_station_1_cargo}, has_station_2_cargo={has_station_2_cargo}"
+        )
+
+    if ship_status == "unknown":
+        return Phase.AT_STATION_1_SELL
+
+    current_station_lower = current_station.lower()
+    station_1_lower = station_1.station.lower()
+    station_2_lower = station_2.station.lower()
+    current_system_lower = current_system.lower()
+    station_1_system_lower = station_1.system.lower()
+    station_2_system_lower = station_2.system.lower()
+
+    if ship_status == "docked":
+        if current_station_lower == station_1_lower:
+            return Phase.AT_STATION_1_SELL if has_station_2_cargo else Phase.AT_STATION_1_BUY
+        if current_station_lower == station_2_lower:
+            return Phase.AT_STATION_2_SELL if has_station_1_cargo else Phase.AT_STATION_2_BUY
+        raise RuntimeError(
+            f"Docked at unknown station {current_station!r}, expected {station_1.station!r} or {station_2.station!r}"
+        )
+
+    if current_system_lower and station_1_system_lower and current_system_lower == station_1_system_lower:
+        if has_station_2_cargo:
+            return Phase.TRANSIT_TO_STATION_1
+        if ship_status == "normal_space":
+            return Phase.DEPART_STATION_1_SYSTEM
+        return Phase.TRANSIT_TO_STATION_2
+
+    if current_system_lower and station_2_system_lower and current_system_lower == station_2_system_lower:
+        if has_station_1_cargo:
+            return Phase.TRANSIT_TO_STATION_2
+        if ship_status == "normal_space":
+            return Phase.DEPART_STATION_2_SYSTEM
+        return Phase.TRANSIT_TO_STATION_1
+
+    if has_station_1_cargo:
+        return Phase.TRANSIT_TO_STATION_2
+    if has_station_2_cargo:
+        return Phase.TRANSIT_TO_STATION_1
+    return Phase.AT_STATION_1_SELL
 
 
 def _run_market_sell(
@@ -364,7 +509,7 @@ def haul_loop_two_way(
     station_2_buying: str,
     station_2_system: str = "",
     iterations: int = 0,
-    start_phase: Phase = Phase.AT_STATION_1_SELL,
+    start_phase: Phase | None = None,
     step_delay_s: float = 1.0,
     max_hold_s: float = 10.0,
     dock_timeout_s: float = 600.0,
@@ -432,6 +577,15 @@ def haul_loop_two_way(
         progress_fn=progress_fn,
     )
 
+    resolved_start_phase = start_phase or _detect_start_phase(
+        journal_dir,
+        station_1=ctx.station_1,
+        station_2=ctx.station_2,
+        progress_fn=progress_fn,
+    )
+    if progress_fn is not None and resolved_start_phase != Phase.AT_STATION_1_SELL:
+        progress_fn(f"Resuming from phase: {resolved_start_phase.name}")
+
     last_result: RoutineResult | None = None
     iteration = 0
     first_cycle = True
@@ -440,7 +594,7 @@ def haul_loop_two_way(
         if progress_fn is not None:
             iter_label = f" of {iterations}" if iterations > 0 else ""
             progress_fn(f"=== Two-way haul iteration {iteration}{iter_label} ===")
-        phase = start_phase if first_cycle else Phase.AT_STATION_1_SELL
+        phase = resolved_start_phase if first_cycle else Phase.AT_STATION_1_SELL
         first_cycle = False
 
         while True:

@@ -317,6 +317,8 @@ def _run_undock_sell(ctx: _HaulCtx) -> tuple[RoutineResult | None, Phase | None]
             journal_dir=ctx.journal_dir,
             step_delay_s=ctx.step_delay_s,
             map_settle_s=ctx.galaxy_map_settle_s,
+            time_fn=ctx.time_fn,
+            sleeper=ctx.sleeper,
             progress_fn=ctx.progress_fn,
         )
     clear_result = _wait_for_clear_of_station(
@@ -355,6 +357,8 @@ def _set_departure_route_and_escape(
             journal_dir=ctx.journal_dir,
             step_delay_s=ctx.step_delay_s,
             map_settle_s=ctx.galaxy_map_settle_s,
+            time_fn=ctx.time_fn,
+            sleeper=ctx.sleeper,
             progress_fn=ctx.progress_fn,
         )
     escape_mass_lock(
@@ -449,6 +453,8 @@ def _run_undock_buy(ctx: _HaulCtx) -> tuple[RoutineResult | None, Phase | None]:
             journal_dir=ctx.journal_dir,
             step_delay_s=ctx.step_delay_s,
             map_settle_s=ctx.galaxy_map_settle_s,
+            time_fn=ctx.time_fn,
+            sleeper=ctx.sleeper,
             progress_fn=ctx.progress_fn,
         )
     clear_result = _wait_for_clear_of_station(

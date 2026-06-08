@@ -6,6 +6,7 @@
 - [diagnostics/cli-reference.md](diagnostics/cli-reference.md): low-level utility and diagnostics commands
 - [diagnostics/bindings-reference.md](diagnostics/bindings-reference.md): Elite bindings names that matter to this runtime
 - [STATUS.md](STATUS.md): maintained project status and next recommended work
+- [status-archive.md](status-archive.md): archived validation notes, detailed status, and longer handoff history
 - [plans/](plans/): implementation plans
 - [research/](research/): deeper research and behavior-reference material
 - [design/](design/): design notes
