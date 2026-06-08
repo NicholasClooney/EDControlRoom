@@ -41,9 +41,11 @@ class LoadConfigTests(unittest.TestCase):
             self.assertEqual(config.controls.minimum_action_hold_seconds, 0.1)
             self.assertEqual(config.controls.continuous_action_hold_seconds, 0.2)
             self.assertEqual(config.controls.galaxy_map_settle_seconds, 2.0)
+            self.assertEqual(config.controls.dock_supercruise_exit_settle_seconds, 3.0)
             self.assertEqual(config.controls.haul_dock_timeout_seconds, 600.0)
             self.assertEqual(config.controls.undock_timeout_seconds, 30.0)
             self.assertEqual(config.controls.undock_no_track_timeout_seconds, 600.0)
+            self.assertEqual(config.controls.market_critical_level_multiplier, 10.0)
             self.assertTrue(config.controls.haul_two_way_auto_hyperspace_engage)
             self.assertTrue(config.controls.haul_two_way_open_nav_panel_after_hyperspace_arrival)
             self.assertEqual(config.controls.haul_two_way_nav_panel_open_delay_seconds, 3.0)
@@ -232,6 +234,26 @@ command_delay_seconds = -0.1
             )
 
             with self.assertRaisesRegex(ConfigError, "control_room.command_delay_seconds"):
+                load_config(config_path)
+
+    def test_rejects_non_positive_market_critical_level_multiplier(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            _write_config(
+                config_path,
+                """
+[paths]
+
+[controls]
+market_critical_level_multiplier = 0
+
+[screen]
+
+[runtime]
+""".strip(),
+            )
+
+            with self.assertRaisesRegex(ConfigError, "market_critical_level_multiplier"):
                 load_config(config_path)
 
     def test_loads_capture_region_overrides(self) -> None:

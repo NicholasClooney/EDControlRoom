@@ -15,6 +15,8 @@ continuous_action_hold_seconds = 0.2
 step_delay_seconds = 0.3
 # Shared settle delay for galaxy-map result loading and route plotting.
 galaxy_map_settle_seconds = 2.0
+# Delay after `SupercruiseExit` before the docking approach boost.
+dock_supercruise_exit_settle_seconds = 3.0
 # Default docking timeout for haul-loop station arrivals.
 haul_dock_timeout_seconds = 600.0
 # Default time to wait for the launch command to produce an Undocked event.
@@ -29,6 +31,8 @@ mass_lock_boost_delay_seconds = 5.0
 market_nav_delay_seconds = 0.1
 # Maximum buy/sell attempts before aborting when the matching MarketBuy/MarketSell journal event is not observed.
 market_trade_max_attempts = 3
+# Treat station supply/demand below this cargo-capacity multiplier as critically low for warning/TTS.
+market_critical_level_multiplier = 10.0
 # Settle pause after the two-way haul sell phase before the buy phase presses UI_Select.
 # The sell phase ends with UI_Back x2 back to the station services menu, and the buy phase
 # immediately presses UI_Select to re-enter it; without this pause the Select can land on

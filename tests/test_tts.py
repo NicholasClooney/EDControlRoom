@@ -27,7 +27,7 @@ class TTSHelpersTests(unittest.TestCase):
                 title="captain",
                 disabled_messages=("arrival",),
                 phrases={
-                    "arrival": "Arrived.",
+                    "arrival": "We are dropping out of hyper space jump captain.",
                     "station_cleared": "Ready to jump, {title}.",
                     "haul_aborted": "Haul aborted.",
                 },
@@ -43,3 +43,29 @@ class TTSHelpersTests(unittest.TestCase):
         announcer.close()
 
         self.assertEqual(backend.spoken, ["Ready to jump, captain.", "Haul aborted."])
+
+    def test_announcer_renders_market_level_low_phrase(self) -> None:
+        backend = _FakeBackend()
+        announcer = TTSAnnouncer(
+            TTSConfig(
+                enabled=True,
+                title="captain",
+                disabled_messages=(),
+                phrases={
+                    "market_level_low": "Station {market_side} for {commodity_name} is low at {units} units.",
+                },
+            ),
+            platform_name="macos",
+            backend=backend,
+        )
+        self.addCleanup(announcer.close)
+
+        announcer.announce(
+            AnnouncementId.MARKET_LEVEL_LOW,
+            market_side="demand",
+            commodity_name="Aluminium",
+            units=200,
+        )
+        announcer.close()
+
+        self.assertEqual(backend.spoken, ["Station demand for Aluminium is low at 200 units."])

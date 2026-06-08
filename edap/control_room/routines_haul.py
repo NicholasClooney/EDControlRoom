@@ -134,6 +134,7 @@ def dispatch_haul_loop(
             undock_timeout_s=undock_timeout,
             undock_no_track_timeout_s=undock_no_track_timeout,
             galaxy_map_settle_s=galaxy_map_settle,
+            supercruise_exit_settle_s=app._config.controls.dock_supercruise_exit_settle_seconds,
             mass_lock_boost_delay_s=app._config.controls.mass_lock_boost_delay_seconds,
             post_sell_settle_s=app._config.controls.haul_post_sell_settle_seconds,
             auto_hyperspace_engage=app._config.controls.haul_two_way_auto_hyperspace_engage,
@@ -141,6 +142,7 @@ def dispatch_haul_loop(
                 app._config.controls.haul_two_way_open_nav_panel_after_hyperspace_arrival
             ),
             nav_panel_open_delay_s=app._config.controls.haul_two_way_nav_panel_open_delay_seconds,
+            market_critical_level_multiplier=app._config.controls.market_critical_level_multiplier,
             sleeper=sleeper,
             progress_fn=progress,
             announce_fn=app._announce_tts,

@@ -444,7 +444,10 @@ class RoutinesTests(unittest.TestCase):
         self.assertEqual(result.details["supercruise_exit_event"], {"event": "SupercruiseExit", "BodyType": "Station"})
         self.assertEqual(controls.calls[0], {"action": "UseBoostJuice", "repeat": 1, "hold_s": 0.0})
         self.assertEqual(controls.calls[-1], {"action": "SetSpeedZero", "repeat": 2, "hold_s": 0.0})
-        self.assertEqual(sleep_calls, [3.0, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 1.0])
+        self.assertEqual(
+            sleep_calls,
+            [3.0, 3.0, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 1.0],
+        )
 
     def test_dock_retries_after_docking_denied(self) -> None:
         controls = FakeShipControls(
@@ -622,6 +625,7 @@ class RoutinesTests(unittest.TestCase):
         watcher = FakeWatcher(
             [[{"event": "MarketBuy", "Type": "aluminium", "Type_Localised": "Aluminium", "Count": 1, "TotalCost": 1234}]]
         )
+        progress: list[str] = []
 
         with tempfile.TemporaryDirectory() as tmp:
             journal_dir = Path(tmp)
@@ -634,6 +638,11 @@ class RoutinesTests(unittest.TestCase):
                         "StationName": "Pawelczyk Dock",
                         "StarSystem": "HIP 58412",
                     }),
+                    json.dumps({
+                        "timestamp": "2024-01-01T00:00:01Z",
+                        "event": "Loadout",
+                        "CargoCapacity": 64,
+                    }),
                 ]) + "\n",
                 encoding="utf-8",
             )
@@ -643,7 +652,7 @@ class RoutinesTests(unittest.TestCase):
                     {
                         "StationName": "Pawelczyk Dock",
                         "Items": [
-                            {"Category": "Metals", "Name": "aluminium", "Stock": 10},
+                            {"Category": "Metals", "Name": "aluminium", "Stock": 1000},
                         ],
                     }
                 ),
@@ -661,9 +670,14 @@ class RoutinesTests(unittest.TestCase):
                 trade_timeout_s=30.0,
                 time_fn=lambda: 0.0,
                 sleeper=lambda _: None,
+                progress_fn=progress.append,
             )
 
         self.assertEqual(result.dispatch.status, "ok")
+        self.assertIn(
+            "Station supply for aluminium looks normal at 1000 units (critical below 640).",
+            progress,
+        )
 
     def test_market_buy_rejects_when_no_docked_station_state_exists(self) -> None:
         controls = FakeShipControls()
@@ -707,6 +721,74 @@ class RoutinesTests(unittest.TestCase):
 
         self.assertEqual(result.dispatch.status, "error")
         self.assertIn("no docked station state found", result.dispatch.reason or "")
+
+    def test_market_sell_warns_and_announces_when_demand_is_low(self) -> None:
+        controls = FakeShipControls()
+        watcher = FakeWatcher(
+            [[{"event": "MarketSell", "Type": "aluminium", "Type_Localised": "Aluminium", "Count": 64, "TotalSale": 9367520}]]
+        )
+        progress: list[str] = []
+        announcements: list[tuple[AnnouncementId, dict[str, object]]] = []
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            (journal_dir / "Journal.240101000000.01.log").write_text(
+                json.dumps({
+                    "timestamp": "2024-01-01T00:00:01Z",
+                    "event": "Loadout",
+                    "CargoCapacity": 64,
+                }) + "\n",
+                encoding="utf-8",
+            )
+            market_path = journal_dir / "Market.json"
+            market_path.write_text(
+                json.dumps(
+                    {
+                        "StationName": "Pawelczyk Dock",
+                        "Items": [
+                            {
+                                "Category": "Metals",
+                                "Name": "aluminium",
+                                "Name_Localised": "Aluminium",
+                                "Demand": 200,
+                                "DemandBracket": 1,
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = market_sell(
+                controls,
+                watcher,
+                market_path=market_path,
+                target="aluminium",
+                amount="MAX",
+                step_delay_s=0.0,
+                nav_delay_s=0.0,
+                trade_timeout_s=30.0,
+                skip_station_check=True,
+                time_fn=lambda: 0.0,
+                sleeper=lambda _: None,
+                progress_fn=progress.append,
+                announce_fn=lambda message_id, **values: announcements.append((message_id, values)),
+            )
+
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertIn(
+            "Warning: Station demand for Aluminium is low at 200 units (critical below 640).",
+            progress,
+        )
+        self.assertEqual(
+            announcements,
+            [
+                (
+                    AnnouncementId.MARKET_LEVEL_LOW,
+                    {"market_side": "demand", "commodity_name": "Aluminium", "units": 200},
+                )
+            ],
+        )
 
 
 class EscapeMassLockTests(unittest.TestCase):

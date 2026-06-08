@@ -12,6 +12,7 @@ def cmd_dock(app: RoutineHost, *, skip_delay: bool = False) -> None:
     controls = app._make_controls(progress)
     sleeper = app._make_sleeper()
     step_delay = app._config.controls.step_delay_seconds
+    supercruise_exit_settle = app._config.controls.dock_supercruise_exit_settle_seconds
     watcher = app._make_watcher()
 
     label = "dock (already in space)" if skip_scx else "dock (waiting for supercruise exit)"
@@ -25,6 +26,7 @@ def cmd_dock(app: RoutineHost, *, skip_delay: bool = False) -> None:
             wait_for_supercruise_exit=not skip_scx,
             auto_refuel=True,
             step_delay_s=step_delay,
+            supercruise_exit_settle_s=supercruise_exit_settle,
             sleeper=sleeper,
             progress_fn=progress,
             announce_fn=app._announce_tts,

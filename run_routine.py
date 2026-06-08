@@ -637,6 +637,7 @@ def main() -> int:
                 dock_timeout_s=dock_timeout_seconds,
                 settle_s=args.settle_seconds,
                 step_delay_s=step_delay_seconds,
+                supercruise_exit_settle_s=loaded.config.controls.dock_supercruise_exit_settle_seconds,
                 boost_settle_s=args.boost_settle_seconds,
                 deny_retry_delay_s=args.deny_retry_delay_seconds,
                 sleeper=logging_sleeper,
@@ -672,6 +673,7 @@ def main() -> int:
                 max_hold_s=args.max_hold_seconds,
                 trade_timeout_s=args.trade_timeout_seconds,
                 skip_station_check=args.skip_station_check,
+                critical_level_multiplier=loaded.config.controls.market_critical_level_multiplier,
                 sleeper=logging_sleeper,
                 progress_fn=_progress,
             )
@@ -686,6 +688,7 @@ def main() -> int:
                 max_hold_s=args.max_hold_seconds,
                 trade_timeout_s=args.trade_timeout_seconds,
                 skip_station_check=args.skip_station_check,
+                critical_level_multiplier=loaded.config.controls.market_critical_level_multiplier,
                 sleeper=logging_sleeper,
                 progress_fn=_progress,
             )
@@ -714,10 +717,12 @@ def main() -> int:
                     if args.galaxy_map_settle_seconds is not None
                     else loaded.config.controls.galaxy_map_settle_seconds
                 ),
+                supercruise_exit_settle_s=loaded.config.controls.dock_supercruise_exit_settle_seconds,
                 boost_settle_s=args.boost_settle_seconds,
                 deny_retry_delay_s=args.deny_retry_delay_seconds,
                 mass_lock_boost_delay_s=loaded.config.controls.mass_lock_boost_delay_seconds,
                 max_dock_retries=args.max_retries,
+                market_critical_level_multiplier=loaded.config.controls.market_critical_level_multiplier,
                 sleeper=logging_sleeper,
                 progress_fn=_progress,
             )

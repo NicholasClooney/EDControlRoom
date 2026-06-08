@@ -172,6 +172,7 @@ class _HaulCtx:
     trade_timeout_s: float
     settle_s: float
     galaxy_map_settle_s: float
+    supercruise_exit_settle_s: float
     boost_settle_s: float
     deny_retry_delay_s: float
     mass_lock_boost_delay_s: float
@@ -180,6 +181,7 @@ class _HaulCtx:
     open_nav_panel_after_hyperspace_arrival: bool
     nav_panel_open_delay_s: float
     max_dock_retries: int
+    market_critical_level_multiplier: float
     time_fn: Callable[[], float]
     sleeper: Callable[[float], None]
     progress_fn: Callable[[str], None] | None
@@ -366,6 +368,8 @@ def _run_market_sell(
         time_fn=ctx.time_fn,
         sleeper=ctx.sleeper,
         progress_fn=ctx.progress_fn,
+        announce_fn=ctx.announce_fn,
+        critical_level_multiplier=ctx.market_critical_level_multiplier,
     )
     if result.dispatch.status != "ok":
         return result, next_phase
@@ -402,6 +406,8 @@ def _run_market_buy(
         time_fn=ctx.time_fn,
         sleeper=ctx.sleeper,
         progress_fn=ctx.progress_fn,
+        announce_fn=ctx.announce_fn,
+        critical_level_multiplier=ctx.market_critical_level_multiplier,
     )
     if result.dispatch.status != "ok":
         return result, next_phase
@@ -570,6 +576,7 @@ def _run_transit(
         dock_timeout_s=ctx.dock_timeout_s,
         settle_s=ctx.settle_s,
         step_delay_s=ctx.step_delay_s,
+        supercruise_exit_settle_s=ctx.supercruise_exit_settle_s,
         boost_settle_s=ctx.boost_settle_s,
         deny_retry_delay_s=ctx.deny_retry_delay_s,
         time_fn=ctx.time_fn,
@@ -678,6 +685,7 @@ def haul_loop_two_way(
     trade_timeout_s: float = 30.0,
     settle_s: float = 2.0,
     galaxy_map_settle_s: float = 2.0,
+    supercruise_exit_settle_s: float = 3.0,
     boost_settle_s: float = 3.0,
     deny_retry_delay_s: float = 5.0,
     mass_lock_boost_delay_s: float = 5.0,
@@ -686,6 +694,7 @@ def haul_loop_two_way(
     open_nav_panel_after_hyperspace_arrival: bool = True,
     nav_panel_open_delay_s: float = 3.0,
     max_dock_retries: int = 3,
+    market_critical_level_multiplier: float = 10.0,
     time_fn: Callable[[], float] = monotonic,
     sleeper: Callable[[float], None] = sleep,
     progress_fn: Callable[[str], None] | None = None,
@@ -730,6 +739,7 @@ def haul_loop_two_way(
         trade_timeout_s=trade_timeout_s,
         settle_s=settle_s,
         galaxy_map_settle_s=galaxy_map_settle_s,
+        supercruise_exit_settle_s=supercruise_exit_settle_s,
         boost_settle_s=boost_settle_s,
         deny_retry_delay_s=deny_retry_delay_s,
         mass_lock_boost_delay_s=mass_lock_boost_delay_s,
@@ -738,6 +748,7 @@ def haul_loop_two_way(
         open_nav_panel_after_hyperspace_arrival=open_nav_panel_after_hyperspace_arrival,
         nav_panel_open_delay_s=nav_panel_open_delay_s,
         max_dock_retries=max_dock_retries,
+        market_critical_level_multiplier=market_critical_level_multiplier,
         time_fn=time_fn,
         sleeper=sleeper,
         progress_fn=progress_fn,

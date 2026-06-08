@@ -44,12 +44,14 @@ def _make_config(journal_dir: Path) -> AppConfig:
             continuous_action_hold_seconds=0.2,
             step_delay_seconds=0.3,
             galaxy_map_settle_seconds=2.0,
+            dock_supercruise_exit_settle_seconds=3.0,
             haul_dock_timeout_seconds=600.0,
             undock_timeout_seconds=30.0,
             undock_no_track_timeout_seconds=600.0,
             mass_lock_boost_delay_seconds=5.0,
             market_nav_delay_seconds=0.1,
             market_trade_max_attempts=3,
+            market_critical_level_multiplier=10.0,
             haul_post_sell_settle_seconds=2.0,
             haul_two_way_auto_hyperspace_engage=True,
             haul_two_way_open_nav_panel_after_hyperspace_arrival=True,
@@ -345,6 +347,53 @@ class ControlRoomBindingsTests(unittest.TestCase):
 
         self.assertEqual(captured["kwargs"]["undock_timeout_s"], 30.0)
         self.assertEqual(captured["kwargs"]["step_delay_s"], 0.3)
+
+    def test_dock_command_passes_configured_supercruise_exit_settle(self) -> None:
+        captured: dict[str, object] = {}
+
+        self.app._controls = object()
+        self.app._ship.status = "supercruise"
+        self.app._make_progress = lambda: (lambda _: None)
+        self.app._make_controls = lambda progress: object()
+        self.app._make_sleeper = lambda: (lambda _: None)
+        self.app._make_watcher = lambda: object()
+        self.app._run_in_thread = lambda fn: fn()
+
+        def fake_dock(controls, watcher, **kwargs):
+            captured["controls"] = controls
+            captured["watcher"] = watcher
+            captured["kwargs"] = kwargs
+            return None
+
+        with patch("edap.control_room.routines_station.dock", new=fake_dock):
+            self.app._cmd_dock()
+
+        self.assertEqual(captured["kwargs"]["supercruise_exit_settle_s"], 3.0)
+        self.assertEqual(captured["kwargs"]["step_delay_s"], 0.3)
+
+    def test_buy_command_passes_tts_announcer_to_market_routine(self) -> None:
+        captured: dict[str, object] = {}
+
+        self.app._controls = object()
+        self.app._make_progress = lambda: (lambda _: None)
+        self.app._make_controls = lambda progress: object()
+        self.app._make_sleeper = lambda: (lambda _: None)
+        self.app._make_watcher = lambda: object()
+        self.app._run_in_thread = lambda fn: fn()
+
+        def fake_market_buy(controls, watcher, **kwargs):
+            captured["controls"] = controls
+            captured["watcher"] = watcher
+            captured["kwargs"] = kwargs
+            return None
+
+        with patch("edap.control_room.routines_trade.market_buy", new=fake_market_buy):
+            self.app._cmd_buy("aluminium 10")
+
+        announce_fn = captured["kwargs"]["announce_fn"]
+        self.assertIs(announce_fn.__self__, self.app)
+        self.assertIs(announce_fn.__func__, self.app._announce_tts.__func__)
+        self.assertEqual(captured["kwargs"]["critical_level_multiplier"], 10.0)
 
     def test_escape_command_calls_mass_lock_routine(self) -> None:
         captured: dict[str, object] = {}

@@ -72,6 +72,7 @@ def cmd_buy(app: TradeHost, rest: str, *, skip_delay: bool = False) -> None:
 
     amt_label = str(amount) + ("t" if isinstance(amount, int) else "")
     max_attempts = app._config.controls.market_trade_max_attempts
+    critical_level_multiplier = app._config.controls.market_critical_level_multiplier
     app._start_delayed_routine(
         description=f"buy {target}",
         start_message=f"Buying {amt_label} [cyan]{escape(target)}[/]...",
@@ -87,6 +88,8 @@ def cmd_buy(app: TradeHost, rest: str, *, skip_delay: bool = False) -> None:
             max_attempts=max_attempts,
             sleeper=sleeper,
             progress_fn=progress,
+            announce_fn=app._announce_tts,
+            critical_level_multiplier=critical_level_multiplier,
         ),
     )
 
@@ -129,6 +132,7 @@ def sell_item(app: TradeHost, target: str, amount: int | str, *, skip_delay: boo
 
     amt_label = str(amount) + ("t" if isinstance(amount, int) else "")
     max_attempts = app._config.controls.market_trade_max_attempts
+    critical_level_multiplier = app._config.controls.market_critical_level_multiplier
     app._start_delayed_routine(
         description=f"sell {target}",
         start_message=f"Selling {amt_label} [cyan]{escape(target)}[/]...",
@@ -143,6 +147,8 @@ def sell_item(app: TradeHost, target: str, amount: int | str, *, skip_delay: boo
             max_attempts=max_attempts,
             sleeper=sleeper,
             progress_fn=progress,
+            announce_fn=app._announce_tts,
+            critical_level_multiplier=critical_level_multiplier,
         ),
     )
 
@@ -169,6 +175,7 @@ def sell_all(app: TradeHost, *, skip_delay: bool = False) -> None:
     if used_fallback:
         app._log("[yellow]Cargo journal state was empty; using Cargo.json fallback for sell-all[/]")
     max_attempts = app._config.controls.market_trade_max_attempts
+    critical_level_multiplier = app._config.controls.market_critical_level_multiplier
 
     def run_all() -> None:
         for item in inventory:
@@ -186,6 +193,8 @@ def sell_all(app: TradeHost, *, skip_delay: bool = False) -> None:
                     max_attempts=max_attempts,
                     sleeper=sleeper,
                     progress_fn=progress,
+                    announce_fn=app._announce_tts,
+                    critical_level_multiplier=critical_level_multiplier,
                 )
                 status = result.dispatch.status
                 color = "green" if status == "ok" else "yellow"

@@ -173,6 +173,7 @@ def dock(
     dock_timeout_s: float = 120.0,
     settle_s: float = 2.0,
     step_delay_s: float = 0.3,
+    supercruise_exit_settle_s: float = 3.0,
     boost_settle_s: float = 3.0,
     deny_retry_delay_s: float = 5.0,
     time_fn: Callable[[], float] = monotonic,
@@ -192,6 +193,8 @@ def dock(
         raise ValueError("settle_s must be non-negative")
     if step_delay_s < 0:
         raise ValueError("step_delay_s must be non-negative")
+    if supercruise_exit_settle_s < 0:
+        raise ValueError("supercruise_exit_settle_s must be non-negative")
     if boost_settle_s < 0:
         raise ValueError("boost_settle_s must be non-negative")
     if deny_retry_delay_s < 0:
@@ -222,6 +225,10 @@ def dock(
         if progress_fn is not None:
             system = supercruise_exit_event.get("StarSystem", "")
             progress_fn(f"SupercruiseExit: {system}" if system else "SupercruiseExit")
+        if supercruise_exit_settle_s > 0:
+            if progress_fn is not None:
+                progress_fn(f"Settling for {supercruise_exit_settle_s:.1f}s after SupercruiseExit...")
+            sleeper(supercruise_exit_settle_s)
         if progress_fn is not None:
             progress_fn("Boosting toward station...")
         controls.boost()

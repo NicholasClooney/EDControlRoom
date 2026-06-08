@@ -12,6 +12,7 @@ from edap.routines._base import (
     SupportsPollEvents,
     _wait_for_event_with_pending,
 )
+from edap.tts import AnnouncementId
 
 
 def _market_localised(item: dict, key: str) -> str:
@@ -83,6 +84,89 @@ def _read_last_docked_state(journal_dir: Path) -> dict[str, object] | None:
     return None
 
 
+def _read_last_cargo_capacity(journal_dir: Path) -> int | None:
+    journal_files = sorted(journal_dir.glob("Journal.*.log"))
+    if not journal_files:
+        return None
+    for journal_file in reversed(journal_files):
+        try:
+            lines = journal_file.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        for line in reversed(lines):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            cargo_capacity = event.get("CargoCapacity")
+            if isinstance(cargo_capacity, (int, float)) and cargo_capacity > 0:
+                return int(cargo_capacity)
+    return None
+
+
+def _find_market_item(items: list[dict], target: str, side: str) -> dict | None:
+    target_lower = target.lower()
+    for item in items:
+        if side == "buy" and item.get("Stock", 0) <= 0:
+            continue
+        if side == "sell" and item.get("DemandBracket", 0) <= 0:
+            continue
+        if (
+            _market_localised(item, "Name").lower() == target_lower
+            or str(item.get("Name", "")).lower() == target_lower
+        ):
+            return item
+    return None
+
+
+def _report_market_level(
+    item: dict,
+    *,
+    journal_dir: Path,
+    side: str,
+    critical_level_multiplier: float,
+    progress_fn: Callable[[str], None] | None,
+    announce_fn: Callable[..., None] | None,
+) -> None:
+    units_key = "Stock" if side == "buy" else "Demand"
+    market_side = "supply" if side == "buy" else "demand"
+    units = int(item.get(units_key, 0) or 0)
+    commodity_name = _market_localised(item, "Name") or str(item.get("Name", ""))
+    cargo_capacity = _read_last_cargo_capacity(journal_dir)
+    if cargo_capacity is None or cargo_capacity <= 0:
+        if progress_fn is not None:
+            progress_fn(
+                f"Station {market_side} for {commodity_name} is {units} units; "
+                "cargo capacity unavailable, skipping low-level threshold check."
+            )
+        return
+
+    low_threshold = int(cargo_capacity * critical_level_multiplier)
+    if units < low_threshold:
+        if progress_fn is not None:
+            progress_fn(
+                f"Warning: Station {market_side} for {commodity_name} is low at "
+                f"{units} units (critical below {low_threshold})."
+            )
+        if announce_fn is not None:
+            announce_fn(
+                AnnouncementId.MARKET_LEVEL_LOW,
+                market_side=market_side,
+                commodity_name=commodity_name,
+                units=units,
+            )
+        return
+
+    if progress_fn is not None:
+        progress_fn(
+            f"Station {market_side} for {commodity_name} looks normal at "
+            f"{units} units (critical below {low_threshold})."
+        )
+
+
 def _market_error(action: str, reason: str) -> RoutineResult:
     return RoutineResult(
         action=action,
@@ -106,6 +190,8 @@ def market_buy(
     time_fn: Callable[[], float] = monotonic,
     sleeper: Callable[[float], None] = sleep,
     progress_fn: Callable[[str], None] | None = None,
+    announce_fn: Callable[..., None] | None = None,
+    critical_level_multiplier: float = 10.0,
 ) -> RoutineResult:
     return _market_trade(
         controls, watcher,
@@ -113,7 +199,8 @@ def market_buy(
         step_delay_s=step_delay_s, nav_delay_s=nav_delay_s, max_hold_s=max_hold_s,
         trade_timeout_s=trade_timeout_s, skip_station_check=skip_station_check,
         max_attempts=max_attempts,
-        time_fn=time_fn, sleeper=sleeper, progress_fn=progress_fn,
+        time_fn=time_fn, sleeper=sleeper, progress_fn=progress_fn, announce_fn=announce_fn,
+        critical_level_multiplier=critical_level_multiplier,
     )
 
 
@@ -133,6 +220,8 @@ def market_sell(
     time_fn: Callable[[], float] = monotonic,
     sleeper: Callable[[float], None] = sleep,
     progress_fn: Callable[[str], None] | None = None,
+    announce_fn: Callable[..., None] | None = None,
+    critical_level_multiplier: float = 10.0,
 ) -> RoutineResult:
     return _market_trade(
         controls, watcher,
@@ -140,7 +229,8 @@ def market_sell(
         step_delay_s=step_delay_s, nav_delay_s=nav_delay_s, max_hold_s=max_hold_s,
         trade_timeout_s=trade_timeout_s, skip_station_check=skip_station_check,
         max_attempts=max_attempts,
-        time_fn=time_fn, sleeper=sleeper, progress_fn=progress_fn,
+        time_fn=time_fn, sleeper=sleeper, progress_fn=progress_fn, announce_fn=announce_fn,
+        critical_level_multiplier=critical_level_multiplier,
     )
 
 
@@ -161,6 +251,8 @@ def _market_trade(
     time_fn: Callable[[], float],
     sleeper: Callable[[float], None],
     progress_fn: Callable[[str], None] | None,
+    announce_fn: Callable[..., None] | None,
+    critical_level_multiplier: float,
 ) -> RoutineResult:
     event_type = "MarketBuy" if side == "buy" else "MarketSell"
     if max_attempts < 1:
@@ -186,7 +278,8 @@ def _market_trade(
             event_type=event_type,
             step_delay_s=step_delay_s, nav_delay_s=nav_delay_s, max_hold_s=max_hold_s,
             trade_timeout_s=trade_timeout_s, skip_station_check=skip_station_check,
-            time_fn=time_fn, sleeper=sleeper, progress_fn=progress_fn,
+            time_fn=time_fn, sleeper=sleeper, progress_fn=progress_fn, announce_fn=announce_fn,
+            critical_level_multiplier=critical_level_multiplier,
         )
 
         if result.dispatch.status == "ok" and result.trigger_event is not None:
@@ -227,6 +320,8 @@ def _market_trade_attempt(
     time_fn: Callable[[], float],
     sleeper: Callable[[float], None],
     progress_fn: Callable[[str], None] | None,
+    announce_fn: Callable[..., None] | None,
+    critical_level_multiplier: float,
 ) -> RoutineResult:
     # Navigate to commodities market first -- the game writes Market.json when the screen opens
     if progress_fn is not None:
@@ -309,9 +404,20 @@ def _market_trade_attempt(
         item_index = _market_item_index(sorted_items, target)
     except ValueError as exc:
         return _market_error(event_type, str(exc))
+    item = _find_market_item(items, target, side)
+    if item is None:
+        return _market_error(event_type, f"'{target}' matched navigation list but not market item data")
 
     if progress_fn is not None:
         progress_fn(f"Target '{target}' at position {item_index} in {side} list ({len(sorted_items)} items)")
+    _report_market_level(
+        item,
+        journal_dir=market_path.parent,
+        side=side,
+        critical_level_multiplier=critical_level_multiplier,
+        progress_fn=progress_fn,
+        announce_fn=announce_fn,
+    )
 
     # For sell: navigate sidebar from BUY to SELL tab before entering the list
     if side == "sell":

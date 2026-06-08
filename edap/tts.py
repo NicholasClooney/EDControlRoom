@@ -27,6 +27,7 @@ class AnnouncementId(str, Enum):
     CARGO_LOADED = "cargo_loaded"
     ROUTE_COMPLETE = "route_complete"
     SESSION_COMPLETE = "session_complete"
+    MARKET_LEVEL_LOW = "market_level_low"
 
 
 def parse_announcement_id(value: str) -> AnnouncementId | None:

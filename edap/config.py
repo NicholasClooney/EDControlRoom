@@ -42,12 +42,14 @@ class ControlsConfig:
     continuous_action_hold_seconds: float
     step_delay_seconds: float
     galaxy_map_settle_seconds: float
+    dock_supercruise_exit_settle_seconds: float
     haul_dock_timeout_seconds: float
     undock_timeout_seconds: float
     undock_no_track_timeout_seconds: float
     mass_lock_boost_delay_seconds: float
     market_nav_delay_seconds: float
     market_trade_max_attempts: int
+    market_critical_level_multiplier: float
     haul_post_sell_settle_seconds: float
     haul_two_way_auto_hyperspace_engage: bool
     haul_two_way_open_nav_panel_after_hyperspace_arrival: bool
@@ -251,6 +253,8 @@ def validate_config(config: AppConfig) -> AppConfig:
         raise ConfigError("Config value `controls.step_delay_seconds` must be non-negative.")
     if config.controls.galaxy_map_settle_seconds < 0:
         raise ConfigError("Config value `controls.galaxy_map_settle_seconds` must be non-negative.")
+    if config.controls.dock_supercruise_exit_settle_seconds < 0:
+        raise ConfigError("Config value `controls.dock_supercruise_exit_settle_seconds` must be non-negative.")
     if config.controls.haul_dock_timeout_seconds < 0:
         raise ConfigError("Config value `controls.haul_dock_timeout_seconds` must be non-negative.")
     if config.controls.undock_timeout_seconds < 0:
@@ -263,6 +267,8 @@ def validate_config(config: AppConfig) -> AppConfig:
         raise ConfigError("Config value `controls.market_nav_delay_seconds` must be non-negative.")
     if config.controls.market_trade_max_attempts < 1:
         raise ConfigError("Config value `controls.market_trade_max_attempts` must be at least 1.")
+    if config.controls.market_critical_level_multiplier <= 0:
+        raise ConfigError("Config value `controls.market_critical_level_multiplier` must be greater than 0.")
     if config.controls.haul_post_sell_settle_seconds < 0:
         raise ConfigError("Config value `controls.haul_post_sell_settle_seconds` must be non-negative.")
     if config.controls.haul_two_way_nav_panel_open_delay_seconds < 0:
@@ -359,12 +365,14 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             continuous_action_hold_seconds=_float(controls, "continuous_action_hold_seconds", 0.2),
             step_delay_seconds=_float(controls, "step_delay_seconds", 0.3),
             galaxy_map_settle_seconds=_float(controls, "galaxy_map_settle_seconds", 2.0),
+            dock_supercruise_exit_settle_seconds=_float(controls, "dock_supercruise_exit_settle_seconds", 3.0),
             haul_dock_timeout_seconds=_float(controls, "haul_dock_timeout_seconds", 600.0),
             undock_timeout_seconds=_float(controls, "undock_timeout_seconds", 30.0),
             undock_no_track_timeout_seconds=_float(controls, "undock_no_track_timeout_seconds", 600.0),
             mass_lock_boost_delay_seconds=_float(controls, "mass_lock_boost_delay_seconds", 5.0),
             market_nav_delay_seconds=_float(controls, "market_nav_delay_seconds", 0.1),
             market_trade_max_attempts=_integer(controls, "market_trade_max_attempts", 3),
+            market_critical_level_multiplier=_float(controls, "market_critical_level_multiplier", 10.0),
             haul_post_sell_settle_seconds=_float(controls, "haul_post_sell_settle_seconds", 2.0),
             haul_two_way_auto_hyperspace_engage=_boolean(controls, "haul_two_way_auto_hyperspace_engage", True),
             haul_two_way_open_nav_panel_after_hyperspace_arrival=_boolean(
