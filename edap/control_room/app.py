@@ -529,15 +529,17 @@ class ControlRoomApp(App[None]):
     def _start_haul_stats(
         self,
         *,
-        commodity: str,
-        buy_station: str,
-        sell_station: str,
+        station_1_buying: str,
+        station_2_buying: str,
+        station_1: str,
+        station_2: str,
     ) -> None:
         _haul_tracking.start_haul_stats(
             self,
-            commodity=commodity,
-            buy_station=buy_station,
-            sell_station=sell_station,
+            station_1_buying=station_1_buying,
+            station_2_buying=station_2_buying,
+            station_1=station_1,
+            station_2=station_2,
         )
 
     def _stop_haul_stats(self) -> None:

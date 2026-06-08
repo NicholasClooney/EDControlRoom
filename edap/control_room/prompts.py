@@ -74,10 +74,10 @@ def saved_haul_defaults(
     defaults = dict(app._saved_state.default_haul)
     if seed:
         defaults.update({key: value for key, value in seed.items() if value != ""})
-    if not defaults.get("sell_station") and app._ship.station:
-        defaults["sell_station"] = app._ship.station
-    if not defaults.get("sell_system") and app._ship.system:
-        defaults["sell_system"] = app._ship.system
+    if not defaults.get("station_1") and app._ship.station:
+        defaults["station_1"] = app._ship.station
+    if not defaults.get("station_1_system") and app._ship.system:
+        defaults["station_1_system"] = app._ship.system
     if not defaults.get("galaxy_map_settle"):
         defaults["galaxy_map_settle"] = str(app._config.controls.galaxy_map_settle_seconds)
     if not defaults.get("dock_timeout"):
@@ -95,11 +95,12 @@ def start_haul_prompt(
     raw_command: str | None = None,
 ) -> None:
     app._haul_params = {
-        "commodity": commodity.strip(),
-        "buy_station": "",
-        "sell_station": "",
-        "sell_system": "",
-        "buy_system": "",
+        "station_1_buying": commodity.strip(),
+        "station_1": "",
+        "station_1_system": "",
+        "station_2_buying": "",
+        "station_2": "",
+        "station_2_system": "",
         "galaxy_map_settle": "",
         "dock_timeout": "",
     }
@@ -108,29 +109,32 @@ def start_haul_prompt(
     app._haul_prompt_defaults = saved_haul_defaults(app, seed)
     app._log("Haul loop setup — enter parameters below:")
     if prompt_for_commodity:
-        app._haul_prompt_step = "commodity"
-        default_commodity = app._haul_prompt_defaults.get("commodity", "")
+        app._haul_prompt_step = "station_1_buying"
+        default_commodity = app._haul_prompt_defaults.get("station_1_buying", "")
         if default_commodity:
-            app._log(f"[dim]Commodity to buy? (Enter = {escape(default_commodity)})[/]")
+            app._log(f"[dim]Station 1 buying? (Enter = {escape(default_commodity)})[/]")
             app.query_one("#cmd", Input).placeholder = (
-                f"commodity (Enter = {default_commodity})..."
+                f"station 1 buying (Enter = {default_commodity})..."
             )
         else:
-            app._log("[dim]Commodity to buy? (e.g. Aluminium)[/]")
-            app.query_one("#cmd", Input).placeholder = "commodity..."
+            app._log("[dim]Station 1 buying? (this cargo will be sold at station 2)[/]")
+            app.query_one("#cmd", Input).placeholder = "station 1 buying..."
         return
 
-    app._log(f"Haul loop: commodity = [cyan]{escape(app._haul_params['commodity'])}[/]")
-    app._haul_prompt_step = "buy_station"
-    default_buy_station = app._haul_prompt_defaults.get("buy_station", "")
-    if default_buy_station:
-        app._log(f"[dim]Buy station name? (Enter = {escape(default_buy_station)})[/]")
+    app._log(
+        f"Haul loop: station 1 buying = [cyan]{escape(app._haul_params['station_1_buying'])}[/]"
+    )
+    app._haul_prompt_step = "station_1"
+    default_station_1 = app._haul_prompt_defaults.get("station_1", "")
+    if default_station_1:
+        app._log(f"[dim]Station 1 name? (Enter = {escape(default_station_1)})[/]")
         app.query_one("#cmd", Input).placeholder = (
-            f"buy station (Enter = {default_buy_station})..."
+            f"station 1 (Enter = {default_station_1})..."
         )
     else:
-        app._log("[dim]Buy station name? (press Enter to skip)[/]")
-        app.query_one("#cmd", Input).placeholder = "buy station (Enter to skip)..."
+        current = app._ship.station or "current station"
+        app._log(f"[dim]Station 1 name? (Enter to use {escape(current)})[/]")
+        app.query_one("#cmd", Input).placeholder = f"station 1 (Enter = {current})..."
 
 
 def start_haul_confirm_prompt(
@@ -139,11 +143,11 @@ def start_haul_confirm_prompt(
 ) -> None:
     app._haul_confirm_buy_station = station
     app._log(
-        f"[dim]Assume current station [cyan]{escape(station)}[/] is the buy station? "
+        f"[dim]Assume current station [cyan]{escape(station)}[/] is station 1? "
         f"(Enter = yes, no to cancel)[/]"
     )
     app.query_one("#cmd", Input).placeholder = (
-        "confirm buy station? Enter = yes, no to cancel..."
+        "confirm station 1? Enter = yes, no to cancel..."
     )
 
 
@@ -157,8 +161,8 @@ def handle_haul_confirm_prompt(
     if answer in {"", "y", "yes"}:
         station = app._haul_confirm_buy_station
         app._haul_confirm_buy_station = ""
-        app._haul_params["buy_station"] = station
-        app._log(f"  Buy station confirmed: [cyan]{escape(station)}[/]")
+        app._haul_params["station_1"] = station
+        app._log(f"  Station 1 confirmed: [cyan]{escape(station)}[/]")
         app.query_one("#cmd", Input).placeholder = default_placeholder
         app._dispatch_haul_loop(
             skip_delay=app._haul_prompt_skip_delay,
@@ -169,7 +173,7 @@ def handle_haul_confirm_prompt(
         station = app._haul_confirm_buy_station
         app._haul_confirm_buy_station = ""
         app._log(
-            f"[yellow]Haul launch cancelled — buy station left unresolved "
+            f"[yellow]Haul launch cancelled — station 1 left unresolved "
             f"for [cyan]{escape(station)}[/].[/]"
         )
         app.query_one("#cmd", Input).placeholder = default_placeholder
@@ -183,95 +187,114 @@ def handle_haul_prompt(
     *,
     default_placeholder: str,
 ) -> None:
-    if app._haul_prompt_step == "commodity":
-        resolved = value.strip() or app._haul_prompt_defaults.get("commodity", "")
+    if app._haul_prompt_step == "station_1_buying":
+        resolved = value.strip() or app._haul_prompt_defaults.get("station_1_buying", "")
         if not resolved:
-            app._log("[red]Commodity is required — enter a commodity name.[/]")
+            app._log("[red]Station 1 buying cargo is required.[/]")
             return
-        app._haul_params["commodity"] = resolved
-        app._log(f"  Commodity: [cyan]{escape(resolved)}[/]")
-        app._haul_prompt_step = "buy_station"
-        default_buy_station = app._haul_prompt_defaults.get("buy_station", "")
-        if default_buy_station:
-            app._log(f"[dim]Buy station name? (Enter = {escape(default_buy_station)})[/]")
+        app._haul_params["station_1_buying"] = resolved
+        app._log(f"  Station 1 buying: [cyan]{escape(resolved)}[/]")
+        app._haul_prompt_step = "station_1"
+        default_station_1 = app._haul_prompt_defaults.get("station_1", "")
+        if default_station_1:
+            app._log(f"[dim]Station 1 name? (Enter = {escape(default_station_1)})[/]")
             app.query_one("#cmd", Input).placeholder = (
-                f"buy station (Enter = {default_buy_station})..."
-            )
-        else:
-            app._log("[dim]Buy station name? (press Enter to skip)[/]")
-            app.query_one("#cmd", Input).placeholder = "buy station (Enter to skip)..."
-        return
-
-    if app._haul_prompt_step == "buy_station":
-        resolved = value.strip() or app._haul_prompt_defaults.get("buy_station", "")
-        app._haul_params["buy_station"] = resolved
-        if resolved:
-            app._log(f"  Buy station: [cyan]{escape(resolved)}[/]")
-        else:
-            app._log("  Buy station: [dim](none)[/]")
-        app._haul_prompt_step = "sell_station"
-        default_sell_station = app._haul_prompt_defaults.get("sell_station", "")
-        if default_sell_station:
-            app._log(f"[dim]Sell station name? (Enter = {escape(default_sell_station)})[/]")
-            app.query_one("#cmd", Input).placeholder = (
-                f"sell station (Enter = {default_sell_station})..."
+                f"station 1 (Enter = {default_station_1})..."
             )
         else:
             current = app._ship.station or "current station"
-            app._log(f"[dim]Sell station name? (Enter to use {escape(current)})[/]")
+            app._log(f"[dim]Station 1 name? (Enter to use {escape(current)})[/]")
+            app.query_one("#cmd", Input).placeholder = f"station 1 (Enter = {current})..."
+        return
+
+    if app._haul_prompt_step == "station_1":
+        resolved = value.strip() or app._haul_prompt_defaults.get("station_1", "")
+        app._haul_params["station_1"] = resolved
+        if resolved:
+            app._log(f"  Station 1: [cyan]{escape(resolved)}[/]")
+        else:
+            app._log("  Station 1: [dim](current station)[/]")
+        app._haul_prompt_step = "station_1_system"
+        default_station_1_system = app._haul_prompt_defaults.get("station_1_system", "")
+        if default_station_1_system:
+            app._log(f"[dim]Station 1 system? (Enter = {escape(default_station_1_system)})[/]")
             app.query_one("#cmd", Input).placeholder = (
-                f"sell station (Enter = {current})..."
+                f"station 1 system (Enter = {default_station_1_system})..."
+            )
+        else:
+            current = app._ship.system or "current system"
+            app._log(f"[dim]Station 1 system? (Enter to use {escape(current)})[/]")
+            app.query_one("#cmd", Input).placeholder = (
+                f"station 1 system (Enter = {current})..."
             )
         return
 
-    if app._haul_prompt_step == "sell_station":
-        resolved = value.strip() or app._haul_prompt_defaults.get("sell_station", "")
-        app._haul_params["sell_station"] = resolved
+    if app._haul_prompt_step == "station_1_system":
+        resolved = value.strip() or app._haul_prompt_defaults.get("station_1_system", "")
+        app._haul_params["station_1_system"] = resolved
         if resolved:
-            app._log(f"  Sell station: [cyan]{escape(resolved)}[/]")
+            app._log(f"  Station 1 system: [cyan]{escape(resolved)}[/]")
         else:
-            app._log("  Sell station: [dim](current station)[/]")
-        app._haul_prompt_step = "sell_system"
-        default_sell_system = app._haul_prompt_defaults.get("sell_system", "")
-        if default_sell_system:
-            app._log(f"[dim]Sell system? (Enter = {escape(default_sell_system)})[/]")
+            app._log("  Station 1 system: [dim](current system)[/]")
+        app._haul_prompt_step = "station_2_buying"
+        default_station_2_buying = app._haul_prompt_defaults.get("station_2_buying", "")
+        if default_station_2_buying:
+            app._log(f"[dim]Station 2 buying? (Enter = {escape(default_station_2_buying)})[/]")
             app.query_one("#cmd", Input).placeholder = (
-                f"sell system (Enter = {default_sell_system})..."
+                f"station 2 buying (Enter = {default_station_2_buying})..."
             )
         else:
-            current_system = app._ship.system or "current system"
-            app._log(f"[dim]Sell system? (Enter to use {escape(current_system)})[/]")
-            app.query_one("#cmd", Input).placeholder = (
-                f"sell system (Enter = {current_system})..."
-            )
+            app._log("[dim]Station 2 buying? (this cargo will be sold at station 1)[/]")
+            app.query_one("#cmd", Input).placeholder = "station 2 buying..."
         return
 
-    if app._haul_prompt_step == "sell_system":
-        resolved = value.strip() or app._haul_prompt_defaults.get("sell_system", "")
-        app._haul_params["sell_system"] = resolved
+    if app._haul_prompt_step == "station_2_buying":
+        resolved = value.strip() or app._haul_prompt_defaults.get("station_2_buying", "")
+        if not resolved:
+            app._log("[red]Station 2 buying cargo is required.[/]")
+            return
+        app._haul_params["station_2_buying"] = resolved
         if resolved:
-            app._log(f"  Sell system: [cyan]{escape(resolved)}[/]")
-        else:
-            app._log("  Sell system: [dim](current system)[/]")
-        app._haul_prompt_step = "buy_system"
-        default_buy_system = app._haul_prompt_defaults.get("buy_system", "")
-        if default_buy_system:
-            app._log(f"[dim]Buy system? (Enter = {escape(default_buy_system)})[/]")
+            app._log(f"  Station 2 buying: [cyan]{escape(resolved)}[/]")
+        app._haul_prompt_step = "station_2"
+        default_station_2 = app._haul_prompt_defaults.get("station_2", "")
+        if default_station_2:
+            app._log(f"[dim]Station 2 name? (Enter = {escape(default_station_2)})[/]")
             app.query_one("#cmd", Input).placeholder = (
-                f"buy system (Enter = {default_buy_system})..."
+                f"station 2 (Enter = {default_station_2})..."
             )
         else:
-            app._log("[dim]Buy system? (press Enter to skip)[/]")
-            app.query_one("#cmd", Input).placeholder = "buy system (Enter to skip)..."
+            app._log("[dim]Station 2 name?[/]")
+            app.query_one("#cmd", Input).placeholder = "station 2..."
         return
 
-    if app._haul_prompt_step == "buy_system":
-        resolved = value.strip() or app._haul_prompt_defaults.get("buy_system", "")
-        app._haul_params["buy_system"] = resolved
+    if app._haul_prompt_step == "station_2":
+        resolved = value.strip() or app._haul_prompt_defaults.get("station_2", "")
+        if not resolved:
+            app._log("[red]Station 2 name is required.[/]")
+            return
+        app._haul_params["station_2"] = resolved
         if resolved:
-            app._log(f"  Buy system: [cyan]{escape(resolved)}[/]")
+            app._log(f"  Station 2: [cyan]{escape(resolved)}[/]")
+        app._haul_prompt_step = "station_2_system"
+        default_station_2_system = app._haul_prompt_defaults.get("station_2_system", "")
+        if default_station_2_system:
+            app._log(f"[dim]Station 2 system? (Enter = {escape(default_station_2_system)})[/]")
+            app.query_one("#cmd", Input).placeholder = (
+                f"station 2 system (Enter = {default_station_2_system})..."
+            )
         else:
-            app._log("  Buy system: [dim](none)[/]")
+            app._log("[dim]Station 2 system?[/]")
+            app.query_one("#cmd", Input).placeholder = "station 2 system..."
+        return
+
+    if app._haul_prompt_step == "station_2_system":
+        resolved = value.strip() or app._haul_prompt_defaults.get("station_2_system", "")
+        if not resolved:
+            app._log("[red]Station 2 system is required.[/]")
+            return
+        app._haul_params["station_2_system"] = resolved
+        app._log(f"  Station 2 system: [cyan]{escape(resolved)}[/]")
         default_settle = float(
             app._haul_prompt_defaults.get(
                 "galaxy_map_settle",

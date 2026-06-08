@@ -374,11 +374,12 @@ class ControlRoomBindingsTests(unittest.TestCase):
         self.app._ship.station = ""
         self.app._ship.system = "Sol"
         self.app._haul_params = {
-            "commodity": "Aluminium",
-            "buy_station": "Trevithick Dock",
-            "sell_station": "Pawelczyk Dock",
-            "sell_system": "Sol",
-            "buy_system": "Achenar",
+            "station_1_buying": "Aluminium",
+            "station_1": "Pawelczyk Dock",
+            "station_1_system": "Sol",
+            "station_2_buying": "Bertrandite",
+            "station_2": "Trevithick Dock",
+            "station_2_system": "Achenar",
             "galaxy_map_settle": "",
             "dock_timeout": "",
         }
@@ -398,53 +399,29 @@ class ControlRoomBindingsTests(unittest.TestCase):
                 dispatch=ActionDispatchResult(action="haul_loop", status="ok"),
             )
 
-        with patch("edap.control_room.routines_haul.haul_loop", new=fake_haul_loop):
+        with patch("edap.control_room.routines_haul.haul_loop_two_way", new=fake_haul_loop):
             self.app._dispatch_haul_loop()
 
         self.assertIn("kwargs", captured)
-        self.assertFalse(any("requires you to be docked at the sell station" in msg for msg in self.app.logged))
         self.assertIn("Starting haul loop:", "\n".join(self.app.logged))
-        self.assertEqual(captured["kwargs"]["confirm_fn"]("ignored"), False)
         self.assertEqual(self.app._active_routine_name, "haul")
-        self.assertEqual(self.app._haul_stats.commodity, "Aluminium")
+        self.assertEqual(self.app._haul_stats.station_1_buying, "Aluminium")
+        self.assertEqual(self.app._haul_stats.station_2_buying, "Bertrandite")
         self.assertTrue(self.app._haul_stats.resumed_mid_run)
 
-    def test_haul_dispatch_prompts_to_confirm_unknown_buy_station(self) -> None:
-        self.app.query_one = lambda *args, **kwargs: _InputStub()  # type: ignore[method-assign]
+    def test_haul_dispatch_defaults_station_1_to_current_station(self) -> None:
+        captured: dict[str, object] = {}
+
         self.app._ship.status = "in_station"
         self.app._ship.station = "Mystery Base"
+        self.app._ship.system = "Sol"
         self.app._haul_params = {
-            "commodity": "Aluminium",
-            "buy_station": "",
-            "sell_station": "Pawelczyk Dock",
-            "sell_system": "Sol",
-            "buy_system": "",
-            "galaxy_map_settle": "",
-            "dock_timeout": "",
-        }
-
-        journal_file = Path(self.tmpdir.name) / "Journal.240101000000.01.log"
-        journal_file.write_text(
-            json.dumps({"event": "Docked", "StationName": "Mystery Base", "StarSystem": "Sol"}) + "\n",
-            encoding="utf-8",
-        )
-        (Path(self.tmpdir.name) / "Cargo.json").write_text(json.dumps({"Inventory": []}), encoding="utf-8")
-
-        self.app._dispatch_haul_loop()
-
-        self.assertEqual(self.app._haul_confirm_buy_station, "Mystery Base")
-        self.assertIn("Assume current station", "\n".join(self.app.logged))
-
-    def test_haul_confirm_yes_sets_buy_station_and_starts(self) -> None:
-        captured: dict[str, object] = {}
-        self.app.query_one = lambda *args, **kwargs: _InputStub()  # type: ignore[method-assign]
-
-        self.app._haul_params = {
-            "commodity": "Aluminium",
-            "buy_station": "",
-            "sell_station": "Pawelczyk Dock",
-            "sell_system": "Sol",
-            "buy_system": "",
+            "station_1_buying": "Aluminium",
+            "station_1": "",
+            "station_1_system": "",
+            "station_2_buying": "Bertrandite",
+            "station_2": "Pawelczyk Dock",
+            "station_2_system": "Achenar",
             "galaxy_map_settle": "",
             "dock_timeout": "",
         }
@@ -455,40 +432,19 @@ class ControlRoomBindingsTests(unittest.TestCase):
         self.app._make_watcher = lambda: object()
         self.app._run_in_thread = lambda fn: fn()
 
-        def fake_dispatch(**kwargs) -> None:
-            captured["buy_station"] = self.app._haul_params["buy_station"]
+        def fake_haul_loop(controls, watcher, **kwargs):
+            captured["kwargs"] = kwargs
+            return RoutineResult(
+                action="haul_loop",
+                dispatch=ActionDispatchResult(action="haul_loop", status="ok"),
+            )
 
-        self.app._dispatch_haul_loop = fake_dispatch  # type: ignore[method-assign]
-        self.app._haul_confirm_buy_station = "Mystery Base"
+        with patch("edap.control_room.routines_haul.haul_loop_two_way", new=fake_haul_loop):
+            self.app._dispatch_haul_loop()
 
-        self.app._handle_haul_confirm_prompt("yes")
-
-        self.assertEqual(captured["buy_station"], "Mystery Base")
-        self.assertEqual(self.app._haul_confirm_buy_station, "")
-
-    def test_haul_confirm_blank_defaults_to_yes(self) -> None:
-        captured: dict[str, object] = {}
-        self.app.query_one = lambda *args, **kwargs: _InputStub()  # type: ignore[method-assign]
-        self.app._haul_params = {
-            "commodity": "Aluminium",
-            "buy_station": "",
-            "sell_station": "Pawelczyk Dock",
-            "sell_system": "Sol",
-            "buy_system": "",
-            "galaxy_map_settle": "",
-            "dock_timeout": "",
-        }
-
-        def fake_dispatch(**kwargs) -> None:
-            captured["buy_station"] = self.app._haul_params["buy_station"]
-
-        self.app._dispatch_haul_loop = fake_dispatch  # type: ignore[method-assign]
-        self.app._haul_confirm_buy_station = "Mystery Base"
-
-        self.app._handle_haul_confirm_prompt("")
-
-        self.assertEqual(captured["buy_station"], "Mystery Base")
-        self.assertEqual(self.app._haul_confirm_buy_station, "")
+        self.assertEqual(captured["kwargs"]["station_1"], "Mystery Base")
+        self.assertEqual(captured["kwargs"]["station_1_system"], "Sol")
+        self.assertIn("Station 1 defaulting to current station", "\n".join(self.app.logged))
 
     def test_haul_confirm_no_cancels_launch(self) -> None:
         self.app.query_one = lambda *args, **kwargs: _InputStub()  # type: ignore[method-assign]
@@ -521,8 +477,8 @@ class ControlRoomBindingsTests(unittest.TestCase):
 
     def test_saved_haul_defaults_use_explicit_default_haul(self) -> None:
         self.app._saved_state.default_haul = {
-            "commodity": "Aluminium",
-            "buy_station": "Hutton Orbital",
+            "station_1_buying": "Aluminium",
+            "station_2": "Hutton Orbital",
             "galaxy_map_settle": "5.0",
         }
         self.app._ship.station = "Jameson Memorial"
@@ -530,10 +486,10 @@ class ControlRoomBindingsTests(unittest.TestCase):
 
         defaults = self.app._saved_haul_defaults()
 
-        self.assertEqual(defaults["commodity"], "Aluminium")
-        self.assertEqual(defaults["buy_station"], "Hutton Orbital")
-        self.assertEqual(defaults["sell_station"], "Jameson Memorial")
-        self.assertEqual(defaults["sell_system"], "Shinrarta Dezhra")
+        self.assertEqual(defaults["station_1_buying"], "Aluminium")
+        self.assertEqual(defaults["station_2"], "Hutton Orbital")
+        self.assertEqual(defaults["station_1"], "Jameson Memorial")
+        self.assertEqual(defaults["station_1_system"], "Shinrarta Dezhra")
         self.assertEqual(defaults["galaxy_map_settle"], "5.0")
 
     def test_filtered_resume_entries_uses_prefix_match(self) -> None:
@@ -588,12 +544,13 @@ class ControlRoomBindingsTests(unittest.TestCase):
         self.app._ship.credits = 1_000_000
         self.app._time_fn = lambda: 100.0
         self.app._start_haul_stats(
-            commodity="Aluminium",
-            buy_station="Hutton Orbital",
-            sell_station="Pawelczyk Dock",
+            station_1_buying="Aluminium",
+            station_2_buying="Bertrandite",
+            station_1="Pawelczyk Dock",
+            station_2="Hutton Orbital",
         )
 
-        self.assertTrue(self.app._haul_stats.waiting_for_sell_departure)
+        self.assertTrue(self.app._haul_stats.waiting_for_station_1_departure)
         self.assertEqual(self.app._haul_stats.current_run_started_at, 100.0)
 
         self.app._time_fn = lambda: 110.0
@@ -607,7 +564,7 @@ class ControlRoomBindingsTests(unittest.TestCase):
 
         self.app._time_fn = lambda: 310.0
         self.app._handle_haul_event({"event": "Docked", "StationName": "Pawelczyk Dock"}, station_before=None)
-        self.assertTrue(self.app._haul_stats.docked_back_at_sell)
+        self.assertTrue(self.app._haul_stats.docked_back_at_station_1)
         self.assertEqual(self.app._haul_stats.current_run_elapsed_s, 210.0)
 
         self.app._time_fn = lambda: 315.0
@@ -626,9 +583,10 @@ class ControlRoomBindingsTests(unittest.TestCase):
         self.app._ship.status = "in_supercruise"
         self.app._time_fn = lambda: 50.0
         self.app._start_haul_stats(
-            commodity="Aluminium",
-            buy_station="Hutton Orbital",
-            sell_station="Pawelczyk Dock",
+            station_1_buying="Aluminium",
+            station_2_buying="Bertrandite",
+            station_1="Pawelczyk Dock",
+            station_2="Hutton Orbital",
         )
 
         self.assertTrue(self.app._haul_stats.resumed_mid_run)
@@ -639,7 +597,7 @@ class ControlRoomBindingsTests(unittest.TestCase):
         self.assertEqual(self.app._haul_stats.current_run_profit, 0)
 
         self.app._handle_haul_event({"event": "Docked", "StationName": "Pawelczyk Dock"}, station_before=None)
-        self.assertTrue(self.app._haul_stats.waiting_for_sell_departure)
+        self.assertTrue(self.app._haul_stats.waiting_for_station_1_departure)
         self.assertFalse(self.app._haul_stats.clean_run_active)
         self.assertEqual(self.app._haul_stats.current_run_elapsed_s, 150.0)
         self.assertEqual(self.app._haul_stats.completed_runs, 0)

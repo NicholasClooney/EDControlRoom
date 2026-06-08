@@ -179,8 +179,8 @@ def resume_toggle_default_selected(app: ReplayHost) -> None:
         app._saved_state.default_haul = {
             str(key): str(value) for key, value in entry.params.items()
         }
-        commodity = app._saved_state.default_haul.get("commodity", "haul")
-        app._log(f"[dim]Saved default haul from history: {escape(commodity)}[/]")
+        cargo = app._saved_state.default_haul.get("station_1_buying", "haul")
+        app._log(f"[dim]Saved default haul from history: {escape(cargo)}[/]")
     app._save_saved_state()
     refresh_resume_picker(app)
 

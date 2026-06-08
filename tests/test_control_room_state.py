@@ -25,13 +25,13 @@ class ControlRoomStateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "state.json"
             original = ControlRoomState(
-                default_haul={"commodity": "Aluminium", "buy_station": "Hutton Orbital"},
+                default_haul={"station_1_buying": "Aluminium", "station_2": "Hutton Orbital"},
                 instant_mode=True,
                 history=[
                     CommandHistoryEntry(
                         raw="haul Aluminium",
                         command="haul",
-                        params={"commodity": "Aluminium", "dock_timeout": "600.0"},
+                        params={"station_1_buying": "Aluminium", "dock_timeout": "600.0"},
                         timestamp="2026-06-07T12:00:00Z",
                     )
                 ],
@@ -40,7 +40,7 @@ class ControlRoomStateTests(unittest.TestCase):
             save_control_room_state(path, original)
             loaded = load_control_room_state(path)
 
-        self.assertEqual(loaded.default_haul["commodity"], "Aluminium")
+        self.assertEqual(loaded.default_haul["station_1_buying"], "Aluminium")
         self.assertTrue(loaded.instant_mode)
         self.assertEqual(len(loaded.history), 1)
         self.assertEqual(loaded.history[0].raw, "haul Aluminium")
@@ -49,11 +49,11 @@ class ControlRoomStateTests(unittest.TestCase):
     def test_loads_legacy_haul_defaults_key_for_backward_compatibility(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "state.json"
-            path.write_text('{"haul_defaults":{"commodity":"Gold"},"history":[]}', encoding="utf-8")
+            path.write_text('{"haul_defaults":{"station_1_buying":"Gold"},"history":[]}', encoding="utf-8")
 
             loaded = load_control_room_state(path)
 
-        self.assertEqual(loaded.default_haul["commodity"], "Gold")
+        self.assertEqual(loaded.default_haul["station_1_buying"], "Gold")
         self.assertFalse(loaded.instant_mode)
 
 

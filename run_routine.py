@@ -10,7 +10,7 @@ from time import sleep
 from edap.binding_lookup import BindingLookup
 from edap.config import ConfigError, DEFAULT_CONFIG_PATH
 from edap.progress_controls import ProgressShipControls
-from edap.routines import auto_zero_throttle_on_arrival, dock, haul_loop, jump, market_buy, market_sell, set_gal_map_destination, station_refuel_menu, undock
+from edap.routines import auto_zero_throttle_on_arrival, dock, haul_loop_two_way, jump, market_buy, market_sell, set_gal_map_destination, station_refuel_menu, undock
 from edap.runtime import build_runtime_context, load_config_with_fallback
 from edap.ship_controls import ShipControls
 from edap.state import JournalWatcher
@@ -240,16 +240,40 @@ def main() -> int:
         help="Skip Market.json station verification (useful for testing)",
     )
     parser.add_argument(
-        "--buy-station",
+        "--station-1",
         metavar="NAME",
         default="",
-        help="Label for the buy station in haul_loop progress output",
+        help="Station 1 name for two-way haul_loop",
     )
     parser.add_argument(
-        "--sell-station",
+        "--station-1-system",
+        metavar="SYSTEM",
+        default="",
+        help="Station 1 system for two-way haul_loop",
+    )
+    parser.add_argument(
+        "--station-1-buying",
         metavar="NAME",
         default="",
-        help="Label for the sell station in haul_loop progress output",
+        help="Commodity bought at station 1 and sold at station 2",
+    )
+    parser.add_argument(
+        "--station-2",
+        metavar="NAME",
+        default="",
+        help="Station 2 name for two-way haul_loop",
+    )
+    parser.add_argument(
+        "--station-2-system",
+        metavar="SYSTEM",
+        default="",
+        help="Station 2 system for two-way haul_loop",
+    )
+    parser.add_argument(
+        "--station-2-buying",
+        metavar="NAME",
+        default="",
+        help="Commodity bought at station 2 and sold at station 1",
     )
     parser.add_argument(
         "--iterations",
@@ -382,8 +406,18 @@ def main() -> int:
                 return 2
 
     if args.routine == ROUTINE_HAUL_LOOP:
-        if not args.target:
-            sys.stderr.write("--target is required for haul_loop (the commodity to buy)\n")
+        if not all([
+            args.station_1,
+            args.station_1_system,
+            args.station_1_buying,
+            args.station_2,
+            args.station_2_system,
+            args.station_2_buying,
+        ]):
+            sys.stderr.write(
+                "--station-1, --station-1-system, --station-1-buying, "
+                "--station-2, --station-2-system, and --station-2-buying are required for haul_loop\n"
+            )
             return 2
         if args.iterations < 0:
             sys.stderr.write("--iterations must be non-negative (0 = infinite)\n")
@@ -559,11 +593,12 @@ def main() -> int:
         for action in ["UI_Select", "UI_Down", "UI_Right", "UI_Back"]:
             _progress(f"  {_describe_binding(runtime.binding_lookup, action)}")
     elif args.routine == ROUTINE_HAUL_LOOP:
-        sell_label = f" ({args.sell_station})" if args.sell_station else ""
-        buy_label = f" ({args.buy_station})" if args.buy_station else ""
         iter_label = f"{args.iterations} iterations" if args.iterations > 0 else "infinite"
         _progress(f"Haul loop: {iter_label}")
-        _progress(f"  Sell station{sell_label} -> buy {args.target} (MAX) -> sell station{sell_label}")
+        _progress(
+            f"  Station 1 ({args.station_1}) buy {args.station_1_buying} -> "
+            f"Station 2 ({args.station_2}) buy {args.station_2_buying}"
+        )
         for action in ["SetSpeedZero", "SetSpeed100", "UseBoostJuice", "FocusLeftPanel", "UI_Back", "UI_Up", "UI_Down", "UI_Select", "UI_Left", "UI_Right", "CycleNextPanel", "CyclePreviousPanel", "HeadLookReset"]:
             _progress(f"  {_describe_binding(runtime.binding_lookup, action)}")
     elif args.routine == ROUTINE_SET_GAL_MAP_DESTINATION:
@@ -655,13 +690,16 @@ def main() -> int:
                 progress_fn=_progress,
             )
         elif args.routine == ROUTINE_HAUL_LOOP:
-            result = haul_loop(
+            result = haul_loop_two_way(
                 logging_controls,
                 watcher,
                 journal_dir=journal_dir,
-                commodity=args.target,
-                sell_station=args.sell_station,
-                buy_station=args.buy_station,
+                station_1=args.station_1,
+                station_1_buying=args.station_1_buying,
+                station_1_system=args.station_1_system,
+                station_2=args.station_2,
+                station_2_buying=args.station_2_buying,
+                station_2_system=args.station_2_system,
                 iterations=args.iterations,
                 step_delay_s=step_delay_seconds,
                 max_hold_s=args.max_hold_seconds,
@@ -678,12 +716,10 @@ def main() -> int:
                 ),
                 boost_settle_s=args.boost_settle_seconds,
                 deny_retry_delay_s=args.deny_retry_delay_seconds,
-                mass_lock_escape_safety_delay_s=loaded.config.controls.mass_lock_escape_safety_delay_seconds,
                 mass_lock_boost_delay_s=loaded.config.controls.mass_lock_boost_delay_seconds,
                 max_dock_retries=args.max_retries,
                 sleeper=logging_sleeper,
                 progress_fn=_progress,
-                confirm_fn=lambda _: False,
             )
         elif args.routine == ROUTINE_SET_GAL_MAP_DESTINATION:
             result = set_gal_map_destination(

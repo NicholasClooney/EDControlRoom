@@ -115,9 +115,10 @@ class HaulHost(RoutineHost, Protocol):
     def _start_haul_stats(
         self,
         *,
-        commodity: str,
-        buy_station: str,
-        sell_station: str,
+        station_1_buying: str,
+        station_2_buying: str,
+        station_1: str,
+        station_2: str,
     ) -> None: ...
 
 

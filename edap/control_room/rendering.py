@@ -142,7 +142,7 @@ def haul_stats_markup(
     current_balance: int | None,
     now_fn: Callable[[], float],
 ) -> str:
-    if not stats.commodity:
+    if not stats.station_1_buying:
         lines = [
             "[dim]No haul session active.[/]",
             "",
@@ -161,13 +161,13 @@ def haul_stats_markup(
     status = "active" if stats.active else "stopped"
     if stats.resumed_mid_run and not stats.clean_run_active:
         status = "resumed mid-run"
-    elif stats.waiting_for_sell_departure:
-        status = "waiting at sell"
-    elif stats.docked_back_at_sell:
-        status = "back at sell"
+    elif stats.waiting_for_station_1_departure:
+        status = "waiting at station 1"
+    elif stats.docked_back_at_station_1:
+        status = "back at station 1"
 
     current_elapsed = stats.current_run_elapsed_s
-    if stats.current_run_started_at is not None and not stats.docked_back_at_sell:
+    if stats.current_run_started_at is not None and not stats.docked_back_at_station_1:
         current_elapsed = now_fn() - stats.current_run_started_at
 
     avg_elapsed = (
@@ -176,9 +176,10 @@ def haul_stats_markup(
     )
 
     row("Status", escape(status))
-    row("Commodity", f"[cyan]{escape(stats.commodity)}[/]")
-    row("Sell", f"[bold cyan]{escape(stats.sell_station or '—')}[/]")
-    row("Buy", escape(stats.buy_station or "—"))
+    row("St1 buy", f"[cyan]{escape(stats.station_1_buying)}[/]")
+    row("St2 buy", f"[cyan]{escape(stats.station_2_buying)}[/]")
+    row("Station 1", f"[bold cyan]{escape(stats.station_1 or '—')}[/]")
+    row("Station 2", escape(stats.station_2 or "—"))
     if current_balance is not None:
         row("Balance", f"[green]{fmt_cr(current_balance)}[/]")
     row(

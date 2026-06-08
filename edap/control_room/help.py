@@ -49,8 +49,8 @@ CONTROL_ROOM_COMMANDS: list[CommandHelp] = [
     CommandHelp(
         name="haul",
         usage="haul [commodity]",
-        summary="Run the community haul loop, prompting for missing stations and systems.",
-        detail="Starts the sell-undock-travel-buy-undock-travel cycle for one commodity. Control room prompts for the missing haul parameters before launching the loop, including the galaxy-map settle delay used by route plotting and the docking timeout for station arrival.",
+        summary="Run the two-station haul loop, prompting for both stations and both cargo legs.",
+        detail="Starts a symmetric loop: at station 1 it sells the cargo bought at station 2, then buys station 1's outbound cargo; at station 2 it does the reverse. Control room prompts for both station names, both systems, both outbound cargo names, the galaxy-map settle delay, and the docking timeout.",
     ),
     CommandHelp(
         name="dest",

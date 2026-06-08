@@ -33,14 +33,15 @@ class MarketData:
 
 @dataclass
 class HaulStats:
-    commodity: str = ""
-    buy_station: str = ""
-    sell_station: str = ""
+    station_1_buying: str = ""
+    station_2_buying: str = ""
+    station_1: str = ""
+    station_2: str = ""
     active: bool = False
     clean_run_active: bool = False
-    waiting_for_sell_departure: bool = False
+    waiting_for_station_1_departure: bool = False
     resumed_mid_run: bool = False
-    docked_back_at_sell: bool = False
+    docked_back_at_station_1: bool = False
     current_run_started_at: float | None = None
     current_run_elapsed_s: float | None = None
     current_run_profit: int = 0
