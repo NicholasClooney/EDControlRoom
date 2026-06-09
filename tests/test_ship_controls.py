@@ -31,6 +31,26 @@ class FakeInputController:
         )
 
 
+def _build_controls(
+    lookup,
+    input_controller: FakeInputController,
+    *,
+    minimum_action_hold_s: float = 0.1,
+    continuous_action_hold_s: float = 0.2,
+    sleeper=None,
+) -> ShipControls:
+    return ShipControls(
+        ActionDispatcher(
+            lookup,
+            input_controller,
+            repeat_delay_s=minimum_action_hold_s,
+            sleeper=(lambda _: None) if sleeper is None else sleeper,
+        ),
+        minimum_action_hold_s=minimum_action_hold_s,
+        continuous_action_hold_s=continuous_action_hold_s,
+    )
+
+
 class ShipControlsTests(unittest.TestCase):
     def test_set_speed_zero_dispatches_through_binding_lookup(self) -> None:
         lookup = build_binding_lookup(
@@ -38,7 +58,7 @@ class ShipControlsTests(unittest.TestCase):
             actions=["SetSpeedZero"],
         )
         input_controller = FakeInputController()
-        controls = ShipControls.from_binding_lookup(lookup, input_controller)
+        controls = _build_controls(lookup, input_controller)
 
         result = controls.set_speed_zero(repeat=2, hold_s=0.05)
 
@@ -125,7 +145,8 @@ class ShipControlsTests(unittest.TestCase):
     def test_tap_key_repeats_with_spacing(self) -> None:
         lookup = build_binding_lookup(bindings={}, actions=[])
         input_controller = FakeInputController()
-        controls = ShipControls.from_binding_lookup(lookup, input_controller)
+        sleep_calls: list[float] = []
+        controls = _build_controls(lookup, input_controller, sleeper=sleep_calls.append)
 
         result = controls.tap_key("k", repeat=3)
 
@@ -138,6 +159,7 @@ class ShipControlsTests(unittest.TestCase):
                 {"method": "tap", "key": "k", "modifier": None, "hold_s": 0.1},
             ],
         )
+        self.assertEqual(sleep_calls, [0.1, 0.1])
 
     def test_boost_dispatches_through_binding_lookup(self) -> None:
         lookup = build_binding_lookup(
@@ -162,7 +184,7 @@ class ShipControlsTests(unittest.TestCase):
             actions=["RollLeftButton"],
         )
         input_controller = FakeInputController()
-        controls = ShipControls.from_binding_lookup(lookup, input_controller)
+        controls = _build_controls(lookup, input_controller)
 
         result = controls.roll_left(repeat=2, hold_s=0.05)
 
@@ -213,7 +235,13 @@ class ShipControlsTests(unittest.TestCase):
             actions=["RollLeftButton"],
         )
         input_controller = FakeInputController()
-        controls = ShipControls.from_binding_lookup(lookup, input_controller, continuous_action_hold_s=0.2)
+        sleep_calls: list[float] = []
+        controls = _build_controls(
+            lookup,
+            input_controller,
+            continuous_action_hold_s=0.2,
+            sleeper=sleep_calls.append,
+        )
 
         result = controls.roll_left(total_s=0.45)
 
@@ -226,6 +254,7 @@ class ShipControlsTests(unittest.TestCase):
                 {"method": "tap", "key": "a", "modifier": None, "hold_s": 0.2},
             ],
         )
+        self.assertEqual(sleep_calls, [0.1, 0.1])
 
     def test_total_seconds_is_rejected_for_discrete_actions(self) -> None:
         lookup = build_binding_lookup(
@@ -332,13 +361,15 @@ class ShipControlsTests(unittest.TestCase):
             actions=["RollLeftButton"],
         )
         input_controller = FakeInputController()
-        controls = ShipControls.from_binding_lookup(lookup, input_controller)
+        sleep_calls: list[float] = []
+        controls = _build_controls(lookup, input_controller, sleeper=sleep_calls.append)
 
         result = controls.tap_action("RollLeftButton", repeat=3)
 
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.binding.to_dict(), {"key": "a", "modifier": None})
         self.assertEqual(len(input_controller.calls), 3)
+        self.assertEqual(sleep_calls, [0.1, 0.1])
 
     def test_submit_text_uses_paced_repeat_dispatch(self) -> None:
         lookup = build_binding_lookup(bindings={}, actions=[])

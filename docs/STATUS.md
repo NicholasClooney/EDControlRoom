@@ -40,7 +40,7 @@ Last updated: 2026-06-09
 - TTS/config: announcement IDs are typed in code, while default phrase text now lives in `defaults/tts.toml` and merges with user `config.toml` overrides under `[tts]`.
 - Windows input injection now builds the full Win32 `INPUT` union shape instead of a keyboard-only subset and includes native `GetLastError()` codes in `SendInput` failures, after admin-to-admin Notepad repros suggested the old structure size could fail on 64-bit Windows before UIPI ever mattered.
 - Platform scope: macOS + CrossOver is the only live-validated operator path. Windows and Linux input/runtime paths exist with unit-test and CI coverage, but not live validation.
-- CI: cross-platform unittest workflow exists in GitHub Actions, and a timing guard now enforces a 10-second ceiling on `tests/test_haul_loop.py`.
+- CI: cross-platform unittest workflow exists in GitHub Actions, a timing guard now enforces a 10-second ceiling on full unittest discovery over `tests/`, and `tools/report_test_timing.py` can rank the slowest individual unittest cases locally.
 
 ## Key Caveats
 
@@ -50,7 +50,7 @@ Last updated: 2026-06-09
 - Windows still lacks live validation; after the `INPUT` layout fix, any remaining `SendInput` failures need a fresh Windows rerun to separate residual UIPI/focus issues from backend bugs.
 - CV is still at validation/scaffolding stage. Template matching has been re-baked against CrossOver captures, but there is no real continuous alignment loop yet.
 - Because the control-room startup warning now suppresses currently unused maneuver bindings, any future CV/alignment or flight-control work that starts depending on roll/pitch/yaw must re-enable startup warnings for those actions in the same change.
-- Timing enforcement is intentionally narrow for now: only `tests/test_haul_loop.py` has a hard runtime budget because it was the clear outlier.
+- Timing enforcement now covers the full unittest discovery run with a 10-second budget, so CI catches both global suite regressions and single-test outliers that meaningfully move total runtime.
 - Cross-platform input tests are still mostly unit-level. Hosted CI covers controller logic, binding resolution, and dispatch plumbing, but not true live desktop injection semantics for modifiers/special keys.
 - EDAP still only emulates keyboard input. Players can keep HOTAS/gamepad bindings, but any action EDAP needs must also have at least one keyboard bind; joystick/mouse-only slots are treated as unavailable for automation.
 
@@ -58,7 +58,7 @@ Last updated: 2026-06-09
 
 1. Live-validate the updated two-way haul startup path and haul telemetry, especially station-2 starts, station-1 run finalization, and `Market.json` fallback behavior.
 2. Live-test the queued TTS callouts on macOS, including the new low supply/demand warning, and trim or reword noisy announcements based on operator feedback.
-3. Keep the timing guard in place and expand it only after measuring stable CI variance on other candidate suites.
+3. Keep the full-suite timing guard in place and tune the threshold only after measuring stable CI variance across several runs and platforms.
 4. Re-run the Windows `diagnostics.py --send-test-key` path on a real machine and capture the new `WinError` detail if `SendInput` still fails.
 5. Continue the next portability follow-up slice: CV capture/performance measurement, journal latency measurement, and diagnostics/dashboard work from plans 0002-0004.
 6. Parked validation idea: add a small Python key-receiver app plus self-hosted desktop runners for end-to-end live input validation of raw keys, modifiers, and key-order semantics. Do not treat hosted CI alone as sufficient for that coverage.

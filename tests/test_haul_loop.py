@@ -141,9 +141,10 @@ class HaulLoopTests(unittest.TestCase):
         # HeadLookReset appears once per undock call (2 undocks total)
         head_look_calls = [c for c in controls.calls if c["action"] == "HeadLookReset"]
         self.assertEqual(len(head_look_calls), 2)
-        # Refuel menu sequence (UI_Up, UI_Select, UI_Down) now runs at both stations after Docked
+        # UI_Up now comes from two refuel menu sequences plus the UI_Up x3
+        # trade-dialog reset used by both market sell and market buy.
         up_calls = [c for c in controls.calls if c["action"] == "UI_Up"]
-        self.assertEqual(len(up_calls), 2)
+        self.assertEqual(len(up_calls), 8)
 
     def test_aborts_when_undock_fails(self) -> None:
         """haul_loop returns an error result immediately when undock times out."""

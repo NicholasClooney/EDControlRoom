@@ -44,7 +44,7 @@ class RuntimeTests(unittest.TestCase):
             with patch("edap.runtime.DEFAULT_CONFIG_PATH", DEFAULT_CONFIG_PATH), patch(
                 "edap.runtime.EXAMPLE_CONFIG_PATH",
                 example_path,
-            ):
+            ), patch("edap.config.default_runtime_platform", return_value="macos"):
                 loaded = load_config_with_fallback(DEFAULT_CONFIG_PATH)
 
         self.assertEqual(loaded.config_path, str(example_path))
@@ -75,7 +75,10 @@ bindings_file = "{bindings_file}"
             )
             config = load_config(config_path)
 
-            with patch("edap.runtime.build_input_controller", return_value=object()), patch(
+            with patch("edap.runtime.build_game_paths", return_value=None), patch(
+                "edap.runtime.build_input_controller",
+                return_value=object(),
+            ), patch(
                 "edap.runtime.build_screen_capture",
                 return_value=object(),
             ), patch(
