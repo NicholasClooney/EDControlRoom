@@ -1245,6 +1245,16 @@ class RoutinesTests(unittest.TestCase):
                 json.dumps({"timestamp": "2024-01-01T00:00:00Z", "event": "Docked", "StationName": "Pawelczyk Dock"}) + "\n",
                 encoding="utf-8",
             )
+            (journal_dir / "Cargo.json").write_text(
+                json.dumps(
+                    {
+                        "Inventory": [
+                            {"Name": "aluminium", "Name_Localised": "Aluminium", "Count": 64},
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
             market_path = journal_dir / "Market.json"
             market_path.write_text(
                 json.dumps(
@@ -1286,12 +1296,72 @@ class RoutinesTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            controls.calls[dialog_index + 7:dialog_index + 9],
+            controls.calls[dialog_index + 7:dialog_index + 10],
             [
+                {"action": "UI_Right", "repeat": 1, "hold_s": 0.64},
                 {"action": "UI_Down", "repeat": 1, "hold_s": 0.0},
                 {"action": "UI_Select", "repeat": 1, "hold_s": 0.0},
             ],
         )
+
+    def test_market_sell_max_restores_quantity_with_hold_after_focus_reset(self) -> None:
+        controls = FakeShipControls()
+        watcher = FakeWatcher(
+            [[{"event": "MarketSell", "Type": "aluminium", "Type_Localised": "Aluminium", "Count": 32, "TotalSale": 654321}]]
+        )
+        progress: list[str] = []
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            (journal_dir / "Journal.240101000000.01.log").write_text(
+                json.dumps({"timestamp": "2024-01-01T00:00:00Z", "event": "Docked", "StationName": "Pawelczyk Dock"}) + "\n",
+                encoding="utf-8",
+            )
+            (journal_dir / "Cargo.json").write_text(
+                json.dumps(
+                    {
+                        "Inventory": [
+                            {"Name": "aluminium", "Name_Localised": "Aluminium", "Count": 32},
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            market_path = journal_dir / "Market.json"
+            market_path.write_text(
+                json.dumps(
+                    {
+                        "StationName": "Pawelczyk Dock",
+                        "Items": [
+                            {"Category": "Metals", "Name": "aluminium", "DemandBracket": 1, "SellPrice": 1000},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = market_sell(
+                controls,
+                watcher,
+                market_path=market_path,
+                target="aluminium",
+                amount="MAX",
+                step_delay_s=0.0,
+                nav_delay_s=0.0,
+                trade_timeout_s=30.0,
+                skip_station_check=True,
+                buy_hold_seconds_per_ton=0.01,
+                time_fn=lambda: 0.0,
+                sleeper=lambda _: None,
+                progress_fn=progress.append,
+            )
+
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertIn(
+            "  UI_Right hold 0.32s (restore sell quantity to 32t at 0.0100s/t)",
+            progress,
+        )
+        self.assertIn({"action": "UI_Right", "repeat": 1, "hold_s": 0.32}, controls.calls)
 
 
 class EscapeMassLockTests(unittest.TestCase):

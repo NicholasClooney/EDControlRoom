@@ -188,6 +188,39 @@ def _read_available_cargo_space(journal_dir: Path) -> int | None:
     return max(0, cargo_capacity - used_capacity)
 
 
+def _read_cargo_inventory(journal_dir: Path) -> list[dict] | None:
+    cargo_path = journal_dir / "Cargo.json"
+    try:
+        with cargo_path.open(encoding="utf-8") as handle:
+            cargo_data = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return None
+    inventory = cargo_data.get("Inventory", [])
+    if not isinstance(inventory, list):
+        return None
+    return inventory
+
+
+def _read_sell_quantity(journal_dir: Path, target: str) -> int | None:
+    inventory = _read_cargo_inventory(journal_dir)
+    if inventory is None:
+        return None
+    target_lower = target.lower()
+    for item in inventory:
+        if not isinstance(item, dict):
+            return None
+        if (
+            str(item.get("Name", "")).lower() != target_lower
+            and str(item.get("Name_Localised", "")).lower() != target_lower
+        ):
+            continue
+        count = item.get("Count", 0)
+        if isinstance(count, bool) or not isinstance(count, (int, float)) or count < 0:
+            return None
+        return int(count)
+    return None
+
+
 def _find_market_item(items: list[dict], target: str, side: str) -> dict | None:
     target_lower = target.lower()
     for item in items:
@@ -658,7 +691,6 @@ def _market_trade_attempt(
     pending_events = watcher.poll()
 
     # Set quantity
-    # Set quantity -- sell pre-fills with full cargo amount so no input needed
     if side == "buy":
         if amount == "MAX":
             hold_s = max_hold_s
@@ -691,8 +723,26 @@ def _market_trade_attempt(
                     sleeper(step_delay_s)
             if qty_dispatch is None:
                 return _market_error(event_type, "amount must be at least 1")
-        if step_delay_s > 0:
-            sleeper(step_delay_s)
+    else:
+        sell_qty = int(amount) if amount != "MAX" else _read_sell_quantity(market_path.parent, target)
+        hold_s = max_hold_s
+        if sell_qty is not None:
+            hold_s = min(max_hold_s, sell_qty * buy_hold_seconds_per_ton)
+        if progress_fn is not None:
+            if sell_qty is None:
+                progress_fn(
+                    f"  UI_Right hold {hold_s:.2f}s (restore sell quantity; cargo count unavailable, using cap)"
+                )
+            else:
+                progress_fn(
+                    f"  UI_Right hold {hold_s:.2f}s "
+                    f"(restore sell quantity to {sell_qty}t at {buy_hold_seconds_per_ton:.4f}s/t)"
+                )
+        qty_dispatch = controls.ui_right(hold_s=hold_s)
+        if qty_dispatch.status != "ok":
+            return RoutineResult(action="UI_Right", dispatch=qty_dispatch, details={"phase": "set_quantity"})
+    if step_delay_s > 0:
+        sleeper(step_delay_s)
 
     # Confirm trade
     confirm_label = "BUY" if side == "buy" else "SELL"
