@@ -1099,6 +1099,40 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.assertIn("UI_Back", output)
         self.assertIn("SetSpeedZero", output)
 
+    def test_log_bindings_status_ignores_unused_maneuver_mappings(self) -> None:
+        bindings_path = Path(self.tmpdir.name) / "Custom.binds"
+        resolved = ResolvedPath(
+            configured={"path": str(bindings_path), "status": "ok", "reason": "test bindings file"},
+            auto_detected={"path": str(bindings_path), "status": "ok", "reason": "test bindings file"},
+            effective={
+                "path": str(bindings_path),
+                "status": "ok",
+                "source": "configured",
+                "reason": "test bindings file",
+            },
+        )
+        lookup = build_binding_lookup(
+            bindings={},
+            actions=["RollLeftButton", "PitchUpButton", "YawLeftButton"],
+        )
+        self.app._ctx = RuntimeContext(
+            config=self.app._ctx.config,
+            game_paths=None,
+            journal=self.app._ctx.journal,
+            bindings=resolved,
+            input_controller=None,
+            screen_capture=None,
+            binding_lookup=lookup,
+        )
+
+        self.app._log_bindings_status()
+
+        output = "\n".join(self.app.logged)
+        self.assertNotIn("Bindings warning", output)
+        self.assertNotIn("RollLeftButton", output)
+        self.assertNotIn("PitchUpButton", output)
+        self.assertNotIn("YawLeftButton", output)
+
     def test_market_filter_sets_filter_and_records_raw_value(self) -> None:
         self.app._dispatch_command("market filter Aluminium")
 

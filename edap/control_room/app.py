@@ -113,6 +113,14 @@ from edap.tts import AnnouncementId, TTSAnnouncer, format_credits_short
 # ── All actions needed across every supported routine ──────────────────────────
 
 _ALL_ROUTINE_ACTIONS = list(DEFAULT_SHIP_CONTROL_ACTIONS)
+_STARTUP_BINDING_WARNING_IGNORED_ACTIONS = frozenset({
+    "RollLeftButton",
+    "RollRightButton",
+    "PitchUpButton",
+    "PitchDownButton",
+    "YawLeftButton",
+    "YawRightButton",
+})
 
 _DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | dest <system> | market ... | reload | q"
 
@@ -515,7 +523,11 @@ class ControlRoomApp(App[None]):
         if self._ctx.binding_lookup is None:
             return
 
-        issues = self._ctx.binding_lookup.issues()
+        issues = {
+            action: result
+            for action, result in self._ctx.binding_lookup.issues().items()
+            if action not in _STARTUP_BINDING_WARNING_IGNORED_ACTIONS
+        }
         if not issues:
             return
 
