@@ -25,6 +25,7 @@ What is not done:
 
 - `uv run python3 control_room.py`
 - `uv run python3 run_routine.py --routine haul_loop`
+  This is the two-way haul routine used by Control Room.
 - `uv run python3 diagnostics.py`
 - `uv run python3 ship_controls.py --action SetSpeedZero --delay-seconds 3`
 

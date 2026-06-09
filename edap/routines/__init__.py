@@ -20,11 +20,12 @@ from edap.routines.docking import (
     undock,
 )
 from edap.routines.galaxy_map import set_gal_map_destination
-from edap.routines.haul import haul_loop
 from edap.routines.haul_two_way import haul_loop_two_way
 from edap.routines.jump import jump
 from edap.routines.market import market_buy, market_sell
 from edap.routines.throttle import auto_zero_throttle_on_arrival, set_speed_zero_then_wait
+
+haul_loop = haul_loop_two_way
 
 __all__ = [
     "RoutineResult",

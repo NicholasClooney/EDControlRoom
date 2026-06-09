@@ -14,8 +14,7 @@ Last updated: 2026-06-09
 ## Active Capabilities
 
 - Journal/runtime: journal tailing, bindings lookup, runtime construction, and shared platform seams are working.
-- Routines: `jump`, `dock`, `undock`, market buy/sell, galaxy-map destination setting, throttle zeroing, and the current two-station haul loop all exist behind `edap/routines/`.
-- The legacy `edap/routines/haul.py` resume detector no longer treats “any target cargo” as “buy leg complete”: docked or in-system resumes at the buy side now only skip back to undock/depart when the hold is actually full of the target commodity.
+- Routines: `jump`, `dock`, `undock`, market buy/sell, galaxy-map destination setting, throttle zeroing, and the current two-station haul loop all exist behind `edap/routines/`; the public `haul_loop` entrypoint now aliases the two-way haul implementation directly, and the older one-way haul file has been removed.
 - `edap/routines/haul_two_way.py` resume detection now also distinguishes “empty/partial outbound load” from “already fully loaded for departure,” so Control Room haul no longer re-enters station buy when you are docked with a full cargo hold of the current station's outbound commodity.
 - Two-way haul startup now detects the active station/phase from journal position, `Cargo.json`, and `Market.json` fallback data, so a station-2 start no longer blindly runs station-1 actions first.
 - Two-way haul transit resume now distinguishes “already dropped near destination” from “docking already requested/granted”: it skips the extra `SupercruiseExit` wait in the first case, and waits for `Docked` instead of re-requesting docking in the second.

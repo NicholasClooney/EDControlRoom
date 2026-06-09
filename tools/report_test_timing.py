@@ -78,7 +78,7 @@ def parse_args() -> argparse.Namespace:
         nargs="*",
         help=(
             "Optional unittest targets. If omitted, the script runs discovery. "
-            "Examples: tests.test_runtime test_haul_loop.HaulLoopTests.test_one_iteration_happy_path"
+            "Examples: tests.test_runtime test_haul_two_way.TwoWayHaulLoopTests.test_one_iteration_happy_path"
         ),
     )
     parser.add_argument(

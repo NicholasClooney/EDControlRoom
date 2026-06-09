@@ -121,6 +121,8 @@ uv run python3 run_routine.py --config config.toml --routine dock --delay-second
 uv run python3 run_routine.py --config config.toml --routine haul_loop
 ```
 
+`haul_loop` is the current two-way haul routine and matches the Control Room haul path.
+
 Windows equivalents:
 
 ```sh

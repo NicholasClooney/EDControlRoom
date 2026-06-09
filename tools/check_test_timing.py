@@ -39,7 +39,7 @@ def parse_args() -> argparse.Namespace:
     )
     target_parser.add_argument(
         "target",
-        help="Unittest target passed to 'python3 -m unittest', e.g. tests/test_haul_loop.py",
+        help="Unittest target passed to 'python3 -m unittest', e.g. tests/test_haul_two_way.py",
     )
 
     discover_parser = subparsers.add_parser(
