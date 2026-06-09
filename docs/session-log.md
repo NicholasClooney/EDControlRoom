@@ -4,6 +4,8 @@ _This is the rolling short-form log for recent sessions. Keep entries concise an
 
 ## 2026-06-09
 
+- Web Control Room research is now documented in `docs/research/0005-web-control-ui-options.md`: current recommendation is NiceGUI for the fastest Python-heavy prototype, but iPhone Safari should be assumed to need HTTPS for NiceGUI because of the open LAN-HTTP reload bug reported in NiceGUI issue `#5802`.
+- Added `bindings_files.py` as a quick operator utility for bindings-file inventory and backup; it resolves the active `.binds` file through the existing runtime, lists sibling `.binds` files by mtime descending, and can copy one into gitignored `backup/bindings/` with a default `<name>-YYYY-MM-DD.binds` filename.
 - `AGENTS.md` now gives `docs/STATUS.md` its own hard maintenance cap (`80` lines), and `docs/STATUS.md` was rewritten back down to a compact handoff so status detail stops accumulating there like a changelog.
 - Release-prep docs now explicitly call out Windows compatibility as part of the next stable cut, and `README.md` / `docs/STATUS.md` now record early live Windows validation by community member CMDR VRYAE while keeping macOS + CrossOver as the primary operator path.
 - Release metadata is being bumped for `v1.5.0`, with README wording updated to credit macOS live validation to @NicholasClooney and Windows live validation to CMDR VRYAE.

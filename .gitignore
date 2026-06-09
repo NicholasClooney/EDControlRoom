@@ -10,5 +10,6 @@ dist
 .vscode
 *.pyc
 artifacts/
+backup/
 config.toml
 .control_room_state.json
