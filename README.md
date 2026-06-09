@@ -28,6 +28,8 @@ What is not done:
   This is the two-way haul routine used by Control Room.
 - `uv run python3 diagnostics.py`
 - `uv run python3 ship_controls.py --action SetSpeedZero --delay-seconds 3`
+- `uv run python3 bindings_files.py`
+  Lists, backs up, restores, and can replace the active `.binds` file from shipped presets.
 
 ## Platform Validation
 
@@ -61,6 +63,23 @@ secondaries are present in the live `.binds` file. On the current Elite setup,
 map/menu cursor. Without those secondary arrow bindings, `dest` / galaxy-map
 automation will not navigate the map menus correctly.
 
+## Bindings Utility
+
+`bindings_files.py` is the operator helper for `.binds` file management.
+
+Examples:
+
+```sh
+uv run python3 bindings_files.py
+uv run python3 bindings_files.py backup
+uv run python3 bindings_files.py restore
+uv run python3 bindings_files.py apply-default
+```
+
+See [docs/operators/bindings-files.md](docs/operators/bindings-files.md) for the full command surface.
+
+Note: `apply-default` is implemented and covered by unit tests, but it has not yet been live-validated against a real Elite session. If it does not behave as expected on your setup, please open an issue or report the exact command and resulting file state.
+
 ## Repo Layout
 
 - `control_room.py`, `run_routine.py`, `diagnostics.py`, `ship_controls.py`: active operator and validation entrypoints
@@ -73,6 +92,7 @@ automation will not navigate the map menus correctly.
 - [docs/getting-started/quickstart.md](docs/getting-started/quickstart.md)
   Includes current macOS and Windows setup paths.
 - [docs/operators/control-room.md](docs/operators/control-room.md)
+- [docs/operators/bindings-files.md](docs/operators/bindings-files.md)
 - [docs/operators/manual-journal-routine-testing.md](docs/operators/manual-journal-routine-testing.md)
 - [docs/diagnostics/cli-reference.md](docs/diagnostics/cli-reference.md)
 - [docs/diagnostics/bindings-reference.md](docs/diagnostics/bindings-reference.md)
