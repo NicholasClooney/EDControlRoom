@@ -111,6 +111,7 @@ class _FakeWorker:
 class _HarnessApp(ControlRoomApp):
     def __init__(self, ctx: RuntimeContext) -> None:
         super().__init__(ctx)
+        self._journal_artifact_log_path = ctx.config.control_room.state_file.parent / "control-room-artifact.log"
         self.logged: list[str] = []
         self.exit_calls = 0
 
@@ -144,6 +145,34 @@ class _HarnessApp(ControlRoomApp):
             return
         self._resume_open = True
         self._resume_entries = self._filtered_resume_entries()
+
+
+class _WorkerGroupStub:
+    def __init__(self) -> None:
+        self.calls: list[tuple[object, str]] = []
+
+    def cancel_group(self, app, group: str) -> None:
+        self.calls.append((app, group))
+
+
+class _ShutdownHarnessApp(ControlRoomApp):
+    def __init__(self, ctx: RuntimeContext) -> None:
+        super().__init__(ctx)
+        self._journal_artifact_log_path = ctx.config.control_room.state_file.parent / "control-room-artifact.log"
+        self.exit_calls = 0
+
+    def exit(self, result=None, return_code: int = 0, message=None) -> None:
+        self.exit_calls += 1
+
+    def _finalize_shutdown(self) -> None:
+        if self._shutdown_finalized:
+            return
+        self._shutdown_finalized = True
+        if self._journal_artifact_log_handle is not None:
+            self._journal_artifact_log_handle.close()
+            self._journal_artifact_log_handle = None
+        self._tts.close()
+        self.exit()
 
 
 class _InputStub:
@@ -203,6 +232,12 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmpdir.cleanup)
         self.app = _HarnessApp(_make_context(Path(self.tmpdir.name)))
+        self.addCleanup(self._close_artifact_log)
+
+    def _close_artifact_log(self) -> None:
+        if self.app._journal_artifact_log_handle is not None:
+            self.app._journal_artifact_log_handle.close()
+            self.app._journal_artifact_log_handle = None
 
     def test_commands_lists_supported_commands(self) -> None:
         self.app._dispatch_command("commands")
@@ -456,6 +491,12 @@ class ControlRoomBindingsTests(unittest.TestCase):
         self.tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmpdir.cleanup)
         self.app = _HarnessApp(_make_context(Path(self.tmpdir.name)))
+        self.addCleanup(self._close_artifact_log)
+
+    def _close_artifact_log(self) -> None:
+        if self.app._journal_artifact_log_handle is not None:
+            self.app._journal_artifact_log_handle.close()
+            self.app._journal_artifact_log_handle = None
 
     def test_preloaded_actions_cover_mass_lock_escape(self) -> None:
         self.assertIn("SetSpeed100", _ALL_ROUTINE_ACTIONS)
@@ -988,6 +1029,35 @@ class ControlRoomBindingsTests(unittest.TestCase):
 
         self.assertIn((AnnouncementId.UNDOCKING, {}), self.app._tts.calls)
 
+    def test_handle_event_appends_to_control_room_artifact_log(self) -> None:
+        log_path = Path(self.tmpdir.name) / "control-room-artifact.log"
+        self.app._journal_artifact_log_path = log_path
+        self.app._handle_event({"event": "SupercruiseExit", "Body": "Wells Terminal"})
+        if self.app._journal_artifact_log_handle is not None:
+            self.app._journal_artifact_log_handle.close()
+            self.app._journal_artifact_log_handle = None
+
+        lines = log_path.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(json.loads(lines[0]), {"event": "SupercruiseExit", "Body": "Wells Terminal"})
+
+    def test_finalize_shutdown_closes_control_room_artifact_log(self) -> None:
+        app = _ShutdownHarnessApp(_make_context(Path(self.tmpdir.name)))
+        app._tts = _FakeTTS()
+        app._journal_artifact_log_path = Path(self.tmpdir.name) / "control-room-artifact.log"
+
+        app._append_journal_event({"event": "FSDTarget", "Name": "Achenar"})
+        handle = app._journal_artifact_log_handle
+
+        self.assertIsNotNone(handle)
+        self.assertFalse(handle.closed)
+
+        app._finalize_shutdown()
+
+        self.assertIsNone(app._journal_artifact_log_handle)
+        self.assertTrue(handle.closed)
+        self.assertEqual(app.exit_calls, 1)
+
 
 class ActivityLogTests(unittest.TestCase):
     def test_manual_scroll_pauses_auto_follow_for_ten_seconds(self) -> None:
@@ -1036,6 +1106,12 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmpdir.cleanup)
         self.app = _HarnessApp(_make_context(Path(self.tmpdir.name)))
+        self.addCleanup(self._close_artifact_log)
+
+    def _close_artifact_log(self) -> None:
+        if self.app._journal_artifact_log_handle is not None:
+            self.app._journal_artifact_log_handle.close()
+            self.app._journal_artifact_log_handle = None
 
     def _last_history(self) -> CommandHistoryEntry | None:
         history = self.app._saved_state.history

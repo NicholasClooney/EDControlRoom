@@ -34,11 +34,12 @@ Other:
 from __future__ import annotations
 
 import argparse
+import json
 import signal
 import sys
 import time
 from pathlib import Path
-from typing import Any, Callable
+from typing import IO, Any, Callable
 
 from rich.markup import escape
 from rich.text import Text
@@ -126,6 +127,7 @@ _STARTUP_BINDING_WARNING_IGNORED_ACTIONS = frozenset({
 
 _DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | dest <system> | market ... | reload | q"
 _ACTIVITY_AUTO_FOLLOW_DEBOUNCE_SECONDS = 10.0
+_JOURNAL_ARTIFACT_LOG_PATH = Path("artifacts/control-room.log")
 
 _RoutineCancelled = _workers.RoutineCancelled
 _CancellationProxy = _workers.CancellationProxy
@@ -346,6 +348,8 @@ class ControlRoomApp(App[None]):
         self._prompt_state = PromptState()
         self._history_state = HistoryState()
         self._state_path: Path = self._config.control_room.state_file
+        self._journal_artifact_log_path = _JOURNAL_ARTIFACT_LOG_PATH
+        self._journal_artifact_log_handle: IO[str] | None = None
         self._saved_state = ControlRoomState()
         self._replay_state = ReplayBrowserState()
         self._watcher_worker: Any | None = None
@@ -790,6 +794,7 @@ class ControlRoomApp(App[None]):
     # ── Journal event processing ───────────────────────────────────────────────
 
     def _handle_event(self, ev: dict[str, Any]) -> None:
+        self._append_journal_event(ev)
         event = ev.get("event", "")
         station_before = self._ship.station
         _events.apply_ship_event(self._ship, ev)
@@ -852,10 +857,31 @@ class ControlRoomApp(App[None]):
         self._log(f"[yellow]{escape(source)} received — exiting control room.[/]")
         self._finalize_shutdown()
 
+    def _append_journal_event(self, ev: dict[str, Any]) -> None:
+        handle = self._ensure_journal_artifact_log_handle()
+        if handle is None:
+            return
+        handle.write(json.dumps(ev))
+        handle.write("\n")
+        handle.flush()
+
+    def _ensure_journal_artifact_log_handle(self) -> IO[str] | None:
+        if self._journal_artifact_log_handle is not None:
+            return self._journal_artifact_log_handle
+        try:
+            self._journal_artifact_log_path.parent.mkdir(parents=True, exist_ok=True)
+            self._journal_artifact_log_handle = self._journal_artifact_log_path.open("a", encoding="utf-8")
+        except OSError:
+            return None
+        return self._journal_artifact_log_handle
+
     def _finalize_shutdown(self) -> None:
         if self._shutdown_finalized:
             return
         self._shutdown_finalized = True
+        if self._journal_artifact_log_handle is not None:
+            self._journal_artifact_log_handle.close()
+            self._journal_artifact_log_handle = None
         self._tts.close()
         self.workers.cancel_group(self, "watchers")
         self.workers.cancel_group(self, "routines")

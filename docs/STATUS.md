@@ -20,7 +20,7 @@ Last updated: 2026-06-09
 ## Active Capabilities
 
 - Journal/runtime: journal tailing, bindings lookup, runtime construction, and shared platform seams are working.
-- Control Room: live Textual UI with ship status, market panel, haul stats, replay/history, persisted state, routine dispatch, and queued cross-platform TTS announcements.
+- Control Room: live Textual UI with ship status, market panel, haul stats, replay/history, persisted state, routine dispatch, queued cross-platform TTS announcements, and a repo-local `artifacts/control-room.log` journal-event mirror for sessions where the standalone watcher is not running.
 - Routines: `jump`, `dock`, `undock`, market buy/sell, galaxy-map destination setting, and the two-way haul loop live under `edap/routines/`.
 - Hauling: `edap.routines.haul_loop` now aliases the two-way implementation directly; the older one-way haul codepath is gone.
 - Two-way haul resume now uses journal position plus `Cargo.json`/`Market.json` fallback data to identify station/phase, distinguish partial vs full outbound loads, and avoid re-buying or replaying the wrong station's actions.
@@ -39,6 +39,7 @@ Last updated: 2026-06-09
 - TTS exists on macOS with Linux/Windows fallbacks, but only the macOS path should be assumed close to live-validated operator quality.
 - Windows has early live validation, but it still needs broader coverage after the `INPUT` layout fix to separate residual focus/UIPI issues from backend bugs.
 - CV is still in validation/scaffolding mode. Template matching has been refreshed against CrossOver captures, but there is no continuous alignment loop yet.
+- Recent live-log review did not reveal a distinct journal or `Music` cue for the pre-drop "safe to disengage" moment; assume CV/vision is required if we want to trigger before `SupercruiseExit`.
 - Startup binding warnings intentionally suppress unused maneuver controls (`Roll*`, `Pitch*`, `Yaw*`). Any future routine that depends on them must remove that suppression in the same change.
 - The suite body is currently fast enough for the local `0.2s` target, but wrapper startup means timing checks must use the runtime reported by `uv run python3 -m unittest discover -s tests`, not generic wall-clock timing around `uv`.
 - EDAP still only emulates keyboard input. Any action EDAP needs must also have a keyboard bind even if the operator normally flies with HOTAS/gamepad.
