@@ -223,7 +223,7 @@ class RoutinesTests(unittest.TestCase):
         self.assertEqual(result.dispatch.status, "error")
         self.assertIn("retry budget", result.dispatch.reason)
 
-    def test_station_refuel_menu_sequence_dispatches_up_select_down(self) -> None:
+    def test_station_refuel_menu_sequence_dispatches_refuel_repair_then_down(self) -> None:
         controls = FakeShipControls(
             set_speed_zero_result=ActionDispatchResult(
                 action="UI_Up",
@@ -240,10 +240,12 @@ class RoutinesTests(unittest.TestCase):
             [
                 {"action": "UI_Up", "repeat": 1, "hold_s": 0.0},
                 {"action": "UI_Select", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Right", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Select", "repeat": 1, "hold_s": 0.0},
                 {"action": "UI_Down", "repeat": 1, "hold_s": 0.0},
             ],
         )
-        self.assertEqual(sleep_calls, [0.5, 0.5])
+        self.assertEqual(sleep_calls, [0.5, 0.5, 0.5, 0.5])
         self.assertEqual(result.action, "UI_Down")
         self.assertEqual(result.dispatch.status, "ok")
 
@@ -274,10 +276,12 @@ class RoutinesTests(unittest.TestCase):
             [
                 {"action": "UI_Up", "repeat": 1, "hold_s": 0.0},
                 {"action": "UI_Select", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Right", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Select", "repeat": 1, "hold_s": 0.0},
                 {"action": "UI_Down", "repeat": 1, "hold_s": 0.0},
             ],
         )
-        self.assertEqual(sleep_calls, [2.0, 0.5, 0.5])
+        self.assertEqual(sleep_calls, [2.0, 0.5, 0.5, 0.5, 0.5])
 
     def test_station_refuel_menu_returns_error_when_docked_not_seen(self) -> None:
         controls = FakeShipControls(
@@ -525,7 +529,7 @@ class RoutinesTests(unittest.TestCase):
             [(AnnouncementId.DOCKING_REQUEST, {"station_name": "Big Station"})],
         )
 
-    def test_dock_can_skip_supercruise_exit_and_chain_refuel(self) -> None:
+    def test_dock_can_skip_supercruise_exit_and_chain_refuel_and_repair(self) -> None:
         controls = FakeShipControls(
             set_speed_zero_result=ActionDispatchResult(
                 action="UI_Down",
@@ -542,6 +546,7 @@ class RoutinesTests(unittest.TestCase):
         )
         time_values = iter([0.0, 0.0, 0.1, 0.1])
         sleep_calls: list[float] = []
+        announcements: list[tuple[AnnouncementId, dict[str, object]]] = []
 
         result = dock(
             controls,
@@ -554,21 +559,25 @@ class RoutinesTests(unittest.TestCase):
             settle_s=2.0,
             time_fn=lambda: next(time_values),
             sleeper=sleep_calls.append,
+            announce_fn=lambda message_id, **values: announcements.append((message_id, values)),
         )
 
         self.assertEqual(result.dispatch.status, "ok")
         self.assertEqual(result.details["auto_refuel"], True)
         self.assertEqual(result.details["followup_action"], "station_refuel_menu")
         self.assertEqual(result.details["supercruise_exit_event"], None)
-        self.assertEqual(sleep_calls, [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 1.0, 2.0, 0.5, 0.5])
+        self.assertEqual(sleep_calls, [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 1.0, 2.0, 0.5, 0.5, 0.5, 0.5])
         self.assertEqual(
-            controls.calls[-3:],
+            controls.calls[-5:],
             [
                 {"action": "UI_Up", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Select", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Right", "repeat": 1, "hold_s": 0.0},
                 {"action": "UI_Select", "repeat": 1, "hold_s": 0.0},
                 {"action": "UI_Down", "repeat": 1, "hold_s": 0.0},
             ],
         )
+        self.assertEqual(announcements, [(AnnouncementId.SHIP_SERVICED, {})])
 
     def test_market_sell_spaces_back_presses_after_trade(self) -> None:
         controls = FakeShipControls(

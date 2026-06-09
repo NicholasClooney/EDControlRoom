@@ -61,6 +61,10 @@ class LoadConfigTests(unittest.TestCase):
             self.assertTrue(config.tts.enabled)
             self.assertEqual(config.tts.title, "commander")
             self.assertEqual(config.tts.phrases["destination_set"], "Setting destination to {system_name}.")
+            self.assertEqual(
+                config.tts.phrases["ship_serviced"],
+                "Ship is fully fueled up and repaired, {title}.",
+            )
 
     def test_tts_partial_override_keeps_default_phrases(self) -> None:
         with TemporaryDirectory() as temp_dir:

@@ -69,3 +69,24 @@ class TTSHelpersTests(unittest.TestCase):
         announcer.close()
 
         self.assertEqual(backend.spoken, ["Station demand for Aluminium is low at 200 units."])
+
+    def test_announcer_renders_ship_serviced_phrase_with_title(self) -> None:
+        backend = _FakeBackend()
+        announcer = TTSAnnouncer(
+            TTSConfig(
+                enabled=True,
+                title="captain",
+                disabled_messages=(),
+                phrases={
+                    "ship_serviced": "Ship is fully fueled up and repaired, {title}.",
+                },
+            ),
+            platform_name="macos",
+            backend=backend,
+        )
+        self.addCleanup(announcer.close)
+
+        announcer.announce(AnnouncementId.SHIP_SERVICED)
+        announcer.close()
+
+        self.assertEqual(backend.spoken, ["Ship is fully fueled up and repaired, captain."])

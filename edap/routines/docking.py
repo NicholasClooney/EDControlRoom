@@ -53,17 +53,43 @@ def station_refuel_menu_sequence(
     if settle_s > 0:
         sleeper(settle_s)
 
+    right_dispatch = controls.ui_right()
+    if right_dispatch.status != "ok":
+        return RoutineResult(
+            action="UI_Right",
+            dispatch=right_dispatch,
+            wait_s=pre_wait_s + (settle_s * 2),
+            details={"phase": "ui_right_after_refuel"},
+        )
+
+    if settle_s > 0:
+        sleeper(settle_s)
+
+    repair_dispatch = controls.ui_select()
+    if repair_dispatch.status != "ok":
+        return RoutineResult(
+            action="UI_Select",
+            dispatch=repair_dispatch,
+            wait_s=pre_wait_s + (settle_s * 3),
+            details={"phase": "ui_select_repair"},
+        )
+
+    if settle_s > 0:
+        sleeper(settle_s)
+
     down_dispatch = controls.ui_down()
     return RoutineResult(
         action="UI_Down",
         dispatch=down_dispatch,
-        wait_s=pre_wait_s + (settle_s * 2),
+        wait_s=pre_wait_s + (settle_s * 4),
         trigger_event=trigger_event,
         details={
             "phase": "ui_down",
             "sequence": [
                 up_dispatch.to_dict(),
                 select_dispatch.to_dict(),
+                right_dispatch.to_dict(),
+                repair_dispatch.to_dict(),
                 down_dispatch.to_dict(),
             ],
         },
@@ -351,6 +377,8 @@ def dock(
         trigger_event=docked_event,
         pre_wait_s=settle_s,
     )
+    if refuel_result.dispatch.status == "ok" and announce_fn is not None:
+        announce_fn(AnnouncementId.SHIP_SERVICED)
     return RoutineResult(
         action=refuel_result.action,
         dispatch=refuel_result.dispatch,

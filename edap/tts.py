@@ -23,6 +23,7 @@ class AnnouncementId(str, Enum):
     APPROACHING_STATION = "approaching_station"
     DOCKING_REQUEST = "docking_request"
     DOCKING_COMPLETE = "docking_complete"
+    SHIP_SERVICED = "ship_serviced"
     UNDOCKING = "undocking"
     CARGO_LOADED = "cargo_loaded"
     ROUTE_COMPLETE = "route_complete"

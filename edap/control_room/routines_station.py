@@ -18,7 +18,7 @@ def cmd_dock(app: RoutineHost, *, skip_delay: bool = False) -> None:
     label = "dock (already in space)" if skip_scx else "dock (waiting for supercruise exit)"
     app._start_delayed_routine(
         description=label,
-        start_message=f"Starting {label}, auto-refuel on...",
+        start_message=f"Starting {label}, auto-refuel/repair on...",
         skip_delay=skip_delay,
         fn=lambda: dock(
             controls,

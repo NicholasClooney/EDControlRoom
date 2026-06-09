@@ -7,8 +7,8 @@ CONTROL_ROOM_COMMANDS: list[CommandHelp] = [
     CommandHelp(
         name="dock",
         usage="dock",
-        summary="Dock at the current station target and auto-refuel after touchdown.",
-        detail="Starts the docking routine. If you're already in normal space it skips the supercruise-exit wait; otherwise it waits for the drop, sends the docking request menu flow, and auto-refuels after docking. Prefix the command with ! to bypass the configured control-room start delay for that launch only.",
+        summary="Dock at the current station target and auto-refuel plus auto-repair after touchdown.",
+        detail="Starts the docking routine. If you're already in normal space it skips the supercruise-exit wait; otherwise it waits for the drop, sends the docking request menu flow, then auto-refuels and attempts one repair press after docking before returning to station services. Prefix the command with ! to bypass the configured control-room start delay for that launch only.",
     ),
     CommandHelp(
         name="undock",
