@@ -38,6 +38,14 @@ Use [docs/session-log.md](docs/session-log.md) for concise rolling session notes
 - After implementing any feature or code change, run the full suite with `uv run python3 -m unittest discover -s tests` before wrapping up.
 - After implementing any feature or code change, use the runtime reported by the preceding `uv run python3 -m unittest discover -s tests` command as the timing check and keep the full-suite runtime at or under `0.2` seconds. If that command reports a runtime slower than `0.2` seconds, run `UV_CACHE_DIR=/private/tmp/uv-cache uv run python3 tools/report_test_timing.py --top 10 --sort slowest` to identify what is dragging runtime down.
 
+### GitHub Actions Checks
+
+- Use compact `gh` queries first so Actions debugging does not flood context.
+- Recent run summary: `gh run list --limit 8 --json databaseId,workflowName,displayTitle,headBranch,event,status,conclusion,updatedAt`
+- Single run job summary: `gh run view <run-id> --json databaseId,workflowName,displayTitle,headBranch,event,status,conclusion,jobs,updatedAt`
+- Failed-step logs only when needed: `gh run view <run-id> --job <job-id> --log-failed`
+- Default to summarizing failing jobs, failing test names, and a few key error lines. Do not pull full logs or broad JSON payloads unless the compact view is insufficient.
+
 ## Working Rules
 
 - Keep platform-specific code isolated behind interfaces.
