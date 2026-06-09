@@ -67,21 +67,23 @@ class WindowsGamePathsTests(unittest.TestCase):
             self.assertIsNone(game_paths.default_journal_dir())
             self.assertIsNone(game_paths.default_bindings_file())
 
-    def test_default_bindings_file_uses_localappdata(self) -> None:
+    def test_default_bindings_file_uses_newest_candidate_by_mtime(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             localappdata = root / "LocalAppData"
             bindings_dir = localappdata / "Frontier Developments/Elite Dangerous/Options/Bindings"
             bindings_dir.mkdir(parents=True)
-            first = bindings_dir / "CustomA.binds"
-            second = bindings_dir / "CustomB.binds"
-            first.write_text("<Root />", encoding="utf-8")
-            second.write_text("<Root />", encoding="utf-8")
+            newer = bindings_dir / "A.binds"
+            older = bindings_dir / "Z.binds"
+            older.write_text("<Root />", encoding="utf-8")
+            newer.write_text("<Root />", encoding="utf-8")
+            os.utime(older, (time() - 40, time() - 40))
+            os.utime(newer, (time() - 10, time() - 10))
 
             with patch.dict(environ, {"LOCALAPPDATA": str(localappdata)}, clear=True):
                 selected = WindowsGamePaths().default_bindings_file()
 
-            self.assertEqual(selected, second)
+            self.assertEqual(selected, newer)
 
 
 class _TestableLinuxGamePaths(LinuxGamePaths):

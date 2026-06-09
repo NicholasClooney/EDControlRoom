@@ -20,7 +20,7 @@ class WindowsGamePaths(GamePaths):
         bindings_dir = Path(localappdata) / "Frontier Developments" / "Elite Dangerous" / "Options" / "Bindings"
         if not bindings_dir.exists():
             return None
-        binds = sorted(bindings_dir.glob("*.binds"))
+        binds = list(bindings_dir.glob("*.binds"))
         if not binds:
             return None
-        return binds[-1]
+        return max(binds, key=lambda path: path.stat().st_mtime)

@@ -5,3 +5,4 @@ _This is the rolling short-form log for recent sessions. Keep entries concise an
 ## 2026-06-09
 
 - Documented Elite preset locations and controller-token format under CrossOver in `docs/research/0006-elite-bindings-preset-locations.md`: built-in presets come from the installed `Products/elite-dangerous-odyssey-64/ControlSchemes` folder, user-editable profiles still live under `AppData/Local/.../Options/Bindings`, and controller bindings are stored as symbolic `Device`/`Key` pairs with USB identity data in `DeviceMappings.xml`.
+- Changed Windows bindings auto-detection to match macOS/Linux: `default_bindings_file()` now selects the newest `.binds` file by modification time, with test coverage proving filename sort order no longer decides the winner.
