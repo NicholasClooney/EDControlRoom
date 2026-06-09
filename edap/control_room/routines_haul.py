@@ -78,6 +78,7 @@ def dispatch_haul_loop(
     )
     journal_dir = app._journal_dir
     watcher = app._make_watcher()
+    app._clear_pending_haul_stop()
 
     app._record_history_entry(CommandHistoryEntry(
         raw=raw_command or f"{'!' if skip_delay else ''}haul {station_1_buying}",
@@ -147,6 +148,7 @@ def dispatch_haul_loop(
             sleeper=sleeper,
             progress_fn=progress,
             announce_fn=app._announce_tts,
+            stop_requested_fn=lambda: app._haul_stop_requested,
         ),
         active_routine_name="haul",
         on_start=on_start,

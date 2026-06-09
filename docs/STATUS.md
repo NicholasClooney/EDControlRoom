@@ -21,6 +21,7 @@ Last updated: 2026-06-09
 
 - Journal/runtime: journal tailing, bindings lookup, runtime construction, and shared platform seams are working.
 - Control Room: live Textual UI with ship status, market panel, haul stats, replay/history, persisted state, routine dispatch, queued cross-platform TTS announcements, and a repo-local `artifacts/control-room.log` journal-event mirror for sessions where the standalone watcher is not running.
+- Control Room `Ctrl-C`/`Ctrl-D` handling is now haul-aware: the first interrupt during `haul` queues a stop at the next station-1 cycle boundary after the return sale, announces that deferred stop, and a second interrupt still cancels immediately.
 - Routines: `jump`, `dock`, `undock`, market buy/sell, galaxy-map destination setting, and the two-way haul loop live under `edap/routines/`.
 - Hauling: `edap.routines.haul_loop` now aliases the two-way implementation directly; the older one-way haul codepath is gone.
 - Two-way haul resume now uses journal position plus `Cargo.json`/`Market.json` fallback data to identify station/phase, distinguish partial vs full outbound loads, and avoid re-buying or replaying the wrong station's actions.

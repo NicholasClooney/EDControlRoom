@@ -513,6 +513,14 @@ class ControlRoomApp(App[None]):
         self._runtime_state.active_routine_name = value
 
     @property
+    def _haul_stop_requested(self) -> bool:
+        return self._runtime_state.haul_stop_requested
+
+    @_haul_stop_requested.setter
+    def _haul_stop_requested(self, value: bool) -> None:
+        self._runtime_state.haul_stop_requested = value
+
+    @property
     def _verbose_controls(self) -> bool:
         return self._runtime_state.verbose_controls
 
@@ -847,8 +855,22 @@ class ControlRoomApp(App[None]):
         self.action_request_quit()
 
     def _cancel_active_routine(self, source: str) -> None:
-        self._log(f"[yellow]{escape(source)} received — cancelling active routine.[/]")
+        if self._active_routine_name == "haul" and not self._haul_stop_requested:
+            self._haul_stop_requested = True
+            self._log(
+                f"[yellow]{escape(source)} received — haul will stop after this run at station 1 before a new cycle.[/]"
+            )
+            self._announce_tts(AnnouncementId.HAUL_STOP_AFTER_RUN)
+            return
+        if self._active_routine_name == "haul" and self._haul_stop_requested:
+            self._haul_stop_requested = False
+            self._log(f"[yellow]{escape(source)} received again — cancelling haul immediately.[/]")
+        else:
+            self._log(f"[yellow]{escape(source)} received — cancelling active routine.[/]")
         self._routine_worker.cancel()
+
+    def _clear_pending_haul_stop(self) -> None:
+        self._haul_stop_requested = False
 
     def _request_shutdown(self, source: str) -> None:
         if self._shutdown_requested:

@@ -103,6 +103,7 @@ class ReplayBrowserState:
 class RuntimeUIState:
     routine_active: bool = False
     active_routine_name: str | None = None
+    haul_stop_requested: bool = False
     verbose_controls: bool = False
     instant_mode: bool = False
     sigint_pending: bool = False

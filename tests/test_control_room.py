@@ -281,6 +281,38 @@ class ControlRoomCommandTests(unittest.TestCase):
         self.assertTrue(worker.cancelled)
         self.assertEqual(self.app.exit_calls, 0)
 
+    def test_request_quit_on_haul_schedules_stop_after_run(self) -> None:
+        worker = _FakeWorker()
+        self.app._routine_active = True
+        self.app._routine_worker = worker
+        self.app._active_routine_name = "haul"
+        self.app._tts = _FakeTTS()
+
+        self.app.action_request_quit()
+
+        self.assertFalse(self.app._shutdown_requested)
+        self.assertFalse(worker.cancelled)
+        self.assertTrue(self.app._haul_stop_requested)
+        self.assertIn(
+            (AnnouncementId.HAUL_STOP_AFTER_RUN, {}),
+            self.app._tts.calls,
+        )
+        self.assertIn("stop after this run", "\n".join(self.app.logged))
+
+    def test_request_quit_on_haul_cancels_immediately_when_stop_already_pending(self) -> None:
+        worker = _FakeWorker()
+        self.app._routine_active = True
+        self.app._routine_worker = worker
+        self.app._active_routine_name = "haul"
+        self.app._haul_stop_requested = True
+
+        self.app.action_request_quit()
+
+        self.assertFalse(self.app._shutdown_requested)
+        self.assertTrue(worker.cancelled)
+        self.assertFalse(self.app._haul_stop_requested)
+        self.assertIn("cancelling haul immediately", "\n".join(self.app.logged))
+
     def test_pending_sigint_cancels_active_routine_without_exiting(self) -> None:
         worker = _FakeWorker()
         self.app._routine_active = True
@@ -719,6 +751,9 @@ class ControlRoomBindingsTests(unittest.TestCase):
         self.assertIn("kwargs", captured)
         self.assertEqual(captured["kwargs"]["undock_timeout_s"], 30.0)
         self.assertEqual(captured["kwargs"]["undock_no_track_timeout_s"], 600.0)
+        self.assertFalse(captured["kwargs"]["stop_requested_fn"]())
+        self.app._haul_stop_requested = True
+        self.assertTrue(captured["kwargs"]["stop_requested_fn"]())
         self.assertIn("Starting haul loop:", "\n".join(self.app.logged))
         self.assertEqual(self.app._active_routine_name, "haul")
         self.assertEqual(self.app._haul_stats.station_1_buying, "Aluminium")

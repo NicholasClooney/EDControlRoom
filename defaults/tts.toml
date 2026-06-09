@@ -7,6 +7,7 @@ disabled_messages = []
 destination_set = "Setting destination to {system_name}."
 station_cleared = "Station cleared. Frame shift drive online, {title}. Ready to jump."
 haul_aborted = "Haul aborted."
+haul_stop_after_run = "Roger {title}, we will stop hauling after this run."
 buying_cargo = "Buying full cargo of {commodity_name}."
 selling_cargo = "Selling {commodity_name}."
 sale_profit = "Sale complete. Profit: {profit_short}."

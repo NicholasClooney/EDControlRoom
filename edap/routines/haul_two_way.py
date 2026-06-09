@@ -788,6 +788,7 @@ def haul_loop_two_way(
     sleeper: Callable[[float], None] = sleep,
     progress_fn: Callable[[str], None] | None = None,
     announce_fn: Callable[..., None] | None = None,
+    stop_requested_fn: Callable[[], bool] | None = None,
 ) -> RoutineResult:
     if iterations < 0:
         raise ValueError("iterations must be non-negative (0 = infinite)")
@@ -871,6 +872,15 @@ def haul_loop_two_way(
                 last_result = result
                 if result.dispatch.status != "ok":
                     return result
+            if (
+                phase == Phase.AT_STATION_1_SELL
+                and stop_requested_fn is not None
+                and stop_requested_fn()
+            ):
+                if progress_fn is not None:
+                    progress_fn("Stop requested at cycle boundary; halting before station 1 buy.")
+                assert last_result is not None
+                return last_result
             if phase == Phase.TRANSIT_TO_STATION_1:
                 break
             phase = next_phase
