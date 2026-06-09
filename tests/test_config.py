@@ -374,7 +374,7 @@ platform = "plan9"
                 config_path,
                 f"""
 [paths]
-bindings_file = "{bindings_dir}"
+bindings_file = '{bindings_dir}'
 
 [controls]
 

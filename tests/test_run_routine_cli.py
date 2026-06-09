@@ -150,7 +150,10 @@ class RunRoutineCliTests(unittest.TestCase):
         self.assertEqual(payload["journal_source"], "auto_detected")
         self.assertEqual(payload["bindings_source"], "auto_detected")
         self.assertEqual(payload["result"]["trigger_event"]["event"], "SupercruiseExit")
-        self.assertIn("Watching /tmp/Journal for SupercruiseExit events", stderr.getvalue())
+        self.assertIn(
+            f"Watching {runtime.journal.effective_path} for SupercruiseExit events",
+            stderr.getvalue(),
+        )
         self.assertIn("  SetSpeedZero -> x", stderr.getvalue())
         self.assertIsNone(payload["event_log_path"])
 
@@ -304,11 +307,11 @@ class RunRoutineCliTests(unittest.TestCase):
         station_refuel_menu_mock.assert_called_once()
         payload = json.loads(stdout.getvalue())
         self.assertEqual(payload["routine"], "station_refuel_menu")
-        self.assertEqual(payload["journal_dir"], "/tmp/Journal")
+        self.assertEqual(payload["journal_dir"], str(runtime.journal.effective_path))
         self.assertIn("  UI_Up -> up", stderr.getvalue())
         self.assertIn("  UI_Select -> space", stderr.getvalue())
         self.assertIn("  UI_Down -> down", stderr.getvalue())
-        self.assertIn("Watching /tmp/Journal for Docked events", stderr.getvalue())
+        self.assertIn(f"Watching {runtime.journal.effective_path} for Docked events", stderr.getvalue())
 
     def test_main_runs_dock_routine_and_emits_json(self) -> None:
         fake_controls = _FakeControls({"action": "SetSpeedZero", "status": "ok"})
@@ -420,7 +423,10 @@ class RunRoutineCliTests(unittest.TestCase):
         self.assertEqual(payload["skip_supercruise_exit"], True)
         self.assertEqual(payload["auto_refuel"], True)
         self.assertEqual(payload["result"]["details"]["followup_action"], "station_refuel_menu")
-        self.assertIn("Watching /tmp/Journal for approach and docking events", stderr.getvalue())
+        self.assertIn(
+            f"Watching {runtime.journal.effective_path} for approach and docking events",
+            stderr.getvalue(),
+        )
         self.assertIn("  FocusLeftPanel -> 1", stderr.getvalue())
         self.assertIn("  CyclePreviousPanel -> q", stderr.getvalue())
         self.assertIn("  UI_Down -> down", stderr.getvalue())

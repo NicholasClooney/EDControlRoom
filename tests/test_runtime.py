@@ -62,8 +62,8 @@ class RuntimeTests(unittest.TestCase):
             config_path.write_text(
                 f"""
 [paths]
-journal_dir = "{journal_dir}"
-bindings_file = "{bindings_file}"
+journal_dir = '{journal_dir}'
+bindings_file = '{bindings_file}'
 
 [controls]
 
@@ -158,7 +158,7 @@ bindings_file = "{bindings_file}"
             config_path.write_text(
                 f"""
 [paths]
-bindings_file = "{missing_bindings}"
+bindings_file = '{missing_bindings}'
 
 [controls]
 
