@@ -2,7 +2,7 @@
 
 _This is the startup handoff document for the repo. Keep it current, compact, and biased toward what the next session needs immediately._
 
-Last updated: 2026-06-08
+Last updated: 2026-06-09
 
 ## Current Snapshot
 
@@ -34,6 +34,7 @@ Last updated: 2026-06-08
 - Release prep for the next stable cut now requires `pyproject.toml` and `uv.lock` version metadata to stay in sync: bump `[project].version`, run `uv sync`, and commit the resulting lockfile change as part of the release changeset.
 - Market `buy ... max` no longer holds `UI_Right` for a fixed 10 seconds: it now scales hold time from remaining cargo space with `controls.market_buy_hold_seconds_per_ton` (default `0.01s` per free ton) and still falls back to the old cap when cargo space cannot be derived.
 - TTS/config: announcement IDs are typed in code, while default phrase text now lives in `defaults/tts.toml` and merges with user `config.toml` overrides under `[tts]`.
+- Windows input injection now builds the full Win32 `INPUT` union shape instead of a keyboard-only subset and includes native `GetLastError()` codes in `SendInput` failures, after admin-to-admin Notepad repros suggested the old structure size could fail on 64-bit Windows before UIPI ever mattered.
 - Platform scope: macOS + CrossOver is the only live-validated operator path. Windows and Linux input/runtime paths exist with unit-test and CI coverage, but not live validation.
 - CI: cross-platform unittest workflow exists in GitHub Actions, and a timing guard now enforces a 10-second ceiling on `tests/test_haul_loop.py`.
 
@@ -42,6 +43,7 @@ Last updated: 2026-06-08
 - The legacy autopilot loop is still not ported. This repo is currently automation/runtime tooling plus a growing set of journal-driven routines, not a complete autopilot.
 - Two-way hauling is the active operator path, but it still needs more live validation around startup/resume/station-role detection after the latest fixes.
 - TTS is implemented for macOS (`say`) plus Linux/Windows fallbacks, but only macOS is expected to be live-validated soon; wording/noise level still needs operator feedback after in-game use.
+- Windows still lacks live validation; after the `INPUT` layout fix, any remaining `SendInput` failures need a fresh Windows rerun to separate residual UIPI/focus issues from backend bugs.
 - CV is still at validation/scaffolding stage. Template matching has been re-baked against CrossOver captures, but there is no real continuous alignment loop yet.
 - Timing enforcement is intentionally narrow for now: only `tests/test_haul_loop.py` has a hard runtime budget because it was the clear outlier.
 
@@ -50,7 +52,8 @@ Last updated: 2026-06-08
 1. Live-validate the updated two-way haul startup path and haul telemetry, especially station-2 starts, station-1 run finalization, and `Market.json` fallback behavior.
 2. Live-test the queued TTS callouts on macOS, including the new low supply/demand warning, and trim or reword noisy announcements based on operator feedback.
 3. Keep the timing guard in place and expand it only after measuring stable CI variance on other candidate suites.
-4. Continue the next portability follow-up slice: CV capture/performance measurement, journal latency measurement, and diagnostics/dashboard work from plans 0002-0004.
+4. Re-run the Windows `diagnostics.py --send-test-key` path on a real machine and capture the new `WinError` detail if `SendInput` still fails.
+5. Continue the next portability follow-up slice: CV capture/performance measurement, journal latency measurement, and diagnostics/dashboard work from plans 0002-0004.
 
 ## Handoff Links
 

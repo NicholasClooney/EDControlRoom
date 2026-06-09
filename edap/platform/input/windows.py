@@ -163,6 +163,50 @@ KEYEVENTF_SCANCODE = 0x0008
 INPUT_KEYBOARD = 1
 
 
+ULONG_PTR = ctypes.c_size_t
+
+
+class KeyBdInput(ctypes.Structure):
+    _fields_ = [
+        ("wVk", ctypes.c_ushort),
+        ("wScan", ctypes.c_ushort),
+        ("dwFlags", ctypes.c_ulong),
+        ("time", ctypes.c_ulong),
+        ("dwExtraInfo", ULONG_PTR),
+    ]
+
+
+class MouseInput(ctypes.Structure):
+    _fields_ = [
+        ("dx", ctypes.c_long),
+        ("dy", ctypes.c_long),
+        ("mouseData", ctypes.c_ulong),
+        ("dwFlags", ctypes.c_ulong),
+        ("time", ctypes.c_ulong),
+        ("dwExtraInfo", ULONG_PTR),
+    ]
+
+
+class HardwareInput(ctypes.Structure):
+    _fields_ = [
+        ("uMsg", ctypes.c_ulong),
+        ("wParamL", ctypes.c_ushort),
+        ("wParamH", ctypes.c_ushort),
+    ]
+
+
+class InputUnion(ctypes.Union):
+    _fields_ = [
+        ("ki", KeyBdInput),
+        ("mi", MouseInput),
+        ("hi", HardwareInput),
+    ]
+
+
+class Input(ctypes.Structure):
+    _fields_ = [("type", ctypes.c_ulong), ("ii", InputUnion)]
+
+
 SenderFn = Callable[[int, bool], None]
 SleeperFn = Callable[[float], None]
 
@@ -175,23 +219,6 @@ def _send_input(scan_code: int, is_key_up: bool) -> None:
     if not _is_windows_available():
         raise RuntimeError("Windows SendInput backend is unavailable on this platform.")
 
-    extra = ctypes.c_ulong(0)
-
-    class KeyBdInput(ctypes.Structure):
-        _fields_ = [
-            ("wVk", ctypes.c_ushort),
-            ("wScan", ctypes.c_ushort),
-            ("dwFlags", ctypes.c_ulong),
-            ("time", ctypes.c_ulong),
-            ("dwExtraInfo", ctypes.POINTER(ctypes.c_ulong)),
-        ]
-
-    class InputUnion(ctypes.Union):
-        _fields_ = [("ki", KeyBdInput)]
-
-    class Input(ctypes.Structure):
-        _fields_ = [("type", ctypes.c_ulong), ("ii", InputUnion)]
-
     flags = KEYEVENTF_SCANCODE
     if scan_code in EXTENDED_KEYS:
         flags |= KEYEVENTF_EXTENDEDKEY
@@ -199,10 +226,17 @@ def _send_input(scan_code: int, is_key_up: bool) -> None:
         flags |= KEYEVENTF_KEYUP
 
     input_union = InputUnion()
-    input_union.ki = KeyBdInput(0, scan_code & 0xFF, flags, 0, ctypes.pointer(extra))
+    input_union.ki = KeyBdInput(0, scan_code & 0xFF, flags, 0, 0)
     event = Input(INPUT_KEYBOARD, input_union)
+    ctypes.set_last_error(0)
     sent = ctypes.windll.user32.SendInput(1, ctypes.pointer(event), ctypes.sizeof(event))
     if sent != 1:
+        error_code = ctypes.get_last_error()
+        if error_code:
+            raise OSError(
+                error_code,
+                f"SendInput failed for scan code 0x{scan_code:02X} (WinError {error_code}).",
+            )
         raise OSError(f"SendInput failed for scan code 0x{scan_code:02X}.")
 
 
