@@ -25,6 +25,7 @@ from edap.config import (
     ScreenConfig,
     TTSConfig,
 )
+from edap.control_room.app import ActivityLog
 from edap.control_room.events import apply_ship_event
 from edap.control_room import rendering as control_room_rendering
 from edap.control_room.models import MarketData, ShipState
@@ -150,6 +151,40 @@ class _InputStub:
         self.placeholder = ""
         self.value = ""
         self.cursor_position = 0
+
+
+class _ActivityLogStub:
+    def __init__(self, *, scroll_y: float = 0.0, max_scroll_y: float = 0.0) -> None:
+        self.border_title = ""
+        self.scroll_y = scroll_y
+        self.max_scroll_y = max_scroll_y
+        self.auto_scroll = True
+        self.writes: list[dict[str, object]] = []
+
+    @property
+    def auto_follow_paused(self) -> bool:
+        return not self.auto_scroll
+
+    def write(self, content, **kwargs) -> None:
+        self.writes.append({"content": content, **kwargs})
+
+
+class _TimerStub:
+    def __init__(self) -> None:
+        self.stopped = False
+
+    def stop(self) -> None:
+        self.stopped = True
+
+
+class _HarnessActivityLog(ActivityLog):
+    def __init__(self, *, max_scroll_y: float, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._test_max_scroll_y = max_scroll_y
+
+    @property
+    def max_scroll_y(self) -> float:
+        return self._test_max_scroll_y
 
 
 class _FakeTTS:
@@ -764,6 +799,24 @@ class ControlRoomBindingsTests(unittest.TestCase):
         self.assertFalse(line.no_wrap)
         self.assertEqual(line.overflow, "fold")
 
+    def test_activity_log_auto_follows_when_not_paused(self) -> None:
+        activity = _ActivityLogStub()
+        self.app.query_one = lambda selector, widget_type=None: activity  # type: ignore[method-assign]
+
+        ControlRoomApp._log(self.app, "hello")
+
+        self.assertNotIn("scroll_end", activity.writes[-1])
+        self.assertEqual(activity.border_title, "ACTIVITY")
+
+    def test_activity_log_title_reflects_paused_auto_follow(self) -> None:
+        activity = _ActivityLogStub()
+        self.app.query_one = lambda selector, widget_type=None: activity  # type: ignore[method-assign]
+        activity.auto_scroll = False
+
+        self.app._refresh_activity_title()
+
+        self.assertEqual(activity.border_title, "ACTIVITY • AUTO-FOLLOW PAUSED")
+
     def test_cargo_summary_lines_limits_to_top_three(self) -> None:
         lines = _cargo_summary_lines([
             {"Name": "gold", "Name_Localised": "Gold", "Count": 4},
@@ -934,6 +987,48 @@ class ControlRoomBindingsTests(unittest.TestCase):
         self.app._handle_event({"event": "Undocked", "StationName": "Pawelczyk Dock"})
 
         self.assertIn((AnnouncementId.UNDOCKING, {}), self.app._tts.calls)
+
+
+class ActivityLogTests(unittest.TestCase):
+    def test_manual_scroll_pauses_auto_follow_for_ten_seconds(self) -> None:
+        timer = _TimerStub()
+        changes: list[bool] = []
+        activity = _HarnessActivityLog(max_scroll_y=10.0, on_pause_changed=changes.append)
+        activity.set_timer = lambda delay, callback, *args, **kwargs: timer  # type: ignore[method-assign]
+        activity.scroll_y = 4.0
+
+        activity.sync_auto_follow_to_scroll_position()
+
+        self.assertFalse(activity.auto_scroll)
+        self.assertEqual(changes, [True])
+        self.assertIs(activity._resume_timer, timer)
+
+    def test_reaching_bottom_resumes_auto_follow_immediately(self) -> None:
+        changes: list[bool] = []
+        activity = _HarnessActivityLog(max_scroll_y=10.0, on_pause_changed=changes.append)
+        activity.auto_scroll = False
+        activity._resume_timer = _TimerStub()
+        activity.scroll_y = 10.0
+
+        activity.sync_auto_follow_to_scroll_position()
+
+        self.assertTrue(activity.auto_scroll)
+        self.assertEqual(changes, [False])
+        self.assertIsNone(activity._resume_timer)
+
+    def test_pause_resets_existing_resume_timer(self) -> None:
+        first_timer = _TimerStub()
+        second_timer = _TimerStub()
+        activity = _HarnessActivityLog(max_scroll_y=10.0)
+        timers = iter([first_timer, second_timer])
+        activity.set_timer = lambda delay, callback, *args, **kwargs: next(timers)  # type: ignore[method-assign]
+        activity.scroll_y = 4.0
+
+        activity.sync_auto_follow_to_scroll_position()
+        activity.sync_auto_follow_to_scroll_position()
+
+        self.assertTrue(first_timer.stopped)
+        self.assertIs(activity._resume_timer, second_timer)
 
 
 class ControlRoomDispatchTests(unittest.TestCase):

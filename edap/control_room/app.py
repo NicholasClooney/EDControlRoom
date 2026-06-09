@@ -8,7 +8,7 @@ Usage:
     uv run python3 control_room.py --config config.toml --market aluminium
 
 Routine commands (type in the input bar):
-    dock               dock + auto-refuel; skips supercruise-exit wait if already in normal space
+    dock               dock + auto-refuel/repair; skips supercruise-exit wait if already in normal space
     undock             launch from station
     boost              fire boost three times immediately
     escape             set speed full, then boost until Status.json says mass lock cleared
@@ -45,6 +45,7 @@ from rich.text import Text
 from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
+from textual.events import MouseScrollDown, MouseScrollUp
 from textual.widgets import Footer, Header, Input, OptionList, RichLog, Static
 
 from edap.config import AppConfig
@@ -124,6 +125,7 @@ _STARTUP_BINDING_WARNING_IGNORED_ACTIONS = frozenset({
 })
 
 _DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | dest <system> | market ... | reload | q"
+_ACTIVITY_AUTO_FOLLOW_DEBOUNCE_SECONDS = 10.0
 
 _RoutineCancelled = _workers.RoutineCancelled
 _CancellationProxy = _workers.CancellationProxy
@@ -166,6 +168,104 @@ def _read_cargo_inventory(journal_dir: Path) -> list[dict[str, Any]]:
 
 def _cargo_summary_lines(inventory: list[dict[str, Any]], *, limit: int = 3) -> list[str]:
     return _rendering.cargo_summary_lines(inventory, limit=limit)
+
+
+class ActivityLog(RichLog):
+    def __init__(
+        self,
+        *,
+        pause_seconds: float = _ACTIVITY_AUTO_FOLLOW_DEBOUNCE_SECONDS,
+        time_fn: Callable[[], float] | None = None,
+        on_pause_changed: Callable[[bool], None] | None = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(**kwargs)
+        self._pause_seconds = pause_seconds
+        self._time_fn = time_fn or time.monotonic
+        self._on_pause_changed = on_pause_changed
+        self._resume_timer: Any | None = None
+
+    @property
+    def auto_follow_paused(self) -> bool:
+        return not self.auto_scroll
+
+    def configure_auto_follow(
+        self,
+        *,
+        time_fn: Callable[[], float] | None = None,
+        on_pause_changed: Callable[[bool], None] | None = None,
+    ) -> None:
+        if time_fn is not None:
+            self._time_fn = time_fn
+        if on_pause_changed is not None:
+            self._on_pause_changed = on_pause_changed
+
+    def _set_auto_follow_paused(self, paused: bool) -> None:
+        if paused == self.auto_follow_paused:
+            if paused:
+                self._schedule_resume_timer()
+            return
+        self.auto_scroll = not paused
+        if paused:
+            self._schedule_resume_timer()
+        else:
+            self._cancel_resume_timer()
+        if self._on_pause_changed is not None:
+            self._on_pause_changed(paused)
+
+    def _schedule_resume_timer(self) -> None:
+        self._cancel_resume_timer()
+        self._resume_timer = self.set_timer(
+            self._pause_seconds,
+            self.resume_auto_follow,
+        )
+
+    def _cancel_resume_timer(self) -> None:
+        if self._resume_timer is None:
+            return
+        self._resume_timer.stop()
+        self._resume_timer = None
+
+    def resume_auto_follow(self) -> None:
+        self._set_auto_follow_paused(False)
+
+    def sync_auto_follow_to_scroll_position(self) -> None:
+        if self.scroll_y >= self.max_scroll_y:
+            self.resume_auto_follow()
+            return
+        self._set_auto_follow_paused(True)
+
+    def on_mouse_scroll_up(self, event: MouseScrollUp) -> None:
+        super()._on_mouse_scroll_up(event)
+        self.sync_auto_follow_to_scroll_position()
+
+    def on_mouse_scroll_down(self, event: MouseScrollDown) -> None:
+        super()._on_mouse_scroll_down(event)
+        self.sync_auto_follow_to_scroll_position()
+
+    def action_scroll_up(self) -> None:
+        super().action_scroll_up()
+        self.sync_auto_follow_to_scroll_position()
+
+    def action_scroll_down(self) -> None:
+        super().action_scroll_down()
+        self.sync_auto_follow_to_scroll_position()
+
+    def action_page_up(self) -> None:
+        super().action_page_up()
+        self.sync_auto_follow_to_scroll_position()
+
+    def action_page_down(self) -> None:
+        super().action_page_down()
+        self.sync_auto_follow_to_scroll_position()
+
+    def action_scroll_home(self) -> None:
+        super().action_scroll_home()
+        self.sync_auto_follow_to_scroll_position()
+
+    def action_scroll_end(self) -> None:
+        super().action_scroll_end()
+        self.sync_auto_follow_to_scroll_position()
 
 
 # ── App ────────────────────────────────────────────────────────────────────────
@@ -454,7 +554,7 @@ class ControlRoomApp(App[None]):
             with Vertical(id="left"):
                 yield Static(id="status")
                 with Vertical(id="activity-pane"):
-                    yield RichLog(id="activity", markup=True, highlight=True, wrap=True)
+                    yield ActivityLog(id="activity", markup=True, highlight=True, wrap=True)
                     with Vertical(id="resume-browser"):
                         yield Static(
                             "Replay history  |  Enter execute  |  ! execute now  |  e edit  |  * set default haul  |  Esc/q close",
@@ -471,7 +571,11 @@ class ControlRoomApp(App[None]):
     def on_mount(self) -> None:
         self.title = "ED Control Room"
         self.query_one("#status", Static).border_title = "SHIP STATUS"
-        self.query_one("#activity", RichLog).border_title = "ACTIVITY"
+        self.query_one("#activity", ActivityLog).configure_auto_follow(
+            time_fn=lambda: self._time_fn(),
+            on_pause_changed=lambda paused: self._refresh_activity_title(),
+        )
+        self._refresh_activity_title()
         self.query_one("#resume-browser", Vertical).border_title = "REPLAY HISTORY"
         self.query_one("#haul", Static).border_title = "HAUL"
         self.query_one("#market", Static).border_title = "MARKET"
@@ -578,8 +682,19 @@ class ControlRoomApp(App[None]):
             Text.from_markup(_rendering.market_markup(self._market, self._market_filter))
         )
 
+    def _activity_auto_follow_paused(self) -> bool:
+        return self.query_one("#activity", ActivityLog).auto_follow_paused
+
+    def _refresh_activity_title(self) -> None:
+        title = "ACTIVITY"
+        if self._activity_auto_follow_paused():
+            title += " • AUTO-FOLLOW PAUSED"
+        self.query_one("#activity", ActivityLog).border_title = title
+
     def _log(self, msg: str) -> None:
-        self.query_one("#activity", RichLog).write(_build_log_text(msg))
+        activity = self.query_one("#activity", ActivityLog)
+        activity.write(_build_log_text(msg))
+        self._refresh_activity_title()
 
     def _start_haul_stats(
         self,
