@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from edap.routines.haul_two_way import Phase, haul_loop_two_way
+from edap.routines.haul_two_way import Phase, StationLeg, _detect_start_phase, haul_loop_two_way
 from edap.routines._base import ActionDispatchResult, RoutineResult
 from edap.tts import AnnouncementId
 from tests.fakes import FakeShipControls, FakeWatcher
@@ -49,7 +49,81 @@ def _write_journal(journal_dir: Path, *events: dict[str, object]) -> None:
     (journal_dir / "Journal.240101000000.01.log").write_text(f"{lines}\n", encoding="utf-8")
 
 
+def _station_1_leg() -> StationLeg:
+    return StationLeg(index=1, station=_STATION_1, system=_SYSTEM_1, buy_commodity=_CARGO_1, sell_commodity=_CARGO_2)
+
+
+def _station_2_leg() -> StationLeg:
+    return StationLeg(index=2, station=_STATION_2, system=_SYSTEM_2, buy_commodity=_CARGO_2, sell_commodity=_CARGO_1)
+
+
 class TwoWayHaulLoopTests(unittest.TestCase):
+    def test_detect_start_phase_docked_at_station_1_with_full_station_1_cargo_undocks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            _write_journal(
+                journal_dir,
+                {
+                    "event": "Docked",
+                    "StationName": _STATION_1,
+                    "StarSystem": _SYSTEM_1,
+                    "CargoCapacity": 64,
+                },
+            )
+            _write_cargo(journal_dir, [{"Name": "aluminium", "Count": 64, "Stolen": 0}])
+
+            phase = _detect_start_phase(
+                journal_dir,
+                station_1=_station_1_leg(),
+                station_2=_station_2_leg(),
+            )
+
+        self.assertEqual(phase, Phase.UNDOCK_STATION_1)
+
+    def test_detect_start_phase_docked_at_station_2_with_full_station_2_cargo_undocks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            _write_journal(
+                journal_dir,
+                {
+                    "event": "Docked",
+                    "StationName": _STATION_2,
+                    "StarSystem": _SYSTEM_2,
+                    "CargoCapacity": 64,
+                },
+            )
+            _write_cargo(journal_dir, [{"Name": "bertrandite", "Count": 64, "Stolen": 0}])
+
+            phase = _detect_start_phase(
+                journal_dir,
+                station_1=_station_1_leg(),
+                station_2=_station_2_leg(),
+            )
+
+        self.assertEqual(phase, Phase.UNDOCK_STATION_2)
+
+    def test_detect_start_phase_docked_at_station_1_with_partial_station_1_cargo_stays_in_buy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            _write_journal(
+                journal_dir,
+                {
+                    "event": "Docked",
+                    "StationName": _STATION_1,
+                    "StarSystem": _SYSTEM_1,
+                    "CargoCapacity": 64,
+                },
+            )
+            _write_cargo(journal_dir, [{"Name": "aluminium", "Count": 20, "Stolen": 0}])
+
+            phase = _detect_start_phase(
+                journal_dir,
+                station_1=_station_1_leg(),
+                station_2=_station_2_leg(),
+            )
+
+        self.assertEqual(phase, Phase.AT_STATION_1_BUY)
+
     def test_one_iteration_happy_path(self) -> None:
         controls = FakeShipControls()
         market_calls: list[tuple[str, str]] = []

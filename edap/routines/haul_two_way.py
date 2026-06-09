@@ -31,6 +31,30 @@ def _read_cargo_json(journal_dir: Path) -> list[dict]:
         return []
 
 
+def _read_last_cargo_capacity(journal_dir: Path) -> int | None:
+    journals = sorted(journal_dir.glob("Journal.*.log"), key=lambda p: p.stat().st_mtime)
+    for journal_file in reversed(journals):
+        try:
+            with journal_file.open(encoding="utf-8") as fh:
+                lines = fh.readlines()
+        except OSError:
+            continue
+        for line in reversed(lines):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            cargo_capacity = event.get("CargoCapacity")
+            if isinstance(cargo_capacity, bool) or not isinstance(cargo_capacity, (int, float)):
+                continue
+            if cargo_capacity > 0:
+                return int(cargo_capacity)
+    return None
+
+
 def _read_market_station(journal_dir: Path) -> tuple[str, str]:
     market_path = journal_dir / "Market.json"
     try:
@@ -127,6 +151,44 @@ def _inventory_has_commodity(inventory: list[dict], commodity: str) -> bool:
         )
         for item in inventory
     )
+
+
+def _inventory_commodity_count(inventory: list[dict], commodity: str) -> int:
+    commodity_lower = commodity.lower()
+    total = 0
+    for item in inventory:
+        count = item.get("Count", 0)
+        if isinstance(count, bool) or not isinstance(count, (int, float)):
+            continue
+        if (
+            str(item.get("Name", "")).lower() == commodity_lower
+            or str(item.get("Name_Localised", "")).lower() == commodity_lower
+        ):
+            total += max(0, int(count))
+    return total
+
+
+def _inventory_used_capacity(inventory: list[dict]) -> int:
+    used = 0
+    for item in inventory:
+        count = item.get("Count", 0)
+        if isinstance(count, bool) or not isinstance(count, (int, float)):
+            continue
+        used += max(0, int(count))
+    return used
+
+
+def _inventory_has_full_commodity_load(
+    inventory: list[dict],
+    *,
+    commodity: str,
+    cargo_capacity: int | None,
+) -> bool | None:
+    if cargo_capacity is None or cargo_capacity <= 0:
+        return None
+    commodity_count = _inventory_commodity_count(inventory, commodity)
+    used_capacity = _inventory_used_capacity(inventory)
+    return commodity_count >= cargo_capacity and used_capacity == commodity_count
 
 
 class Phase(Enum):
@@ -276,6 +338,17 @@ def _detect_start_phase(
     inventory = _read_cargo_json(journal_dir)
     has_station_1_cargo = _inventory_has_commodity(inventory, station_1.buy_commodity)
     has_station_2_cargo = _inventory_has_commodity(inventory, station_2.buy_commodity)
+    cargo_capacity = _read_last_cargo_capacity(journal_dir)
+    has_full_station_1_cargo = _inventory_has_full_commodity_load(
+        inventory,
+        commodity=station_1.buy_commodity,
+        cargo_capacity=cargo_capacity,
+    )
+    has_full_station_2_cargo = _inventory_has_full_commodity_load(
+        inventory,
+        commodity=station_2.buy_commodity,
+        cargo_capacity=cargo_capacity,
+    )
     market_station, market_system = _read_market_station(journal_dir)
 
     if ship_status in {"docked", "unknown"}:
@@ -290,7 +363,8 @@ def _detect_start_phase(
         progress_fn(
             "Two-way phase detect: "
             f"status={ship_status}, station={current_station!r}, system={current_system!r}, "
-            f"has_station_1_cargo={has_station_1_cargo}, has_station_2_cargo={has_station_2_cargo}"
+            f"has_station_1_cargo={has_station_1_cargo}, has_station_2_cargo={has_station_2_cargo}, "
+            f"full_station_1_cargo={has_full_station_1_cargo}, full_station_2_cargo={has_full_station_2_cargo}"
         )
 
     if ship_status == "unknown":
@@ -305,9 +379,17 @@ def _detect_start_phase(
 
     if ship_status == "docked":
         if current_station_lower == station_1_lower:
-            return Phase.AT_STATION_1_SELL if has_station_2_cargo else Phase.AT_STATION_1_BUY
+            if has_station_2_cargo:
+                return Phase.AT_STATION_1_SELL
+            if has_full_station_1_cargo:
+                return Phase.UNDOCK_STATION_1
+            return Phase.AT_STATION_1_BUY
         if current_station_lower == station_2_lower:
-            return Phase.AT_STATION_2_SELL if has_station_1_cargo else Phase.AT_STATION_2_BUY
+            if has_station_1_cargo:
+                return Phase.AT_STATION_2_SELL
+            if has_full_station_2_cargo:
+                return Phase.UNDOCK_STATION_2
+            return Phase.AT_STATION_2_BUY
         raise RuntimeError(
             f"Docked at unknown station {current_station!r}, expected {station_1.station!r} or {station_2.station!r}"
         )
@@ -315,6 +397,8 @@ def _detect_start_phase(
     if current_system_lower and station_1_system_lower and current_system_lower == station_1_system_lower:
         if has_station_2_cargo:
             return Phase.TRANSIT_TO_STATION_1
+        if has_full_station_1_cargo and ship_status == "normal_space":
+            return Phase.DEPART_STATION_1_SYSTEM
         if ship_status == "normal_space":
             return Phase.DEPART_STATION_1_SYSTEM
         return Phase.TRANSIT_TO_STATION_2
@@ -322,6 +406,8 @@ def _detect_start_phase(
     if current_system_lower and station_2_system_lower and current_system_lower == station_2_system_lower:
         if has_station_1_cargo:
             return Phase.TRANSIT_TO_STATION_2
+        if has_full_station_2_cargo and ship_status == "normal_space":
+            return Phase.DEPART_STATION_2_SYSTEM
         if ship_status == "normal_space":
             return Phase.DEPART_STATION_2_SYSTEM
         return Phase.TRANSIT_TO_STATION_1
