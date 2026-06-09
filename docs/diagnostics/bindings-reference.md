@@ -18,6 +18,21 @@ These are Elite XML action tags that matter to the current runtime:
 - `GalaxyMapOpen`: open galaxy map
 - `CamZoomIn`: galaxy map route-plot hold action used by the Odyssey flow
 
+Control-room startup warnings now print both the XML tag and a friendlier in-game label/menu hint for the routine-critical actions. Examples:
+
+- `UseBoostJuice` -> `Engine Boost` in `Ship Controls > Flight Miscellaneous`
+- `HyperSuperCombination` -> `Toggle Frame Shift Drive` in `Ship Controls > Flight Miscellaneous`
+- `UIFocus` -> `UI Focus` in `Ship Controls > Mode Switches`
+- `HeadLookReset` -> `Reset Headlook` in `Ship Controls > Headlook Mode`
+
+These label/menu hints were compiled from community references, not Frontier-authored docs. Main sources used in the 2026-06-09 Control Room warning update:
+
+- `EDAPGui` required-keybindings documentation on GitHub for the internal XML action names and the corresponding in-game control labels used by that autopilot project.
+- `EDRefCard` for cross-checking how uploaded `.binds` files are categorized and described for players.
+- `Ambient-Impact/Elite-Dangerous-bindings` on GitHub as an additional community-maintained binding reference.
+
+Treat these as operator-facing hints, not canonical API contracts. When a label matters to workflow or support copy, verify it against the live Odyssey Controls menu.
+
 ## Important Gotcha
 
 Boost is written as `UseBoostJuice` in the live `.binds` files on this macOS +
@@ -27,6 +42,12 @@ If a future routine needs boost, request `UseBoostJuice` in action lists and
 binding lookups.
 
 `read_bindings()` in [edap/bindings.py](/Users/nicholasclooney/Source/Projects/EDAutoPilotMKII/edap/bindings.py:79) currently resolves only one keyboard binding per action. If both `Primary` and `Secondary` are keyboard bindings, the `Secondary` entry overwrites the `Primary` entry in the runtime lookup.
+
+Non-keyboard slots do not override a keyboard slot. Practical effect:
+
+- keyboard `Primary` + joystick/mouse `Secondary` => runtime keeps the keyboard `Primary`
+- joystick/mouse `Primary` + keyboard `Secondary` => runtime uses the keyboard `Secondary`
+- joystick/mouse only, with no keyboard bind in either slot => runtime reports the action missing, because EDAP can only emulate keyboard input today
 
 This is not just display detail. It changes what `control_room.py`, `run_routine.py`, and `ship_controls.py` will actually press.
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable, Mapping
-from xml.etree.ElementTree import parse
+from xml.etree.ElementTree import Element, parse
 
 from edap.bindings import Binding, REQUIRED_BINDINGS, read_bindings
 
@@ -161,8 +161,14 @@ def _describe_missing_binding_reasons(bindings_file: Path, actions: Iterable[str
             child for child in item if child.attrib.get("Device", "").strip() == "Keyboard"
         ]
         if not keyboard_children:
+            non_keyboard_categories = _describe_non_keyboard_binding_categories(item)
             if len(item) == 0:
                 reasons[item.tag] = "action has no binding entries in the bindings file"
+            elif non_keyboard_categories is not None:
+                reasons[item.tag] = (
+                    f"action has {non_keyboard_categories} bindings, "
+                    "but none are keyboard bindings"
+                )
             else:
                 reasons[item.tag] = "action has bindings, but none are keyboard bindings"
             continue
@@ -174,6 +180,27 @@ def _describe_missing_binding_reasons(bindings_file: Path, actions: Iterable[str
         reasons[item.tag] = DEFAULT_MISSING_REASON
 
     return reasons
+
+
+def _describe_non_keyboard_binding_categories(item: Element) -> str | None:
+    categories: set[str] = set()
+
+    for child in item:
+        device = child.attrib.get("Device", "").strip()
+        if not device or device == "{NoDevice}" or device == "Keyboard":
+            continue
+        if device == "Mouse":
+            categories.add("mouse")
+            continue
+        categories.add("joystick/controller")
+
+    if not categories:
+        return None
+    if categories == {"mouse"}:
+        return "mouse"
+    if categories == {"joystick/controller"}:
+        return "joystick/controller"
+    return "mouse and joystick/controller"
 
 
 def build_binding_lookup(

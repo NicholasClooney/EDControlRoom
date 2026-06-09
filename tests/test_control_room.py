@@ -1096,8 +1096,49 @@ class ControlRoomDispatchTests(unittest.TestCase):
 
         output = "\n".join(self.app.logged)
         self.assertIn("Bindings warning", output)
-        self.assertIn("UI_Back", output)
-        self.assertIn("SetSpeedZero", output)
+        self.assertIn("UI_Back -> UI Back (General Controls > Interface Mode)", output)
+        self.assertIn(
+            "SetSpeedZero -> Set Speed to 0% (Ship Controls > Flight Throttle)",
+            output,
+        )
+
+    def test_log_bindings_status_reports_joystick_only_binding_reason(self) -> None:
+        bindings_path = Path(self.tmpdir.name) / "Custom.binds"
+        resolved = ResolvedPath(
+            configured={"path": str(bindings_path), "status": "ok", "reason": "test bindings file"},
+            auto_detected={"path": str(bindings_path), "status": "ok", "reason": "test bindings file"},
+            effective={
+                "path": str(bindings_path),
+                "status": "ok",
+                "source": "configured",
+                "reason": "test bindings file",
+            },
+        )
+        lookup = build_binding_lookup(
+            bindings={},
+            missing_actions={
+                "UseBoostJuice": "action has joystick/controller bindings, but none are keyboard bindings",
+            },
+            actions=["UseBoostJuice"],
+        )
+        self.app._ctx = RuntimeContext(
+            config=self.app._ctx.config,
+            game_paths=None,
+            journal=self.app._ctx.journal,
+            bindings=resolved,
+            input_controller=None,
+            screen_capture=None,
+            binding_lookup=lookup,
+        )
+
+        self.app._log_bindings_status()
+
+        output = "\n".join(self.app.logged)
+        self.assertIn(
+            "UseBoostJuice -> Engine Boost (Ship Controls > Flight Miscellaneous)",
+            output,
+        )
+        self.assertIn("joystick/controller bindings", output)
 
     def test_log_bindings_status_ignores_unused_maneuver_mappings(self) -> None:
         bindings_path = Path(self.tmpdir.name) / "Custom.binds"

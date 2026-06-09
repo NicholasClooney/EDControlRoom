@@ -105,6 +105,7 @@ from edap.control_room_state import (
     CommandHistoryEntry,
     ControlRoomState,
 )
+from edap.binding_names import format_binding_action_hint
 from edap.runtime import RuntimeContext, build_runtime_context, load_config_with_fallback
 from edap.ship_controls import DEFAULT_SHIP_CONTROL_ACTIONS, ShipControls
 from edap.tts import AnnouncementId, TTSAnnouncer, format_credits_short
@@ -537,7 +538,10 @@ class ControlRoomApp(App[None]):
         )
         for action, result in sorted(issues.items()):
             reason = result.reason or result.status
-            self._log(f"[yellow]- {escape(action)}: {escape(reason)}[/]")
+            hint = format_binding_action_hint(action)
+            self._log(
+                f"[yellow]- {escape(action)} -> {escape(hint)}: {escape(reason)}[/]"
+            )
 
     def _save_saved_state(self) -> None:
         _persistence.save_saved_state(self)

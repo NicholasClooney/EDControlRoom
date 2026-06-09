@@ -139,11 +139,55 @@ class BindingLookupTests(unittest.TestCase):
             self.assertEqual(lookup.resolve("PrimaryFire").status, "missing")
             self.assertEqual(
                 lookup.resolve("PrimaryFire").reason,
-                "action has bindings, but none are keyboard bindings",
+                "action has mouse bindings, but none are keyboard bindings",
             )
             self.assertEqual(
                 lookup.resolve("UI_Back").reason,
                 "action is not present in bindings file",
+            )
+
+    def test_load_binding_lookup_reports_joystick_only_binding(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            bindings_path = Path(temp_dir) / "Custom.binds"
+            bindings_path.write_text(
+                """
+<Root>
+  <UseBoostJuice>
+    <Primary Device="SaitekX52" Key="Joy_30" />
+  </UseBoostJuice>
+</Root>
+""".strip(),
+                encoding="utf-8",
+            )
+
+            lookup = load_binding_lookup(bindings_path, actions=["UseBoostJuice"])
+
+            self.assertEqual(lookup.resolve("UseBoostJuice").status, "missing")
+            self.assertEqual(
+                lookup.resolve("UseBoostJuice").reason,
+                "action has joystick/controller bindings, but none are keyboard bindings",
+            )
+
+    def test_load_binding_lookup_keeps_primary_keyboard_when_secondary_is_joystick(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            bindings_path = Path(temp_dir) / "Custom.binds"
+            bindings_path.write_text(
+                """
+<Root>
+  <SetSpeedZero>
+    <Primary Device="Keyboard" Key="Key_X" />
+    <Secondary Device="SaitekX52" Key="Joy_30" />
+  </SetSpeedZero>
+</Root>
+""".strip(),
+                encoding="utf-8",
+            )
+
+            lookup = load_binding_lookup(bindings_path, actions=["SetSpeedZero"])
+
+            self.assertEqual(
+                lookup.get("SetSpeedZero").to_dict(),
+                {"key": "x", "modifier": None},
             )
 
     def test_load_binding_lookup_reports_keyboard_binding_with_missing_key_token(self) -> None:

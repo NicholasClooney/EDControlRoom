@@ -28,6 +28,7 @@ Last updated: 2026-06-09
 - Control-room trade parsing now accepts multi-word commodity names like `buy food cartridges` / `sell food cartridges` and still defaults them to `MAX` unless the final token is a valid explicit amount; unknown or otherwise failed commands are also persisted into replay history now.
 - Control room ship status now shows `Status.json` `Destination` as `system/body/name` alongside the journal `FSDTarget`, and the background refresh cadence is configurable with `control_room.status_refresh_seconds` (default `2.0`).
 - Control room startup now logs which `.binds` file it resolved and warns inline when any loaded routine action has no usable keyboard mapping, so operators can see binding gaps before dispatching routines.
+- Control-room startup binding warnings now include the in-game control label and Controls-menu location for the missing action, and joystick/mouse-only binds are called out explicitly so operators know EDAP still needs a keyboard primary or secondary slot for those actions.
 - Temporary exception: control-room startup currently ignores missing `RollLeftButton`, `RollRightButton`, `PitchUpButton`, `PitchDownButton`, `YawLeftButton`, and `YawRightButton` mappings because no live routine path uses those maneuver controls yet. If any future routine, CV alignment loop, or other active control-room workflow starts using any of those actions, remove them from the control-room startup ignore list immediately so missing binds become visible again at startup.
 - Market buy/sell now logs station supply/demand levels, warns and speaks when the current level is critically low relative to cargo capacity, and lets operators tune that threshold with `controls.market_critical_level_multiplier`.
 - Market sell still uses the original demand-sorted SELL list for cursor indexing, but if the target commodity is hidden from that list while the station still exposes a sell price, it now injects just that target row into the original order to estimate the correct position for cargo like `Food Cartridges`.
@@ -51,6 +52,7 @@ Last updated: 2026-06-09
 - Because the control-room startup warning now suppresses currently unused maneuver bindings, any future CV/alignment or flight-control work that starts depending on roll/pitch/yaw must re-enable startup warnings for those actions in the same change.
 - Timing enforcement is intentionally narrow for now: only `tests/test_haul_loop.py` has a hard runtime budget because it was the clear outlier.
 - Cross-platform input tests are still mostly unit-level. Hosted CI covers controller logic, binding resolution, and dispatch plumbing, but not true live desktop injection semantics for modifiers/special keys.
+- EDAP still only emulates keyboard input. Players can keep HOTAS/gamepad bindings, but any action EDAP needs must also have at least one keyboard bind; joystick/mouse-only slots are treated as unavailable for automation.
 
 ## Current Next Steps
 
@@ -60,6 +62,7 @@ Last updated: 2026-06-09
 4. Re-run the Windows `diagnostics.py --send-test-key` path on a real machine and capture the new `WinError` detail if `SendInput` still fails.
 5. Continue the next portability follow-up slice: CV capture/performance measurement, journal latency measurement, and diagnostics/dashboard work from plans 0002-0004.
 6. Parked validation idea: add a small Python key-receiver app plus self-hosted desktop runners for end-to-end live input validation of raw keys, modifiers, and key-order semantics. Do not treat hosted CI alone as sufficient for that coverage.
+7. After the next live Control Room run, verify the new startup warning wording against the actual Odyssey Controls menu labels, especially for `FocusLeftPanel` and the galaxy-map `CamZoomIn` binding.
 
 ## Handoff Links
 
