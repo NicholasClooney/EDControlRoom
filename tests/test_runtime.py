@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from edap.config import DEFAULT_CONFIG_PATH, load_config
+from edap.config import load_config
 from edap.platform.input.linux import LinuxInputController
 from edap.runtime import build_runtime_context, load_config_with_fallback
 from edap.platform.input.windows import WindowsInputController
@@ -27,6 +27,7 @@ class RuntimeTests(unittest.TestCase):
     def test_load_config_with_fallback_uses_example_for_default_path(self) -> None:
         with TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)
+            default_config_path = temp_root / "config.toml"
             example_path = temp_root / "config.example.toml"
             example_path.write_text(
                 """
@@ -41,11 +42,11 @@ class RuntimeTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with patch("edap.runtime.DEFAULT_CONFIG_PATH", DEFAULT_CONFIG_PATH), patch(
+            with patch("edap.runtime.DEFAULT_CONFIG_PATH", default_config_path), patch(
                 "edap.runtime.EXAMPLE_CONFIG_PATH",
                 example_path,
             ), patch("edap.config.default_runtime_platform", return_value="macos"):
-                loaded = load_config_with_fallback(DEFAULT_CONFIG_PATH)
+                loaded = load_config_with_fallback(default_config_path)
 
         self.assertEqual(loaded.config_path, str(example_path))
         self.assertTrue(loaded.used_example_config_fallback)
