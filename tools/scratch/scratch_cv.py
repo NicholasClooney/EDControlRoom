@@ -10,9 +10,9 @@ conversion is applied once after capture (RGB→BGR). All cv2 operations
 below work on BGR arrays.
 
 Usage:
-    uv run python3 tools/scratch/scratch_cv.py --config config.toml
-    uv run python3 tools/scratch/scratch_cv.py --config config.toml --save-debug /tmp/cv-debug.png
-    uv run python3 tools/scratch/scratch_cv.py --config config.toml --save-debug /tmp/cv-debug.png --save-raw /tmp/cv-raw.png
+    uv run python3 tools/scratch/scratch_cv.py
+    uv run python3 tools/scratch/scratch_cv.py --save-debug /tmp/cv-debug.png
+    uv run python3 tools/scratch/scratch_cv.py --save-debug /tmp/cv-debug.png --save-raw /tmp/cv-raw.png
 """
 from __future__ import annotations
 

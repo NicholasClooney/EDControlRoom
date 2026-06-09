@@ -4,7 +4,7 @@ ED AutoPilot Control Room
 Thin launcher for the control-room Textual app.
 
 Usage:
-    uv run python3 control_room.py --config config.toml
+    uv run python3 control_room.py
 """
 
 from edap.control_room.app import (

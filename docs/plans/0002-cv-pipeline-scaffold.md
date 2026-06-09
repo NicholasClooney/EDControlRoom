@@ -49,7 +49,7 @@ Out of scope:
 
 ## Acceptance Criteria
 
-- Running `uv run python3 tools/scratch/scratch_cv.py --config config.toml --save-debug /tmp/cv-debug.png` against a live CrossOver Elite session prints a single block with:
+- Running `uv run python3 tools/scratch/scratch_cv.py --save-debug /tmp/cv-debug.png` against a live CrossOver Elite session prints a single block with:
   - the input capture size and the region used
   - per-template best match score, location, and pass/fail against the legacy threshold
   - the computed navpoint offset and destination offset, in pixels relative to the compass / centre

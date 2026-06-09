@@ -73,7 +73,7 @@ Out of scope:
 
 ## Acceptance Criteria
 
-- `python3 run_routine.py --config config.toml --routine auto_zero_throttle_on_arrival` zero-throttles the ship on the next `SupercruiseExit` while the user flies manually, and prints the event that triggered it.
+- `python3 run_routine.py --routine auto_zero_throttle_on_arrival` zero-throttles the ship on the next `SupercruiseExit` while the user flies manually, and prints the event that triggered it.
 - `JournalWatcher` has unit tests covering: incremental reads, rollover to a new `Journal.*` file mid-run, and idle polling without growing memory.
 - Each routine has at least one unit test that drives it with a stubbed watcher and stubbed `ShipControls`, asserting the action dispatch sequence.
 - No routine spins on a busy loop; all waits go through an injected sleeper.

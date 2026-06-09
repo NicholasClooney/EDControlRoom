@@ -4,8 +4,8 @@ ED AutoPilot Control Room
 Live TUI: ship status, activity log, market tracker, and routine dispatch.
 
 Usage:
-    uv run python3 control_room.py --config config.toml
-    uv run python3 control_room.py --config config.toml --market aluminium
+    uv run python3 control_room.py
+    uv run python3 control_room.py --market aluminium
 
 Routine commands (type in the input bar):
     dock               dock + auto-refuel/repair; skips supercruise-exit wait if already in normal space

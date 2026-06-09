@@ -11,11 +11,11 @@ with items sorted alphabetically within each category.
 Open the market screen in-game first, then run this.
 
 Usage:
-    uv run python3 tools/scratch/scratch_market.py --config config.toml
-    uv run python3 tools/scratch/scratch_market.py --config config.toml --filter gold
-    uv run python3 tools/scratch/scratch_market.py --config config.toml --raw
-    uv run python3 tools/scratch/scratch_market.py --config config.toml --raw --sort sell
-    uv run python3 tools/scratch/scratch_market.py --config config.toml --format json --side sell
+    uv run python3 tools/scratch/scratch_market.py
+    uv run python3 tools/scratch/scratch_market.py --filter gold
+    uv run python3 tools/scratch/scratch_market.py --raw
+    uv run python3 tools/scratch/scratch_market.py --raw --sort sell
+    uv run python3 tools/scratch/scratch_market.py --format json --side sell
 """
 from __future__ import annotations
 

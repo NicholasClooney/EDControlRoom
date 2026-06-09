@@ -16,23 +16,23 @@ This is a validation harness document, not the main day-to-day operator path. Fo
 Run:
 
 ```sh
-uv run python3 run_routine.py --config config.toml --routine auto_zero_throttle_on_arrival
-uv run python3 run_routine.py --config config.toml --routine jump
-uv run python3 run_routine.py --config config.toml --routine dock
+uv run python3 run_routine.py --routine auto_zero_throttle_on_arrival
+uv run python3 run_routine.py --routine jump
+uv run python3 run_routine.py --routine dock
 ```
 
 Useful variants:
 
 ```sh
-uv run python3 run_routine.py --config config.toml --routine auto_zero_throttle_on_arrival --delay-seconds 5
-uv run python3 run_routine.py --config config.toml --routine jump --delay-seconds 5
-uv run python3 run_routine.py --config config.toml --routine jump --max-retries 3 --start-timeout-seconds 20 --completion-timeout-seconds 30
-uv run python3 run_routine.py --config config.toml --routine dock --delay-seconds 5
-uv run python3 run_routine.py --config config.toml --routine dock --delay-seconds 5 --auto-refuel --log-events
-uv run python3 run_routine.py --config config.toml --routine dock --skip-supercruise-exit --delay-seconds 5
-uv run python3 run_routine.py --config config.toml --routine auto_zero_throttle_on_arrival --poll-interval-seconds 0.5
-uv run python3 run_routine.py --config config.toml --routine auto_zero_throttle_on_arrival --hold-seconds 0.1
-uv run python3 run_routine.py --config config.toml --routine auto_zero_throttle_on_arrival --repeat 2
+uv run python3 run_routine.py --routine auto_zero_throttle_on_arrival --delay-seconds 5
+uv run python3 run_routine.py --routine jump --delay-seconds 5
+uv run python3 run_routine.py --routine jump --max-retries 3 --start-timeout-seconds 20 --completion-timeout-seconds 30
+uv run python3 run_routine.py --routine dock --delay-seconds 5
+uv run python3 run_routine.py --routine dock --delay-seconds 5 --auto-refuel --log-events
+uv run python3 run_routine.py --routine dock --skip-supercruise-exit --delay-seconds 5
+uv run python3 run_routine.py --routine auto_zero_throttle_on_arrival --poll-interval-seconds 0.5
+uv run python3 run_routine.py --routine auto_zero_throttle_on_arrival --hold-seconds 0.1
+uv run python3 run_routine.py --routine auto_zero_throttle_on_arrival --repeat 2
 ```
 
 ## What This Proves
@@ -50,7 +50,7 @@ This does not prove broader autopilot behavior. It only proves the watcher-to-co
 
 Before running the manual test:
 
-1. Ensure `config.toml` resolves both the journal directory and bindings file, either explicitly or through auto-detection.
+1. If you keep a repo-root `config.toml`, make sure any overrides in it still point at the right journal directory and bindings file. If you do not have one, EDAP falls back to auto-detection.
 2. Ensure macOS Accessibility / input permissions are already working for the repo's existing diagnostics and manual control scripts.
 3. Ensure Elite Dangerous is running through CrossOver and can receive synthetic keyboard input on the current machine.
 
@@ -58,10 +58,10 @@ If you are unsure about the runtime prerequisites, verify them first with:
 
 ```sh
 uv run python3 watch_journal.py
-uv run python3 diagnostics.py --config config.toml
-uv run python3 diagnostics.py --config config.toml --send-test-key --test-key space --delay-seconds 3
+uv run python3 diagnostics.py
+uv run python3 diagnostics.py --send-test-key --test-key space --delay-seconds 3
 uv run python3 check_bindings.py
-uv run python3 ship_controls.py --config config.toml --action SetSpeedZero --delay-seconds 3
+uv run python3 ship_controls.py --action SetSpeedZero --delay-seconds 3
 ```
 
 `watch_journal.py` prints only a small filtered event set to stdout and writes every raw event to `artifacts/journal-watcher.log`, which is useful when you want to confirm event sequences before testing a routine.
@@ -80,7 +80,7 @@ Recommended flow:
 2. Run:
 
 ```sh
-uv run python3 run_routine.py --config config.toml --routine auto_zero_throttle_on_arrival --delay-seconds 5
+uv run python3 run_routine.py --routine auto_zero_throttle_on_arrival --delay-seconds 5
 ```
 
 3. During the countdown, focus the Elite window.
@@ -96,7 +96,7 @@ Recommended flow:
 2. Run:
 
 ```sh
-uv run python3 run_routine.py --config config.toml --routine jump --delay-seconds 5
+uv run python3 run_routine.py --routine jump --delay-seconds 5
 ```
 
 3. During the countdown, focus the Elite window.
@@ -112,7 +112,7 @@ Recommended flow:
 2. Run:
 
 ```sh
-uv run python3 run_routine.py --config config.toml --routine dock --delay-seconds 5 --log-events
+uv run python3 run_routine.py --routine dock --delay-seconds 5 --log-events
 ```
 
 3. During the countdown, focus the Elite window.
@@ -127,13 +127,13 @@ uv run python3 run_routine.py --config config.toml --routine dock --delay-second
 For a manual trigger while already outside the station in local space, use:
 
 ```sh
-uv run python3 run_routine.py --config config.toml --routine dock --skip-supercruise-exit --delay-seconds 5 --log-events
+uv run python3 run_routine.py --routine dock --skip-supercruise-exit --delay-seconds 5 --log-events
 ```
 
 To chain the in-station refuel menu automatically after docking:
 
 ```sh
-uv run python3 run_routine.py --config config.toml --routine dock --delay-seconds 5 --auto-refuel --log-events
+uv run python3 run_routine.py --routine dock --delay-seconds 5 --auto-refuel --log-events
 ```
 
 ## Expected Output

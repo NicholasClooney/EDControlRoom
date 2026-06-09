@@ -2,12 +2,12 @@
 
 ## Setup
 
-`config.example.toml` is the full reference config. Create a local `config.toml` only if you want overrides, and put only the keys you want to change in it.
+`config.example.toml` is the full reference config. Create a local `config.toml` only if you want overrides; EDAP auto-loads it when present, and otherwise falls back to platform defaults plus auto-detection.
 
 ### macOS + CrossOver
 
-1. Create `config.toml` only if you need local overrides.
-2. Set `paths.journal_dir` and `paths.bindings_file` explicitly if auto-detection is not enough on this machine.
+1. Optional: create `config.toml` only if you need local overrides.
+2. Set `paths.journal_dir` and `paths.bindings_file` explicitly only if auto-detection is not enough on this machine.
 3. Leave `runtime.platform` unset unless you want to make the backend choice explicit in a shared config. When omitted, it defaults to the host OS.
 4. Make sure Terminal has macOS Accessibility permission, and Screen Recording permission if you plan to use capture-based diagnostics.
 5. Start Elite Dangerous through CrossOver.
@@ -16,9 +16,9 @@
 
 1. Install Python 3.12 and `uv`.
 2. Run `uv sync`.
-3. Create `config.toml` only if you need local overrides.
+3. Optional: create `config.toml` only if you need local overrides.
 4. Leave `runtime.platform` unset unless you want to make the backend choice explicit in a shared config. When omitted, it defaults to the host OS.
-5. Set `paths.journal_dir` and `paths.bindings_file` explicitly.
+5. Set `paths.journal_dir` and `paths.bindings_file` explicitly only if auto-detection is not enough on this machine.
 6. Start Elite Dangerous.
 
 ### Windows without `uv`
@@ -42,18 +42,18 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-5. Create `config.toml` only if you need local overrides.
+5. Optional: create `config.toml` only if you need local overrides.
 6. Leave `runtime.platform` unset unless you want to make the backend choice explicit in a shared config. When omitted, it defaults to the host OS.
-7. Set `paths.journal_dir` and `paths.bindings_file` explicitly.
+7. Set `paths.journal_dir` and `paths.bindings_file` explicitly only if auto-detection is not enough on this machine.
 8. Start Elite Dangerous.
 
 ### Linux
 
 1. Install Python 3.12 and `uv`.
 2. Install `xdotool` if you want synthetic key input support.
-3. Create `config.toml` only if you need local overrides.
+3. Optional: create `config.toml` only if you need local overrides.
 4. Leave `runtime.platform` unset unless you want to make the backend choice explicit in a shared config. When omitted, it defaults to the host OS.
-5. Prefer explicit `paths.journal_dir` and `paths.bindings_file`, though the runtime now also probes common Steam Proton paths for app ID `359320`.
+5. Prefer explicit `paths.journal_dir` and `paths.bindings_file` only when the built-in Steam Proton probing for app ID `359320` is not enough on this machine.
 6. Start Elite Dangerous through Steam/Proton.
 
 Minimal example:
@@ -75,30 +75,30 @@ Linux input is currently implemented through `xdotool`, so treat it as X11-orien
 On macOS:
 
 ```sh
-uv run python3 diagnostics.py --config config.toml
-uv run python3 watch_journal.py --config config.toml
-uv run python3 ship_controls.py --config config.toml --action SetSpeedZero --delay-seconds 3
+uv run python3 diagnostics.py
+uv run python3 watch_journal.py
+uv run python3 ship_controls.py --action SetSpeedZero --delay-seconds 3
 ```
 
 On Windows with `uv`:
 
 ```sh
-uv run python diagnostics.py --config config.toml --send-test-key
-uv run python ship_controls.py --config config.toml --action SetSpeedZero --delay-seconds 3
+uv run python diagnostics.py --send-test-key
+uv run python ship_controls.py --action SetSpeedZero --delay-seconds 3
 ```
 
 On Windows without `uv`:
 
 ```sh
-python diagnostics.py --config config.toml --send-test-key
-python ship_controls.py --config config.toml --action SetSpeedZero --delay-seconds 3
+python diagnostics.py --send-test-key
+python ship_controls.py --action SetSpeedZero --delay-seconds 3
 ```
 
 On Linux:
 
 ```sh
-uv run python3 diagnostics.py --config config.toml --send-test-key
-uv run python3 ship_controls.py --config config.toml --action SetSpeedZero --delay-seconds 3
+uv run python3 diagnostics.py --send-test-key
+uv run python3 ship_controls.py --action SetSpeedZero --delay-seconds 3
 ```
 
 Validate `diagnostics.py --send-test-key` first on Windows. That proves the `SendInput` path reaches Elite before you debug bindings or routines.
@@ -109,20 +109,20 @@ Validate `diagnostics.py --send-test-key` first on Linux too. That proves the `x
 ## Main Runtime
 
 ```sh
-uv run python3 control_room.py --config config.toml
+uv run python3 control_room.py
 ```
 
 Windows equivalents:
 
 ```sh
-uv run python control_room.py --config config.toml
-python control_room.py --config config.toml
+uv run python control_room.py
+python control_room.py
 ```
 
 Linux equivalent:
 
 ```sh
-uv run python3 control_room.py --config config.toml
+uv run python3 control_room.py
 ```
 
 Control Room is the primary operator surface for current routine work.
@@ -132,9 +132,9 @@ For day-to-day usage, haul behavior, replay/history, and interrupt semantics, se
 ## Routine Harness
 
 ```sh
-uv run python3 run_routine.py --config config.toml --routine jump --delay-seconds 5
-uv run python3 run_routine.py --config config.toml --routine dock --delay-seconds 5 --log-events
-uv run python3 run_routine.py --config config.toml --routine haul_loop
+uv run python3 run_routine.py --routine jump --delay-seconds 5
+uv run python3 run_routine.py --routine dock --delay-seconds 5 --log-events
+uv run python3 run_routine.py --routine haul_loop
 ```
 
 `haul_loop` is the current two-way haul routine and matches the Control Room haul path.
@@ -142,14 +142,14 @@ uv run python3 run_routine.py --config config.toml --routine haul_loop
 Windows equivalents:
 
 ```sh
-uv run python run_routine.py --config config.toml --routine jump --delay-seconds 5
-python run_routine.py --config config.toml --routine jump --delay-seconds 5
+uv run python run_routine.py --routine jump --delay-seconds 5
+python run_routine.py --routine jump --delay-seconds 5
 ```
 
 Linux equivalent:
 
 ```sh
-uv run python3 run_routine.py --config config.toml --routine jump --delay-seconds 5
+uv run python3 run_routine.py --routine jump --delay-seconds 5
 ```
 
 For current supported manual validation flows, see [../operators/manual-journal-routine-testing.md](../operators/manual-journal-routine-testing.md).

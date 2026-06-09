@@ -5,9 +5,11 @@
 Run it with:
 
 ```sh
-uv run python3 control_room.py --config config.toml
-uv run python3 control_room.py --config config.toml --market aluminium
+uv run python3 control_room.py
+uv run python3 control_room.py --market aluminium
 ```
+
+If `config.toml` exists in the repo root, EDAP loads it automatically. Create one only when you need explicit overrides beyond the built-in auto-detection.
 
 ## What It Is
 
