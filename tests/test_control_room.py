@@ -911,6 +911,30 @@ class ControlRoomBindingsTests(unittest.TestCase):
 
         self.assertIn((AnnouncementId.DESTINATION_SET, {"system_name": "Achenar"}), self.app._tts.calls)
 
+    def test_handle_event_does_not_announce_undocking_outside_haul(self) -> None:
+        self.app._tts = _FakeTTS()
+        self.app._ship.station = "Pawelczyk Dock"
+        self.app._ship.status = "in_station"
+
+        self.app._handle_event({"event": "Undocked", "StationName": "Pawelczyk Dock"})
+
+        self.assertNotIn((AnnouncementId.UNDOCKING, {}), self.app._tts.calls)
+
+    def test_handle_event_announces_undocking_during_active_haul(self) -> None:
+        self.app._tts = _FakeTTS()
+        self.app._ship.station = "Pawelczyk Dock"
+        self.app._ship.status = "in_station"
+        self.app._start_haul_stats(
+            station_1_buying="Aluminium",
+            station_2_buying="Bertrandite",
+            station_1="Pawelczyk Dock",
+            station_2="Hutton Orbital",
+        )
+
+        self.app._handle_event({"event": "Undocked", "StationName": "Pawelczyk Dock"})
+
+        self.assertIn((AnnouncementId.UNDOCKING, {}), self.app._tts.calls)
+
 
 class ControlRoomDispatchTests(unittest.TestCase):
     def setUp(self) -> None:

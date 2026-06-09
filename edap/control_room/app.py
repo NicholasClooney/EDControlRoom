@@ -617,7 +617,7 @@ class ControlRoomApp(App[None]):
                 self._announce_tts(AnnouncementId.DESTINATION_SET, system_name=system_name)
         elif event == "Docked":
             self._announce_tts(AnnouncementId.DOCKING_COMPLETE)
-        elif event == "Undocked" and station_before:
+        elif event == "Undocked" and station_before and self._haul_stats.active:
             self._announce_tts(AnnouncementId.UNDOCKING)
         elif event == "StartJump" and str(ev.get("JumpType", "")).lower() == "hyperspace":
             system_name = str(ev.get("StarSystem", "")).strip() or str(self._ship.target or "").strip()
