@@ -4,6 +4,7 @@ _This is the rolling short-form log for recent sessions. Keep entries concise an
 
 ## 2026-06-09
 
+- `AGENTS.md` now gives `docs/STATUS.md` its own hard maintenance cap (`80` lines), and `docs/STATUS.md` was rewritten back down to a compact handoff so status detail stops accumulating there like a changelog.
 - Release-prep docs now explicitly call out Windows compatibility as part of the next stable cut, and `README.md` / `docs/STATUS.md` now record early live Windows validation by community member CMDR VRYAE while keeping macOS + CrossOver as the primary operator path.
 - Release metadata is being bumped for `v1.5.0`, with README wording updated to credit macOS live validation to @NicholasClooney and Windows live validation to CMDR VRYAE.
 - Market `buy ... max` already used free cargo space rather than full hold capacity; it now also clamps the hold-time estimate to current station `Stock`, so MAX buys stop at the smaller of free space and supply. Verified with `uv run python3 -m unittest tests/test_routines.py` and `uv run python3 -m unittest discover -s tests` (`313` tests, `0.126s`).

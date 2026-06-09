@@ -1,91 +1,54 @@
 # Project Status
 
-_This is the startup handoff document for the repo. Keep it current, compact, and biased toward what the next session needs immediately._
+_This is the startup handoff document for the repo. Keep it current, compact, and biased toward what the next session needs immediately. Hard limit: 80 lines. If an update would push this file past the limit, move displaced detail to `status-archive.md` or a more specific doc, then trim this file back down._
 
 Last updated: 2026-06-09
 
 ## Current Snapshot
 
-- Plan 0001 (macOS MVP portability) is complete. The shared runtime, config system, journal parsing, bindings lookup, and synthetic input path are in place and live-validated on macOS + CrossOver.
-- Windows operator/runtime compatibility now also has live community validation from CMDR VRYAE, shifting the platform story from macOS-only live validation to macOS primary plus early real-world Windows confirmation.
-- The project is in follow-up work, not a full autopilot rewrite. Active work is focused on journal-driven routines, two-way hauling, CV/capture validation, and operator diagnostics.
-- `control_room.py` is the primary operator surface. `run_routine.py`, `ship_controls.py`, `diagnostics.py`, `speak.py`, and the journal/bindings helpers are the main manual-validation tools.
+- Plan 0001 (macOS MVP portability) is complete. Shared runtime, config loading, journal parsing, bindings lookup, and synthetic input are in place and live-validated on macOS + CrossOver.
+- Windows now has early real-world validation from CMDR VRYAE, so the platform story is macOS-primary with initial Windows confirmation rather than macOS-only live validation.
+- Current work is follow-up, not a rewrite: journal-driven routines, two-way hauling, CV/capture validation, and operator diagnostics.
+- `control_room.py` is the primary operator surface. `run_routine.py`, `ship_controls.py`, `diagnostics.py`, `speak.py`, and the journal/bindings helpers remain the main manual-validation tools.
 
 ## Active Capabilities
 
 - Journal/runtime: journal tailing, bindings lookup, runtime construction, and shared platform seams are working.
-- Routines: `jump`, `dock`, `undock`, market buy/sell, galaxy-map destination setting, throttle zeroing, and the current two-station haul loop all exist behind `edap/routines/`; the public `haul_loop` entrypoint now aliases the two-way haul implementation directly, and the older one-way haul file has been removed.
-- `edap/routines/haul_two_way.py` resume detection now also distinguishes “empty/partial outbound load” from “already fully loaded for departure,” so Control Room haul no longer re-enters station buy when you are docked with a full cargo hold of the current station's outbound commodity.
-- Two-way haul startup now detects the active station/phase from journal position, `Cargo.json`, and `Market.json` fallback data, so a station-2 start no longer blindly runs station-1 actions first.
-- Two-way haul transit resume now distinguishes “already dropped near destination” from “docking already requested/granted”: it skips the extra `SupercruiseExit` wait in the first case, and waits for `Docked` instead of re-requesting docking in the second.
-- Docking now waits a configurable 3-second settle after `SupercruiseExit` before the station-approach boost; `controls.dock_supercruise_exit_settle_seconds` tunes it.
-- Docking now also speaks `Engaging auto docking sequence.` immediately after docking permission is granted and just before EDAP sends `SetSpeedZero` to hand off to the docking computer.
-- Docking auto-follow-up now does station auto-refuel, moves right once to attempt repair, then returns to station services; successful completion also triggers the new `Ship is fully fueled up and repaired, {title}.` TTS line via `ship_serviced`.
-- Two-way haul departures now auto-tap raw key `k` after mass lock clears to engage hyperspace FSD by default; `controls.haul_two_way_auto_hyperspace_engage` disables it when needed.
-- Two-way haul transit now opens the left external panel on hyperspace arrival by default so the nav page is ready for station approach, after a configurable default 3-second delay; `controls.haul_two_way_open_nav_panel_after_hyperspace_arrival` and `controls.haul_two_way_nav_panel_open_delay_seconds` control that behavior.
-- Two-way haul clear-of-station waits now default to 10 minutes; if the `NoTrack` music event still never arrives after undock, the haul aborts instead of continuing, logs a replay/`ctrl-r` recovery hint, and keeps the spoken alert short.
-- Control-room haul dispatch now forwards the configured undock and clear-of-station timeouts into the two-way haul routine, so live haul progress no longer falls back to the stale `60s` `NoTrack` wait.
-- Control-room haul telemetry now matches the two-way route flow: it carries the station-1 buy cost into the next clean departure, counts both station sells plus the station-2 buy, and closes a run when the return cargo is sold at station 1 instead of waiting for the next undock.
-- When haul telemetry ignores a station-1 sale because tracking has not yet reached a clean departure, control room now logs that the sale profit is being discarded from the prior run instead of dropping it silently.
-- Control room: live Textual UI with ship status, market panel, haul stats, replay/history, persisted state, and routine dispatch.
-- Control room: live Textual UI with ship status, market panel, haul stats, replay/history, persisted state, routine dispatch, and queued cross-platform TTS announcements for haul/navigation milestones; the undock/leaving-station callout is now limited to active haul tracking instead of every `Undocked` event, and the post-buy cargo-loaded phrase is now the shorter `Cargo secured.` to avoid sounding like a sell just triggered station departure.
-- Control-room trade parsing now accepts multi-word commodity names like `buy food cartridges` / `sell food cartridges` and still defaults them to `MAX` unless the final token is a valid explicit amount; unknown or otherwise failed commands are also persisted into replay history now.
-- Control room ship status now shows `Status.json` `Destination` as `system/body/name` alongside the journal `FSDTarget`, and the background refresh cadence is configurable with `control_room.status_refresh_seconds` (default `2.0`).
-- Control room startup now logs which `.binds` file it resolved and warns inline when any loaded routine action has no usable keyboard mapping, so operators can see binding gaps before dispatching routines.
-- Control-room startup binding warnings now include the in-game control label and Controls-menu location for the missing action, and joystick/mouse-only binds are called out explicitly so operators know EDAP still needs a keyboard primary or secondary slot for those actions.
-- Temporary exception: control-room startup currently ignores missing `RollLeftButton`, `RollRightButton`, `PitchUpButton`, `PitchDownButton`, `YawLeftButton`, and `YawRightButton` mappings because no live routine path uses those maneuver controls yet. If any future routine, CV alignment loop, or other active control-room workflow starts using any of those actions, remove them from the control-room startup ignore list immediately so missing binds become visible again at startup.
-- Control-room activity log auto-follow now pauses for 10 seconds after the operator manually scrolls away from the bottom, then resumes automatically; while paused, the pane title shows `AUTO-FOLLOW PAUSED` so the behavior is visible.
-- Market buy/sell now logs station supply/demand levels, warns and speaks when the current level is critically low relative to cargo capacity, and lets operators tune that threshold with `controls.market_critical_level_multiplier`.
-- Market sell still uses the original demand-sorted SELL list for cursor indexing, but if the player is carrying cargo the station is not actively buying while `Market.json` still exposes a sell price, it injects just that target row into the original order so EDAP can intentionally sell cargo like `Food Cartridges` anyway.
-- Market sell now hard-resets the UI with `UI_Back` before entering station services, requires a current in-station journal state before it starts, and re-checks that state after backing out of the trade dialog so stale or misaligned menus fail fast instead of wandering through the UI.
-- Market buy/sell now also hard-reset trade-dialog focus with `UI_Left x3` plus `UI_Up x3` immediately after opening a commodity, so quantity and confirm navigation no longer depend on the initial cursor landing on the amount controls; sell now re-holds `UI_Right` afterward based on the intended tonnage so `sell ... max` still restores the full quantity after that reset.
-- `ActionDispatcher` is now the single source of truth for repeat pacing: repeated actions and raw keys are emitted as separate delayed taps there, `ShipControls` inherits that behavior without its own repeat loop, and `submit_text` now follows the same pacing semantics.
-- Release prep for the next stable cut now requires `pyproject.toml` and `uv.lock` version metadata to stay in sync: bump `[project].version`, run `uv sync`, and commit the resulting lockfile change as part of the release changeset.
-- Release prep for `v1.5.0` is in progress: docs now explicitly call out early live Windows validation from CMDR VRYAE alongside macOS + CrossOver validation by @NicholasClooney.
-- Market `buy ... max` no longer holds `UI_Right` for a fixed 10 seconds: it now scales hold time from the smaller of remaining cargo space and current station supply with `controls.market_buy_hold_seconds_per_ton` (default `0.01s` per ton), and only falls back to the old cap when neither limit can be derived.
-- TTS/config: announcement IDs are typed in code, while default phrase text now lives in `defaults/tts.toml` and merges with user `config.toml` overrides under `[tts]`.
-- `speak.py` provides a minimal TTS smoke-test path outside Control Room: `uv run python3 speak.py "hello"` detects the current host platform with the repo runtime rules and speaks directly through the selected backend.
-- `tools/scratch/scratch_market.py` now supports machine-friendly JSON output plus `--side all|buy|sell` filtering for quick market inspection; its JSON output now mirrors the default in-game ordering too (alphabetical categories, alphabetical items within each category), while intentionally keeping its conservative station-view logic (`buy` = `Stock > 0`, `sell` = `DemandBracket > 0`) separate from EDAP's more permissive targeted-sell routine behavior.
-- Windows input injection now builds the full Win32 `INPUT` union shape instead of a keyboard-only subset and includes native `GetLastError()` codes in `SendInput` failures, after admin-to-admin Notepad repros suggested the old structure size could fail on 64-bit Windows before UIPI ever mattered.
-- Platform scope: macOS + CrossOver remains the primary operator path and is live-validated. Windows now also has early live community validation from CMDR VRYAE. Linux input/runtime paths still only have unit-test and CI coverage, not live validation.
-- CI: cross-platform unittest workflow exists in GitHub Actions, a timing guard now enforces a 3-second ceiling on full unittest discovery over `tests/`, and `tools/report_test_timing.py` can rank the slowest individual unittest cases locally.
-- Cross-platform test fixtures now avoid Windows-specific TOML parse traps by using TOML literal strings for interpolated filesystem paths, and CLI path assertions compare against the runtime-rendered path instead of hardcoded POSIX separators.
+- Control Room: live Textual UI with ship status, market panel, haul stats, replay/history, persisted state, routine dispatch, and queued cross-platform TTS announcements.
+- Routines: `jump`, `dock`, `undock`, market buy/sell, galaxy-map destination setting, and the two-way haul loop live under `edap/routines/`.
+- Hauling: `edap.routines.haul_loop` now aliases the two-way implementation directly; the older one-way haul codepath is gone.
+- Two-way haul resume now uses journal position plus `Cargo.json`/`Market.json` fallback data to identify station/phase, distinguish partial vs full outbound loads, and avoid re-buying or replaying the wrong station's actions.
+- Docking adds a configurable post-`SupercruiseExit` settle, announces the auto-docking handoff, then attempts auto-refuel plus a one-step repair follow-up before returning to station services.
+- Haul departures now auto-engage hyperspace with raw key `k` after mass lock clears by default, and hyperspace arrival can auto-open the left nav panel after a configurable delay.
+- Market routines now log supply/demand levels, speak low-stock warnings, reset UI focus defensively, and support targeted sells even when the station is not actively buying the carried commodity.
+- `ActionDispatcher` is the single source of truth for repeated-input pacing; raw keys, repeated actions, and `submit_text` all emit separate paced taps there.
+- TTS phrases now live in `defaults/tts.toml` with user overrides under `[tts]`, and `speak.py` provides a minimal direct-backend smoke test.
+- Windows input injection now builds the full Win32 `INPUT` union shape and surfaces native `GetLastError()` detail on `SendInput` failures.
+- CI runs the unittest suite cross-platform and enforces a 3-second full-suite ceiling; `tools/report_test_timing.py` can rank slow tests locally.
 
 ## Key Caveats
 
-- The legacy autopilot loop is still not ported. This repo is currently automation/runtime tooling plus a growing set of journal-driven routines, not a complete autopilot.
-- Two-way hauling is the active operator path, but it still needs more live validation around startup/resume/station-role detection after the latest fixes.
-- TTS is implemented for macOS (`say`) plus Linux/Windows fallbacks, but only macOS is expected to be live-validated soon; wording/noise level still needs operator feedback after in-game use.
-- Windows now has early live community validation from CMDR VRYAE, but it still needs broader validation coverage after the `INPUT` layout fix to separate any residual UIPI/focus issues from backend bugs on other machines and setups.
-- CV is still at validation/scaffolding stage. Template matching has been re-baked against CrossOver captures, but there is no real continuous alignment loop yet.
-- Because the control-room startup warning now suppresses currently unused maneuver bindings, any future CV/alignment or flight-control work that starts depending on roll/pitch/yaw must re-enable startup warnings for those actions in the same change.
-- Timing enforcement now covers the full unittest discovery run with a 3-second budget, so CI catches both global suite regressions and single-test outliers that meaningfully move total runtime.
-- Local strict `0.2s` timing checks now need to distinguish unittest runtime from wrapper startup overhead: the suite itself is currently around `0.16s`, but `tools/check_test_timing.py` wall-clock time can still exceed `0.2s` because it includes `uv run` process startup.
-- Cross-platform input tests are still mostly unit-level. Hosted CI covers controller logic, binding resolution, and dispatch plumbing, but not true live desktop injection semantics for modifiers/special keys.
-- EDAP still only emulates keyboard input. Players can keep HOTAS/gamepad bindings, but any action EDAP needs must also have at least one keyboard bind; joystick/mouse-only slots are treated as unavailable for automation.
+- The legacy autopilot loop is still not ported. The repo is automation/runtime tooling plus journal-driven routines, not a complete autopilot.
+- Two-way hauling is the active operator path, but it still needs more live validation around startup/resume, station-role detection, and telemetry closure.
+- TTS exists on macOS with Linux/Windows fallbacks, but only the macOS path should be assumed close to live-validated operator quality.
+- Windows has early live validation, but it still needs broader coverage after the `INPUT` layout fix to separate residual focus/UIPI issues from backend bugs.
+- CV is still in validation/scaffolding mode. Template matching has been refreshed against CrossOver captures, but there is no continuous alignment loop yet.
+- Startup binding warnings intentionally suppress unused maneuver controls (`Roll*`, `Pitch*`, `Yaw*`). Any future routine that depends on them must remove that suppression in the same change.
+- The suite body is currently fast enough for the local `0.2s` target, but wrapper startup means timing checks must use the runtime reported by `uv run python3 -m unittest discover -s tests`, not generic wall-clock timing around `uv`.
+- EDAP still only emulates keyboard input. Any action EDAP needs must also have a keyboard bind even if the operator normally flies with HOTAS/gamepad.
 
 ## Current Next Steps
 
-1. Live-validate the updated two-way haul startup path and haul telemetry, especially station-2 starts, station-1 run finalization, and `Market.json` fallback behavior.
-2. Live-test the queued TTS callouts on macOS, including the new low supply/demand warning, and trim or reword noisy announcements based on operator feedback.
-3. Keep the full-suite timing guard in place and tune the threshold only after measuring stable CI variance across several runs and platforms; the current CI budget is `3s`.
-4. Expand Windows validation beyond the current community live check from CMDR VRYAE, including re-running `diagnostics.py --send-test-key` on additional real machines and capturing the new `WinError` detail if `SendInput` still fails.
-5. Continue the next portability follow-up slice: CV capture/performance measurement, journal latency measurement, and diagnostics/dashboard work from plans 0002-0004.
-6. Parked validation idea: add a small Python key-receiver app plus self-hosted desktop runners for end-to-end live input validation of raw keys, modifiers, and key-order semantics. Do not treat hosted CI alone as sufficient for that coverage.
-7. After the next live Control Room run, verify the new startup warning wording against the actual Odyssey Controls menu labels, especially for `FocusLeftPanel` and the galaxy-map `CamZoomIn` binding.
+1. Live-validate the updated two-way haul startup/resume path and haul telemetry, especially station-2 starts, station-1 run finalization, and `Market.json` fallback behavior.
+2. Live-test queued TTS callouts on macOS and trim noisy phrasing, especially the low supply/demand warnings.
+3. Expand Windows validation beyond the current community live check, including more `diagnostics.py --send-test-key` runs and capture of any remaining `WinError` detail.
+4. Continue the next portability follow-up slice from plans 0002-0004: CV capture/performance measurement, journal latency measurement, and diagnostics/dashboard work.
+5. After the next live Control Room run, verify the startup warning wording against the actual Odyssey Controls menu labels for panel and galaxy-map bindings.
 
 ## Handoff Links
 
 - Rolling recent session notes: [session-log.md](session-log.md)
-- Archive for detailed validation notes, longer capability status, and historical handoff detail: [status-archive.md](status-archive.md)
+- Archive for detailed validation notes and displaced status detail: [status-archive.md](status-archive.md)
 - Maintained plans: [plans/](plans/)
 - Operator workflows: [operators/](operators/)
 - Deeper research/history: [research/](research/) and [devlog/](devlog/)
-
-## Maintenance Policy
-
-- Keep this file high-signal only: current status, active capabilities, key caveats, immediate next steps, and minimal handoff context.
-- Put short-lived session detail in [session-log.md](session-log.md). Keep that file at or under 20 lines. If a new entry would exceed the limit, append the full current log to [status-archive.md](status-archive.md), reset `session-log.md` to a fresh empty log template, then write the new entry.
-- Put verbose validation logs, session chronology, long capability matrices, refactor TODOs, and speculative backlog notes in [status-archive.md](status-archive.md) or a more specific supporting doc.
-- Do not read [status-archive.md](status-archive.md) during normal work unless the user explicitly asks for archive/history detail or newer compact docs are insufficient to unblock the task.
-- If a section starts reading like a changelog or investigation log, move that detail out of `STATUS.md` and leave a one-line summary plus a link.
