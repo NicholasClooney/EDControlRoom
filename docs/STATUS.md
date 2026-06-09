@@ -47,6 +47,7 @@ Last updated: 2026-06-09
 - Windows still lacks live validation; after the `INPUT` layout fix, any remaining `SendInput` failures need a fresh Windows rerun to separate residual UIPI/focus issues from backend bugs.
 - CV is still at validation/scaffolding stage. Template matching has been re-baked against CrossOver captures, but there is no real continuous alignment loop yet.
 - Timing enforcement is intentionally narrow for now: only `tests/test_haul_loop.py` has a hard runtime budget because it was the clear outlier.
+- Cross-platform input tests are still mostly unit-level. Hosted CI covers controller logic, binding resolution, and dispatch plumbing, but not true live desktop injection semantics for modifiers/special keys.
 
 ## Current Next Steps
 
@@ -55,6 +56,7 @@ Last updated: 2026-06-09
 3. Keep the timing guard in place and expand it only after measuring stable CI variance on other candidate suites.
 4. Re-run the Windows `diagnostics.py --send-test-key` path on a real machine and capture the new `WinError` detail if `SendInput` still fails.
 5. Continue the next portability follow-up slice: CV capture/performance measurement, journal latency measurement, and diagnostics/dashboard work from plans 0002-0004.
+6. Parked validation idea: add a small Python key-receiver app plus self-hosted desktop runners for end-to-end live input validation of raw keys, modifiers, and key-order semantics. Do not treat hosted CI alone as sufficient for that coverage.
 
 ## Handoff Links
 
