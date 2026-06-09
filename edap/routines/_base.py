@@ -51,6 +51,9 @@ class SupportsUndockControls(Protocol):
 
 
 class SupportsMarketControls(Protocol):
+    def ui_up(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        """Dispatch the UI_Up action."""
+
     def ui_select(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
         """Dispatch the UI_Select action."""
 
@@ -59,6 +62,9 @@ class SupportsMarketControls(Protocol):
 
     def ui_right(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
         """Dispatch the UI_Right action."""
+
+    def ui_left(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
+        """Dispatch the UI_Left action."""
 
     def ui_back(self, repeat: int = 1, hold_s: float = 0.0) -> ActionDispatchResult:
         """Dispatch the UI_Back action."""

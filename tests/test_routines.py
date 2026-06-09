@@ -636,6 +636,70 @@ class RoutinesTests(unittest.TestCase):
         )
         self.assertGreaterEqual(sleep_calls.count(0.5), 9)
 
+    def test_market_buy_resets_trade_dialog_focus_before_setting_quantity(self) -> None:
+        controls = FakeShipControls()
+        watcher = FakeWatcher(
+            [[{"event": "MarketBuy", "Type": "aluminium", "Type_Localised": "Aluminium", "Count": 1, "TotalCost": 1234}]]
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            (journal_dir / "Journal.240101000000.01.log").write_text(
+                json.dumps({
+                    "timestamp": "2024-01-01T00:00:00Z",
+                    "event": "Location",
+                    "Docked": True,
+                    "StationName": "Pawelczyk Dock",
+                }) + "\n",
+                encoding="utf-8",
+            )
+            market_path = journal_dir / "Market.json"
+            market_path.write_text(
+                json.dumps(
+                    {
+                        "StationName": "Pawelczyk Dock",
+                        "Items": [
+                            {"Category": "Metals", "Name": "aluminium", "Stock": 1000},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = market_buy(
+                controls,
+                watcher,
+                market_path=market_path,
+                target="aluminium",
+                amount=1,
+                step_delay_s=0.0,
+                nav_delay_s=0.0,
+                trade_timeout_s=30.0,
+                time_fn=lambda: 0.0,
+                sleeper=lambda _: None,
+            )
+
+        self.assertEqual(result.dispatch.status, "ok")
+        dialog_index = controls.calls.index({"action": "UI_Select", "repeat": 1, "hold_s": 0.0}, 7)
+        self.assertEqual(
+            controls.calls[dialog_index + 1:dialog_index + 7],
+            [
+                {"action": "UI_Left", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Left", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Left", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Up", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Up", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Up", "repeat": 1, "hold_s": 0.0},
+            ],
+        )
+        self.assertEqual(
+            controls.calls[dialog_index + 7:dialog_index + 9],
+            [
+                {"action": "UI_Right", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Down", "repeat": 1, "hold_s": 0.0},
+            ],
+        )
+
     def test_market_sell_requires_current_docked_state(self) -> None:
         controls = FakeShipControls()
         watcher = FakeWatcher([])
@@ -1168,6 +1232,66 @@ class RoutinesTests(unittest.TestCase):
         self.assertEqual(result.dispatch.status, "ok")
         self.assertIn("Target 'Food Cartridges' at position 4 in sell list (5 items)", progress)
         self.assertIn("  UI_Down x4 (navigate to 'Food Cartridges')", progress)
+
+    def test_market_sell_resets_trade_dialog_focus_before_confirm(self) -> None:
+        controls = FakeShipControls()
+        watcher = FakeWatcher(
+            [[{"event": "MarketSell", "Type": "aluminium", "Type_Localised": "Aluminium", "Count": 64, "TotalSale": 123456}]]
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            (journal_dir / "Journal.240101000000.01.log").write_text(
+                json.dumps({"timestamp": "2024-01-01T00:00:00Z", "event": "Docked", "StationName": "Pawelczyk Dock"}) + "\n",
+                encoding="utf-8",
+            )
+            market_path = journal_dir / "Market.json"
+            market_path.write_text(
+                json.dumps(
+                    {
+                        "StationName": "Pawelczyk Dock",
+                        "Items": [
+                            {"Category": "Metals", "Name": "aluminium", "DemandBracket": 1, "SellPrice": 1000},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = market_sell(
+                controls,
+                watcher,
+                market_path=market_path,
+                target="aluminium",
+                amount="MAX",
+                step_delay_s=0.0,
+                nav_delay_s=0.0,
+                trade_timeout_s=30.0,
+                skip_station_check=True,
+                time_fn=lambda: 0.0,
+                sleeper=lambda _: None,
+            )
+
+        self.assertEqual(result.dispatch.status, "ok")
+        dialog_index = controls.calls.index({"action": "UI_Select", "repeat": 1, "hold_s": 0.0}, 9)
+        self.assertEqual(
+            controls.calls[dialog_index + 1:dialog_index + 7],
+            [
+                {"action": "UI_Left", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Left", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Left", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Up", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Up", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Up", "repeat": 1, "hold_s": 0.0},
+            ],
+        )
+        self.assertEqual(
+            controls.calls[dialog_index + 7:dialog_index + 9],
+            [
+                {"action": "UI_Down", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Select", "repeat": 1, "hold_s": 0.0},
+            ],
+        )
 
 
 class EscapeMassLockTests(unittest.TestCase):

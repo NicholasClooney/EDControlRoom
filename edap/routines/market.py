@@ -294,6 +294,36 @@ def _market_back_out_to_station_menu(
     return dispatch
 
 
+def _market_reset_trade_dialog_focus(
+    controls: SupportsMarketControls,
+    *,
+    nav_delay_s: float,
+    sleeper: Callable[[float], None],
+    progress_fn: Callable[[str], None] | None,
+) -> ActionDispatchResult:
+    if progress_fn is not None:
+        progress_fn("Resetting trade dialog focus to quantity controls...")
+        progress_fn("  UI_Left x3 (bias to left edge of dialog)")
+    dispatch = ActionDispatchResult(action="UI_Left", status="ok")
+    for _ in range(3):
+        dispatch = controls.ui_left()
+        if dispatch.status != "ok":
+            return dispatch
+        if nav_delay_s > 0:
+            sleeper(nav_delay_s)
+
+    if progress_fn is not None:
+        progress_fn("  UI_Up x3 (bias to quantity row)")
+    dispatch = ActionDispatchResult(action="UI_Up", status="ok")
+    for _ in range(3):
+        dispatch = controls.ui_up()
+        if dispatch.status != "ok":
+            return dispatch
+        if nav_delay_s > 0:
+            sleeper(nav_delay_s)
+    return dispatch
+
+
 def market_buy(
     controls: SupportsMarketControls,
     watcher: SupportsPollEvents,
@@ -610,6 +640,19 @@ def _market_trade_attempt(
         return RoutineResult(action="UI_Select", dispatch=dispatch, details={"phase": "select_item"})
     if step_delay_s > 0:
         sleeper(step_delay_s)
+
+    dialog_reset_dispatch = _market_reset_trade_dialog_focus(
+        controls,
+        nav_delay_s=nav_delay_s,
+        sleeper=sleeper,
+        progress_fn=progress_fn,
+    )
+    if dialog_reset_dispatch.status != "ok":
+        return RoutineResult(
+            action=dialog_reset_dispatch.action,
+            dispatch=dialog_reset_dispatch,
+            details={"phase": "reset_trade_dialog_focus"},
+        )
 
     # Prime the watcher before setting quantity so the trade event is not missed
     pending_events = watcher.poll()
