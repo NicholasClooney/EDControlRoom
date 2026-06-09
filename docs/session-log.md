@@ -4,6 +4,7 @@ _This is the rolling short-form log for recent sessions. Keep entries concise an
 
 ## 2026-06-09
 
+- Tightened the docs surface for discoverability: README now points harder at Control Room + haul, `docs/README.md` is grouped into start/operator/diagnostics/handoff/reference sections, and the Control Room operator guide now documents the haul-specific deferred-stop behavior for `Ctrl-C` / `Ctrl-D`.
 - Prepared and verified release `v1.7.0`: bumped project metadata for the bindings utility plus Control Room/TTS/haul follow-up slice, and hardened the runtime fallback test so local untracked `config.toml` files no longer break release verification. Verified with `uv run python3 -m unittest discover -s tests` (`328` tests, `0.159s`).
 - TTS title selection now supports literal `commander`, a custom configured string, or the detected commander name via `tts.title_mode`; Control Room keeps the announcer's commander-name context synced from bootstrap and live journal events. Verified with `uv run python3 -m unittest discover -s tests` (`328` tests, `0.162s`).
 - Shared journal snapshots now retain commander identity from `LoadGame`/`Commander`, and Control Room bootstrap seeds that field on startup so the operator name appears even when the UI attaches mid-session; verified with `uv run python3 -m unittest discover -s tests` (`321` tests, `0.146s`).

@@ -98,8 +98,6 @@ Validate `diagnostics.py --send-test-key` first on Linux too. That proves the `x
 uv run python3 control_room.py --config config.toml
 ```
 
-Control Room is the primary operator surface for current routine work.
-
 Windows equivalents:
 
 ```sh
@@ -112,6 +110,10 @@ Linux equivalent:
 ```sh
 uv run python3 control_room.py --config config.toml
 ```
+
+Control Room is the primary operator surface for current routine work.
+
+For day-to-day usage, haul behavior, replay/history, and interrupt semantics, see [../operators/control-room.md](../operators/control-room.md).
 
 ## Routine Harness
 
@@ -137,3 +139,5 @@ uv run python3 run_routine.py --config config.toml --routine jump --delay-second
 ```
 
 For current supported manual validation flows, see [../operators/manual-journal-routine-testing.md](../operators/manual-journal-routine-testing.md).
+
+For `.binds` backup, restore, or shipped preset apply, see [../operators/bindings-files.md](../operators/bindings-files.md).

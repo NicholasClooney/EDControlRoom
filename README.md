@@ -8,6 +8,14 @@ The current operator surface is [`control_room.py`](control_room.py). The projec
 
 See [docs/STATUS.md](docs/STATUS.md) for the maintained status, validation notes, and next recommended work.
 
+## Start Here
+
+- run `uv run python3 control_room.py`
+- use `haul` as the main end-to-end workflow
+- start with [docs/getting-started/quickstart.md](docs/getting-started/quickstart.md)
+- use [docs/operators/control-room.md](docs/operators/control-room.md) for day-to-day operation
+- use [docs/operators/bindings-files.md](docs/operators/bindings-files.md) for `.binds` backup / restore / preset apply
+
 ## Current Surface
 
 What works today:
@@ -15,7 +23,7 @@ What works today:
 - shared journal parsing, bindings lookup, and platform input/runtime plumbing across supported targets
 - live-validated operator paths on macOS via CrossOver and on Windows via community testing from CMDR VRYAE
 - journal-driven `haul`, `jump`, `dock`, `undock`, `buy`, `sell`, and `dest` flows
-- a live Control Room TUI with ship status, activity log, market panel, replay history, and saved default haul setup
+- a live Control Room TUI with ship status, activity log, market panel, replay history, saved default haul setup, and repo-local journal-event logging
 
 What is not done:
 
@@ -30,6 +38,15 @@ What is not done:
 - `uv run python3 ship_controls.py --action SetSpeedZero --delay-seconds 3`
 - `uv run python3 bindings_files.py`
   Lists, backs up, restores, and can replace the active `.binds` file from shipped presets.
+
+## Control Room Highlights
+
+- `haul` is the strongest current operator flow and runs the active two-way haul loop
+- `replay` / `Ctrl-R` reopens recent commands, including haul setups
+- one saved default haul setup persists across restarts
+- Control Room mirrors consumed journal events into `artifacts/control-room.log`
+
+Interrupt behavior during `haul` is haul-aware: the first `Ctrl-C` or `Ctrl-D` queues a stop after the current station-1 return sale and before the next buy. A second interrupt cancels immediately.
 
 ## Platform Validation
 
@@ -90,10 +107,13 @@ Note: `apply-default` is implemented and covered by unit tests, but it has not y
 ## Docs Map
 
 - [docs/getting-started/quickstart.md](docs/getting-started/quickstart.md)
-  Includes current macOS and Windows setup paths.
+  Setup plus first commands.
 - [docs/operators/control-room.md](docs/operators/control-room.md)
+  Main operator workflow, haul behavior, replay/history, and interrupt semantics.
 - [docs/operators/bindings-files.md](docs/operators/bindings-files.md)
+  `.binds` backup, restore, and shipped preset apply flows.
 - [docs/operators/manual-journal-routine-testing.md](docs/operators/manual-journal-routine-testing.md)
+  Low-level routine validation outside Control Room.
 - [docs/diagnostics/cli-reference.md](docs/diagnostics/cli-reference.md)
 - [docs/diagnostics/bindings-reference.md](docs/diagnostics/bindings-reference.md)
 - [docs/README.md](docs/README.md)

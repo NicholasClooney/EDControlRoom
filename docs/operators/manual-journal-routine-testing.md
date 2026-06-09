@@ -2,6 +2,8 @@
 
 This document describes the current supported live test flows for the journal-driven routines that can be exercised manually today:
 
+This is a validation harness document, not the main day-to-day operator path. For normal use, start with [control-room.md](control-room.md).
+
 - `JournalWatcher` tails the latest `Journal.*` file incrementally
 - `auto_zero_throttle_on_arrival` dispatches `SetSpeedZero` when a `SupercruiseExit` event appears
 - `jump` dispatches `HyperSuperCombination`, waits for jump start, waits to re-enter `in_supercruise`, then dispatches `SetSpeedZero`
