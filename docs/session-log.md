@@ -4,4 +4,5 @@ _This is the rolling short-form log for recent sessions. Keep entries concise an
 
 ## 2026-06-10
 
+- Confirmed a CrossOver/Elite bindings caveat for future troubleshooting: if a shared `Custom` `.binds` preset contains controller mappings, Elite may refuse to surface/load that preset until the mapped controller is connected or otherwise visible to the runtime.
 - Preemptive trim of `docs/STATUS.md` (Current Snapshot, Active Capabilities, Key Caveats each kept to top 5 newest bullets) and a full session-log reset to status-archive, restoring headroom before the next handoff.

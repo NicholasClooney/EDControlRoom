@@ -2,7 +2,7 @@
 
 _This is the startup handoff document for the repo. Keep it current, compact, and biased toward what the next session needs immediately. Hard limit: 80 lines. If an update would push this file past the limit, move displaced older status/session detail to `docs/status-archive.md` or a more specific doc, then trim this file back down._
 
-Last updated: 2026-06-10 (session 116)
+Last updated: 2026-06-10 (session 117)
 
 ## Current Snapshot
 
@@ -24,6 +24,7 @@ Last updated: 2026-06-10 (session 116)
 
 ## Key Caveats
 
+- Elite may hide or refuse to load a `Custom` preset when that `.binds` file includes controller mappings for a device that is not currently connected or exposed; reconnect the controller or fall back to a keyboard-only preset before treating it as a missing-file problem.
 - The legacy autopilot loop is still not ported. The repo is automation/runtime tooling plus journal-driven routines, not a complete autopilot.
 - Two-way hauling is the active operator path, but it still needs more live validation around startup/resume, station-role detection, and telemetry closure.
 - TTS exists on macOS with Linux/Windows fallbacks, but only the macOS path should be assumed close to live-validated operator quality.
