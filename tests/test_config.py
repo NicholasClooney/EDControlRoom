@@ -58,6 +58,7 @@ class LoadConfigTests(unittest.TestCase):
             self.assertEqual(config.control_room.history_limit, 20)
             self.assertEqual(config.control_room.command_delay_seconds, 5.0)
             self.assertEqual(config.control_room.status_refresh_seconds, 2.0)
+            self.assertTrue(config.control_room.check_for_updates)
             self.assertTrue(config.tts.enabled)
             self.assertEqual(config.tts.title_mode, "commander")
             self.assertEqual(config.tts.title, "commander")
@@ -145,6 +146,29 @@ nav_panel_open_delay_seconds = 4.0
             self.assertEqual(config.controls.market_trade_max_attempts, 5)
             self.assertFalse(config.controls.haul_two_way_auto_hyperspace_engage)
             self.assertEqual(config.controls.haul_two_way_nav_panel_open_delay_seconds, 4.0)
+
+    def test_loads_control_room_update_check_override(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            _write_config(
+                config_path,
+                """
+[paths]
+
+[controls]
+
+[screen]
+
+[runtime]
+
+[control_room]
+check_for_updates = false
+""".strip(),
+            )
+
+            config = load_config(config_path)
+
+            self.assertFalse(config.control_room.check_for_updates)
 
     def test_defaults_runtime_platform_from_host_when_omitted(self) -> None:
         with TemporaryDirectory() as temp_dir:

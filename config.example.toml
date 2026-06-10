@@ -16,6 +16,8 @@ history_limit = 20
 command_delay_seconds = 5.0
 # Poll cadence for Status.json refreshes and market/haul panel upkeep.
 status_refresh_seconds = 2.0
+# Check the latest GitHub release on startup and log a gentle notice when an update exists.
+check_for_updates = true
 
 [tts]
 enabled = true

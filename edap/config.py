@@ -94,6 +94,7 @@ class ControlRoomConfig:
     history_limit: int
     command_delay_seconds: float
     status_refresh_seconds: float = 2.0
+    check_for_updates: bool = True
 
 
 @dataclass(frozen=True)
@@ -529,6 +530,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             history_limit=_integer(control_room, "history_limit", 20),
             command_delay_seconds=_float(control_room, "command_delay_seconds", 5.0),
             status_refresh_seconds=_float(control_room, "status_refresh_seconds", 2.0),
+            check_for_updates=_boolean(control_room, "check_for_updates", True),
         ),
         tts=TTSConfig(
             enabled=_boolean(tts, "enabled", _boolean(default_tts, "enabled", True)),

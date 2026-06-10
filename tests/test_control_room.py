@@ -34,6 +34,7 @@ from edap.routines import RoutineResult
 from edap.runtime import ResolvedPath, RuntimeContext
 from edap.tts import AnnouncementId
 from edap.control_room.workers import PendingRoutineCancelled, RoutineCancelled
+from edap.version import GitHubRelease
 
 
 def _make_config(journal_dir: Path) -> AppConfig:
@@ -1320,6 +1321,65 @@ class ControlRoomDispatchTests(unittest.TestCase):
         self.app._log_startup_modes()
 
         self.assertIn("Instant mode on — control with: instant", "\n".join(self.app.logged))
+
+    def test_log_current_version_reports_current_version(self) -> None:
+        self.app._current_version = "1.7.1"
+
+        self.app._log_current_version(is_latest=None)
+
+        self.assertIn("Currently running version *v1.7.1* of EDAutoPilotMKII", "\n".join(self.app.logged))
+
+    def test_log_current_version_reports_latest_version(self) -> None:
+        self.app._current_version = "1.7.1"
+
+        self.app._log_current_version(is_latest=True)
+
+        self.assertIn(
+            "Currently running latest version (*v1.7.1*) of EDAutoPilotMKII",
+            "\n".join(self.app.logged),
+        )
+
+    def test_start_update_check_skips_when_disabled(self) -> None:
+        self.app._config = AppConfig(
+            paths=self.app._config.paths,
+            controls=self.app._config.controls,
+            screen=self.app._config.screen,
+            runtime=self.app._config.runtime,
+            control_room=ControlRoomConfig(
+                state_file=self.app._config.control_room.state_file,
+                history_limit=self.app._config.control_room.history_limit,
+                command_delay_seconds=self.app._config.control_room.command_delay_seconds,
+                status_refresh_seconds=self.app._config.control_room.status_refresh_seconds,
+                check_for_updates=False,
+            ),
+            tts=self.app._config.tts,
+        )
+
+        with patch.object(self.app, "_check_for_updates") as mock_check:
+            self.app._start_update_check()
+
+        mock_check.assert_not_called()
+        self.assertIn(
+            "Currently running version *v1.7.1* of EDAutoPilotMKII",
+            "\n".join(self.app.logged),
+        )
+
+    def test_log_update_available_reports_newer_release(self) -> None:
+        self.app._current_version = "1.7.1"
+
+        self.app._log_update_available(
+            GitHubRelease(
+                tag_name="v1.8.0",
+                name="",
+                html_url="https://github.com/NicholasClooney/EDAutoPilotMKII/releases/tag/v1.8.0",
+                published_at="2026-06-10T00:00:00Z",
+            )
+        )
+
+        output = "\n".join(self.app.logged)
+        self.assertIn("A newer ED AutoPilot Mk II release is available: v1.8.0", output)
+        self.assertIn("Currently running version *v1.7.1* of EDAutoPilotMKII", output)
+        self.assertIn("releases/tag/v1.8.0", output)
 
     def test_log_bindings_status_reports_effective_bindings_file(self) -> None:
         bindings_path = Path(self.tmpdir.name) / "Custom.binds"

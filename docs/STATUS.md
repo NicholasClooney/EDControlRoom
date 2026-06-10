@@ -2,7 +2,7 @@
 
 _This is the startup handoff document for the repo. Keep it current, compact, and biased toward what the next session needs immediately. Hard limit: 80 lines. If an update would push this file past the limit, move displaced detail to `status-archive.md` or a more specific doc, then trim this file back down._
 
-Last updated: 2026-06-09
+Last updated: 2026-06-10
 
 ## Current Snapshot
 
@@ -25,6 +25,7 @@ Last updated: 2026-06-09
 
 - Journal/runtime: journal tailing, bindings lookup, runtime construction, and shared platform seams are working.
 - Control Room: live Textual UI with ship status, market panel, haul stats, replay/history, persisted state, routine dispatch, queued cross-platform TTS announcements, and a repo-local `artifacts/control-room.log` journal-event mirror for sessions where the standalone watcher is not running.
+- Control Room startup now writes a current-version line into `ACTIVITY`; when `control_room.check_for_updates` is enabled and GitHub confirms the local build is current it says `Currently running latest version (...)`, otherwise it logs `Currently running version ...` plus a separate newer-release notice only when GitHub reports one.
 - Control Room bootstrap now restores commander name from the latest journal snapshot, so opening the UI mid-session no longer depends on catching a fresh live `LoadGame` or `Commander` event.
 - Control Room and two-way haul startup now prefer the full journal-derived current station/system over stale `Market.json` metadata, and the shared ship snapshot now retains station name alongside system/status during bootstrap/resume.
 - The location-regression root cause and prevention notes are captured in `docs/devlog/0002-control-room-location-regression.md`; the key lesson is that current station/system must come from one canonical journal-derived snapshot rather than ad hoc `Market.json` fallback.

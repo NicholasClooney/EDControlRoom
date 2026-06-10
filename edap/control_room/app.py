@@ -111,6 +111,7 @@ from edap.binding_names import format_binding_action_hint
 from edap.runtime import RuntimeContext, build_runtime_context, load_config_with_fallback
 from edap.ship_controls import DEFAULT_SHIP_CONTROL_ACTIONS, ShipControls
 from edap.tts import AnnouncementId, TTSAnnouncer, format_credits_short
+from edap import version as _version
 
 
 # ── All actions needed across every supported routine ──────────────────────────
@@ -356,6 +357,7 @@ class ControlRoomApp(App[None]):
         self._routine_worker: Any | None = None
         self._time_fn: Callable[[], float] = time.monotonic
         self._tts = TTSAnnouncer(self._config.tts, platform_name=self._config.runtime.platform)
+        self._current_version = _version.get_current_version()
         self._facade = _facade.ControlRoomFacade(
             self,
             default_placeholder=_DEFAULT_COMMAND_PLACEHOLDER,
@@ -595,6 +597,7 @@ class ControlRoomApp(App[None]):
         self._log_bindings_status()
         self._load_saved_state()
         self._log_startup_modes()
+        self._start_update_check()
         self._bootstrap_ship_state()
         self._load_market_json()
         self._refresh_status()
@@ -665,6 +668,32 @@ class ControlRoomApp(App[None]):
     def _log_startup_modes(self) -> None:
         state = "on" if self._instant_mode else "off"
         self._log(f"[dim]Instant mode {state} — control with: instant[/]")
+
+    def _start_update_check(self) -> None:
+        if not self._config.control_room.check_for_updates:
+            self._log_current_version(is_latest=None)
+            return
+        self._check_for_updates()
+
+    def _log_current_version(self, *, is_latest: bool | None) -> None:
+        current = _version.display_version(self._current_version)
+        if is_latest is True:
+            self._log(
+                f"[dim]Currently running latest version "
+                f"(*{escape(current)}*) of EDAutoPilotMKII[/]"
+            )
+            return
+        self._log(
+            f"[dim]Currently running version *{escape(current)}* of EDAutoPilotMKII[/]"
+        )
+
+    def _log_update_available(self, release: _version.GitHubRelease) -> None:
+        self._log(
+            f"[yellow]A newer ED AutoPilot Mk II release is available: "
+            f"{escape(release.display_name)}[/]"
+        )
+        self._log_current_version(is_latest=False)
+        self._log(f"[dim]{escape(release.html_url)}[/]")
 
     def _bootstrap_ship_state(self) -> None:
         _bootstrap.bootstrap_ship_state(self)
@@ -829,6 +858,17 @@ class ControlRoomApp(App[None]):
     @work(thread=True, group="watchers", exclusive=True)
     def _start_watcher(self) -> None:
         _workers.start_watcher_loop(self)
+
+    @work(thread=True, group="watchers", exclusive=False)
+    def _check_for_updates(self) -> None:
+        release = _version.fetch_latest_github_release()
+        if release is None:
+            self.call_from_thread(self._log_current_version, is_latest=None)
+            return
+        if not _version.is_newer_version(release.version, self._current_version):
+            self.call_from_thread(self._log_current_version, is_latest=True)
+            return
+        self.call_from_thread(self._log_update_available, release)
 
     # ── Routine dispatch ───────────────────────────────────────────────────────
 
