@@ -4,7 +4,7 @@ Date: 2026-05-26
 
 ## Goal
 
-Evaluate whether EDAutopilot should pursue virtual joystick or game-controller output on macOS for Elite Dangerous running through CrossOver.
+Evaluate whether this project should pursue virtual joystick or game-controller output on macOS for Elite Dangerous running through CrossOver.
 
 ## Recommendation
 
@@ -55,7 +55,7 @@ This is useful as an architectural reference, but not a drop-in answer for a sma
 
 Apple's `GCVirtualController` is for adding software controls to your own game/app experience. It is not a general system-wide virtual Xbox/joystick device that another arbitrary app consumes as a hardware controller.
 
-For EDAutopilot, that means:
+For this project, that means:
 - `GCVirtualController` is not the solution
 - `CoreHID` / DriverKit is the relevant branch
 
@@ -136,7 +136,7 @@ Implication:
 - Linux is the most script-friendly platform for virtual controller output
 - permissions are still relevant, but the architectural path is much simpler than macOS
 
-## What This Means For EDAutopilot
+## What This Means For This Project
 
 For this project, the practical decision is:
 - keep macOS MVP on keyboard-based control

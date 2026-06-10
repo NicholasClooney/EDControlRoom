@@ -133,5 +133,5 @@ Examples:
 - Tag stable releases as semantic versions like `v1.0.0`.
 - When preparing a release tag, update `pyproject.toml` so `[project].version` matches the release version without the leading `v`.
 - If a release prep changes `[project].version`, run `uv sync` so `uv.lock` is refreshed to the same version metadata and commit that lockfile update as part of the release-prep changeset.
-- Use GitHub release titles in the form `EDAutoPilot Mk II vX.Y.Z - <short release label>`.
+- Use GitHub release titles in the form `EDControlRoom vX.Y.Z - <short release label>`.
 - Release notes should stay high level: summarize the major operator-facing capabilities, especially `control_room.py`, available routines, and any other significant platform/runtime milestones.
