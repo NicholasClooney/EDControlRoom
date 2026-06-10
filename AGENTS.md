@@ -24,13 +24,18 @@ See [docs/STATUS.md](docs/STATUS.md) for the current port status, what is stubbe
 - Treat the `Last updated: YYYY-MM-DD (session N)` line in `docs/STATUS.md` as the canonical session counter for the repo.
 - Whenever `docs/STATUS.md` or `docs/session-log.md` is updated, increment that `session N` value exactly once for the current work session, even if only one of those two files changed.
 - Keep it concise and current so the next agent can resume from it directly.
-- Keep `docs/STATUS.md` bounded to at most 80 lines. If a new update would push it past the limit, move displaced detail into `docs/status-archive.md` or a more specific supporting doc, then rewrite `docs/STATUS.md` back down to a compact handoff instead of letting it grow indefinitely.
+- Keep `docs/STATUS.md` bounded to at most 80 lines. If a new update would push it past the limit, move displaced older status/session detail into `docs/status-archive.md` or a more specific supporting doc, then rewrite `docs/STATUS.md` back down to a compact handoff instead of letting it grow indefinitely.
+- When adding bullets to `docs/STATUS.md`, insert new bullets at the top of the relevant section so the newest handoff detail is encountered first.
+- The "newest first" rule applies within each suitable section body. Do not reorder the document headers or the `Last updated` line to satisfy it.
+- If `docs/STATUS.md` goes over 80 lines, trim each bullet-based status section down to its 5 newest bullets and move the older trimmed bullets into `docs/status-archive.md`.
+- When archiving trimmed `docs/STATUS.md` content, prepend the newest archive block at the top of `docs/status-archive.md`.
+- Do not read the whole `docs/status-archive.md` file just to prepend new archival content. Read only enough of the top of the file to insert the new block correctly, roughly `head -n 15`.
 
 Use [docs/session-log.md](docs/session-log.md) for concise rolling session notes.
 
 - Append short session entries to `docs/session-log.md` when the detail is useful for future operators/agents but too transient or verbose for `docs/STATUS.md`.
 - Keep `docs/session-log.md` bounded to at most 20 lines. If a new entry would push it past that limit, append the full current contents of `docs/session-log.md` to `docs/status-archive.md` and then reset `docs/session-log.md` to a fresh empty log template before writing the new entry.
-- Treat `docs/status-archive.md` as cold storage. Do not open or read it during normal work unless the user explicitly asks for archive/history detail or you are blocked and need older context that is not available in `docs/STATUS.md` or `docs/session-log.md`.
+- Treat `docs/status-archive.md` as cold storage for displaced older status/session content. Do not open or read it during normal work unless the user explicitly asks for archive/history detail or you are blocked and need older context that is not available in `docs/STATUS.md` or `docs/session-log.md`.
 
 ## Testing
 
@@ -56,6 +61,8 @@ Use [docs/session-log.md](docs/session-log.md) for concise rolling session notes
 - Treat macOS as the primary target until the diagnostic path is stable.
 - Preserve existing OpenCV/navigation behavior unless a change is required for portability.
 - Make incremental changes that are easy to validate.
+- Prefer strong non-optional types when production/runtime callers always provide a value. Do not widen production APIs to `Optional[...]` just because tests want to omit an argument.
+- When tests need silent progress/announcement-style hooks, pass an explicit no-op helper or lambda from the test instead of relying on `None` in the runtime signature.
 - If you add, remove, rename, or reorder top-level `README.md` sections, update the hand-written README table of contents in the same change. GitHub exposes an automatic Outline menu, but it does not replace the inline TOC block in the file.
 - When writing or updating tests, consider cross-platform behavior explicitly: avoid hardcoded path separators in expectations, and use TOML literal strings (`'...'`) for interpolated filesystem paths so Windows backslashes do not turn into invalid escapes.
 - If implementation reveals a new runtime or behavioral assumption, verify it with the user before baking it into defaults, heuristics, or policy-level behavior.
