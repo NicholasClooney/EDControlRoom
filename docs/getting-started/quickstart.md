@@ -4,22 +4,21 @@
 
 `config.example.toml` is the full reference config. Create a local `config.toml` only if you want overrides; EDAP auto-loads it when present, and otherwise falls back to platform defaults plus auto-detection.
 
+When you do create `config.toml`, keep it minimal:
+
+- Set `paths.journal_dir` and `paths.bindings_file` only if auto-detection is not enough on this machine.
+- Leave `runtime.platform` unset unless you want to make the backend choice explicit in a shared config. When omitted, it defaults to the host OS.
+
 ### macOS + CrossOver
 
-1. Optional: create `config.toml` only if you need local overrides.
-2. Set `paths.journal_dir` and `paths.bindings_file` explicitly only if auto-detection is not enough on this machine.
-3. Leave `runtime.platform` unset unless you want to make the backend choice explicit in a shared config. When omitted, it defaults to the host OS.
-4. Make sure Terminal has macOS Accessibility permission, and Screen Recording permission if you plan to use capture-based diagnostics.
-5. Start Elite Dangerous through CrossOver.
+1. Make sure Terminal has macOS Accessibility permission, and Screen Recording permission if you plan to use capture-based diagnostics.
+2. Start Elite Dangerous through CrossOver.
 
 ### Windows with `uv`
 
 1. Install Python 3.12 and `uv`.
 2. Run `uv sync`.
-3. Optional: create `config.toml` only if you need local overrides.
-4. Leave `runtime.platform` unset unless you want to make the backend choice explicit in a shared config. When omitted, it defaults to the host OS.
-5. Set `paths.journal_dir` and `paths.bindings_file` explicitly only if auto-detection is not enough on this machine.
-6. Start Elite Dangerous.
+3. Start Elite Dangerous.
 
 ### Windows without `uv`
 
@@ -42,19 +41,15 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-5. Optional: create `config.toml` only if you need local overrides.
-6. Leave `runtime.platform` unset unless you want to make the backend choice explicit in a shared config. When omitted, it defaults to the host OS.
-7. Set `paths.journal_dir` and `paths.bindings_file` explicitly only if auto-detection is not enough on this machine.
-8. Start Elite Dangerous.
+5. Start Elite Dangerous.
 
 ### Linux
 
 1. Install Python 3.12 and `uv`.
 2. Install `xdotool` if you want synthetic key input support.
-3. Optional: create `config.toml` only if you need local overrides.
-4. Leave `runtime.platform` unset unless you want to make the backend choice explicit in a shared config. When omitted, it defaults to the host OS.
-5. Prefer explicit `paths.journal_dir` and `paths.bindings_file` only when the built-in Steam Proton probing for app ID `359320` is not enough on this machine.
-6. Start Elite Dangerous through Steam/Proton.
+3. Start Elite Dangerous through Steam/Proton.
+
+On Linux, prefer explicit `paths.journal_dir` and `paths.bindings_file` only when the built-in Steam Proton probing for app ID `359320` is not enough on this machine.
 
 Minimal example:
 
@@ -70,64 +65,50 @@ title = "captain"
 
 Linux input is currently implemented through `xdotool`, so treat it as X11-oriented and verify it locally before relying on routines. Wayland behavior is unverified.
 
-## First Checks
+## Start Control Room
 
-On macOS:
+Control Room is the primary operator surface for current routine work, so start there first after installation.
+
+With `uv`:
 
 ```sh
-uv run python3 diagnostics.py
+uv run python3 control_room.py
+```
+
+If your Windows shell does not provide `python3`, use `uv run python ...` instead.
+
+Without `uv`:
+
+```sh
+python control_room.py
+```
+
+For day-to-day usage, haul behavior, replay/history, and interrupt semantics, see [../operators/control-room.md](../operators/control-room.md).
+
+## If Something Is Not Working
+
+Use these checks only when you need to troubleshoot input, journal detection, or game integration.
+
+With `uv`:
+
+```sh
 uv run python3 watch_journal.py
 uv run python3 ship_controls.py --action SetSpeedZero --delay-seconds 3
 ```
 
-On Windows with `uv`:
+If your Windows shell does not provide `python3`, use `uv run python ...` instead.
+
+Without `uv`:
 
 ```sh
-uv run python diagnostics.py --send-test-key
-uv run python ship_controls.py --action SetSpeedZero --delay-seconds 3
-```
-
-On Windows without `uv`:
-
-```sh
-python diagnostics.py --send-test-key
+python watch_journal.py
 python ship_controls.py --action SetSpeedZero --delay-seconds 3
 ```
 
-On Linux:
+- `watch_journal.py` tails the Elite journal and prints events as they arrive. Run it only while the game is open, otherwise nothing new will appear.
+- `ship_controls.py --action SetSpeedZero --delay-seconds 3` waits three seconds, then presses the key currently bound to Elite's `SetSpeedZero` action. Expect your throttle-zero keybind to fire in game.
 
-```sh
-uv run python3 diagnostics.py --send-test-key
-uv run python3 ship_controls.py --action SetSpeedZero --delay-seconds 3
-```
-
-Validate `diagnostics.py --send-test-key` first on Windows. That proves the `SendInput` path reaches Elite before you debug bindings or routines.
-Validate `diagnostics.py --send-test-key` first on Linux too. That proves the `xdotool` path reaches the game before you debug bindings or routines.
-
-`diagnostics.py --send-test-key` only checks raw synthetic input delivery for a literal key such as `space` or `j`. It does not validate Elite action lookup from the bindings file. After that low-level check passes, use `check_bindings.py` to verify action resolution and `ship_controls.py --action ...` to verify a resolved Elite action in game.
-
-## Main Runtime
-
-```sh
-uv run python3 control_room.py
-```
-
-Windows equivalents:
-
-```sh
-uv run python control_room.py
-python control_room.py
-```
-
-Linux equivalent:
-
-```sh
-uv run python3 control_room.py
-```
-
-Control Room is the primary operator surface for current routine work.
-
-For day-to-day usage, haul behavior, replay/history, and interrupt semantics, see [../operators/control-room.md](../operators/control-room.md).
+If journal or bindings auto-detection still looks wrong after that, add explicit `paths.journal_dir` and `paths.bindings_file` overrides in `config.toml`.
 
 ## Routine Harness
 

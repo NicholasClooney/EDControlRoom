@@ -2,7 +2,7 @@
 
 _This is the startup handoff document for the repo. Keep it current, compact, and biased toward what the next session needs immediately. Hard limit: 80 lines. If an update would push this file past the limit, move displaced detail to `status-archive.md` or a more specific doc, then trim this file back down._
 
-Last updated: 2026-06-10 (session 108)
+Last updated: 2026-06-10 (session 109)
 
 ## Current Snapshot
 
@@ -16,6 +16,7 @@ Last updated: 2026-06-10 (session 108)
 - README and the operator docs are now being tightened around a smaller "start here" surface so haul behavior, Control Room interrupt semantics, and bindings-file workflows are easier to discover without reading the full status handoff.
 - The current docs pass also removes redundant `--config config.toml` examples from the main operator guides and launcher/probe usage strings; repo-root `config.toml` is now documented as optional and auto-loaded when present.
 - README `Start Here` now leads with `uv sync` plus `uv run python3 control_room.py`, points deeper setup to the quickstart guide, and surfaces Control Room + haul context earlier in the page.
+- `docs/getting-started/quickstart.md` now leads operators from setup straight into Control Room, consolidates the repeated optional-config guidance into one shared note, and limits journal/input probe commands to an issue-driven troubleshooting section with clearer command intent.
 - `AGENTS.md` now explicitly requires future README section edits to keep the hand-written README TOC in sync, because GitHub's automatic Outline menu is not an inline TOC replacement.
 - Windows bindings auto-detection now matches macOS/Linux by selecting the newest `.binds` file by modification time instead of the lexicographically last filename.
 - Web-control UI research is now captured in `docs/research/0005-web-control-ui-options.md`, including the current NiceGUI-first prototype recommendation and the iPhone Safari LAN-HTTP caveat from NiceGUI issue `#5802`.
