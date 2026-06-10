@@ -63,6 +63,7 @@ Interrupt behavior during `haul` is special:
 
 - Startup logs a current-version line in `ACTIVITY`; when the GitHub check confirms the local build is current it says `Currently running latest version (...)`, otherwise it falls back to `Currently running version ...`.
 - When `control_room.check_for_updates = true` (default), startup also performs a short GitHub latest-release check and adds a separate `A newer ED AutoPilot Mk II release is available: ...` line only when a newer release exists.
+- `control_room.activity_log_max_lines` controls how many lines the `ACTIVITY` pane retains in memory before discarding the oldest ones; default `2000`.
 - `control_room.status_refresh_seconds` controls how often control room re-reads `Status.json` and refreshes market/haul side state; default `2.0`.
 - Live observation on 2026-06-08: `Status.json` `Destination` does show in `SHIP STATUS` during supercruise, and also appears in normal space after dropping from supercruise, while docking, and while docked.
 - `Ctrl-R` opens replay/history from the command bar.
@@ -70,4 +71,4 @@ Interrupt behavior during `haul` is special:
 - `Ctrl-C` and `Ctrl-D` do not close the TUI while a routine is active; when idle they exit the app.
 - `sell` with no explicit item falls back to `Cargo.json` if the in-memory cargo manifest is empty.
 - Cross-session command history and one saved default haul profile are persisted in `.control_room_state.json` by default.
-- Consumed journal events are mirrored into `artifacts/control-room.log`.
+- Consumed journal events are mirrored into `artifacts/control-room.log`, with shutdown still flushing buffered writes before exit.

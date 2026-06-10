@@ -92,6 +92,7 @@ class RuntimeConfig:
 class ControlRoomConfig:
     state_file: Path
     history_limit: int
+    activity_log_max_lines: int
     command_delay_seconds: float
     status_refresh_seconds: float = 2.0
     check_for_updates: bool = True
@@ -326,6 +327,8 @@ def validate_config(config: AppConfig) -> AppConfig:
         )
     if config.control_room.history_limit <= 0:
         raise ConfigError("Config value `control_room.history_limit` must be greater than 0.")
+    if config.control_room.activity_log_max_lines <= 0:
+        raise ConfigError("Config value `control_room.activity_log_max_lines` must be greater than 0.")
     if config.control_room.command_delay_seconds < 0:
         raise ConfigError("Config value `control_room.command_delay_seconds` must be non-negative.")
     if config.control_room.status_refresh_seconds < 0:
@@ -528,6 +531,7 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
         control_room=ControlRoomConfig(
             state_file=Path(_string(control_room, "state_file", ".control_room_state.json")).expanduser(),
             history_limit=_integer(control_room, "history_limit", 20),
+            activity_log_max_lines=_integer(control_room, "activity_log_max_lines", 2000),
             command_delay_seconds=_float(control_room, "command_delay_seconds", 5.0),
             status_refresh_seconds=_float(control_room, "status_refresh_seconds", 2.0),
             check_for_updates=_boolean(control_room, "check_for_updates", True),

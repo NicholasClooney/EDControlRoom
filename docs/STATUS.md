@@ -2,7 +2,7 @@
 
 _This is the startup handoff document for the repo. Keep it current, compact, and biased toward what the next session needs immediately. Hard limit: 80 lines. If an update would push this file past the limit, move displaced detail to `status-archive.md` or a more specific doc, then trim this file back down._
 
-Last updated: 2026-06-10 (session 106)
+Last updated: 2026-06-10 (session 107)
 
 ## Current Snapshot
 
@@ -25,6 +25,8 @@ Last updated: 2026-06-10 (session 106)
 
 - Journal/runtime: journal tailing, bindings lookup, runtime construction, and shared platform seams are working.
 - Control Room: live Textual UI with ship status, market panel, haul stats, replay/history, persisted state, routine dispatch, queued cross-platform TTS announcements, and a repo-local `artifacts/control-room.log` journal-event mirror for sessions where the standalone watcher is not running.
+- Control Room's ActivityLog now honors `control_room.activity_log_max_lines` at widget creation time, and the app layer also accepts an explicit injected override so retention can be pinned in tests or alternate launch surfaces without touching config loading.
+- Control Room journal mirroring now keeps the artifact log handle buffered during steady-state event flow, flushes in small batches instead of on every event, and still forces a final flush during shutdown before closing the mirror.
 - Control Room startup now writes a current-version line into `ACTIVITY`; when `control_room.check_for_updates` is enabled and GitHub confirms the local build is current it says `Currently running latest version (...)`, otherwise it logs `Currently running version ...` plus a separate newer-release notice only when GitHub reports one.
 - Control Room version/update checks now read through an injectable version source so unit tests can pin fake version metadata instead of coupling assertions to the repo's live release number.
 - Control Room bootstrap now restores commander name from the latest journal snapshot, so opening the UI mid-session no longer depends on catching a fresh live `LoadGame` or `Commander` event.
@@ -39,6 +41,7 @@ Last updated: 2026-06-10 (session 106)
 - Market routines now log supply/demand levels, speak low-stock warnings, reset UI focus defensively, and support targeted sells even when the station is not actively buying the carried commodity.
 - `ActionDispatcher` is the single source of truth for repeated-input pacing; raw keys, repeated actions, and `submit_text` all emit separate paced taps there.
 - TTS phrases now live in `defaults/tts.toml` with user overrides under `[tts]`; `speak.py` can now smoke-test raw text or explicit `--system-name` / `--station-name` normalization; and spoken system/station names spell `3+` digit runs individually so callouts like `HIP 58412` come out as `5 8 4 1 2` while shorter tags like `B13-2` stay intact.
+- Queued TTS now bounds pending backlog in-process and coalesces stale queued repeats by announcement type once speech is already in flight, so long Control Room sessions keep the latest operator-relevant callout without unbounded queue growth.
 - TTS title handling now supports `tts.title_mode = "commander" | "custom" | "commander_name"`; `commander_name` uses the detected journal CMDR name once available and falls back to plain `commander` before that.
 - The config loader now also accepts grouped control subtables such as `[controls.market]` and `[controls.haul.two_way]`, so `config.example.toml` can stay organized while local `config.toml` files only need the specific overrides a commander wants.
 - Windows input injection now builds the full Win32 `INPUT` union shape and surfaces native `GetLastError()` detail on `SendInput` failures.
@@ -59,7 +62,7 @@ Last updated: 2026-06-10 (session 106)
 ## Current Next Steps
 
 1. Live-validate the updated two-way haul startup/resume path and haul telemetry, especially station-2 starts, station-1 run finalization, and `Market.json` fallback behavior.
-2. Live-test queued TTS callouts on macOS and trim noisy phrasing, especially the low supply/demand warnings.
+2. Live-test the bounded/coalescing queued TTS behavior on macOS and trim noisy phrasing, especially the low supply/demand warnings.
 3. Expand Windows validation beyond the current community live check, including more `diagnostics.py --send-test-key` runs and capture of any remaining `WinError` detail.
 4. Continue the next portability follow-up slice from plans 0002-0004: CV capture/performance measurement, journal latency measurement, and diagnostics/dashboard work.
 5. After the next live Control Room run, verify the startup warning wording against the actual Odyssey Controls menu labels for panel and galaxy-map bindings.

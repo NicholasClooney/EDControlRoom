@@ -186,3 +186,24 @@ _This is the rolling short-form log for recent sessions. Keep entries concise an
 - Added `docs/operators/bindings-files.md` plus a README mention for `bindings_files.py`, including an explicit note that `apply-default` is not yet live-validated and should be reported if it behaves unexpectedly.
 - Changed Windows bindings auto-detection to match macOS/Linux: `default_bindings_file()` now selects the newest `.binds` file by modification time, with test coverage proving filename sort order no longer decides the winner.
 - Control Room haul interrupts now defer on the first `Ctrl-C`/`Ctrl-D`: the active two-way haul finishes the current run, stops at station 1 after the return sale and before the next buy, announces that plan over TTS, and still cancels immediately on a second interrupt; verified with `uv run python3 -m unittest discover -s tests` (`318` tests, `0.158s`).
+# Session Log
+
+_This is the rolling short-form log for recent sessions. Keep entries concise and operational. Hard limit: 20 lines. If a new entry would exceed the limit, append the full current log to `docs/status-archive.md`, then reset this file to a fresh empty log template before writing the new entry._
+
+## 2026-06-09
+
+- Prepared and verified release `v1.7.1`: rolled up the docked-location bootstrap fix, configured-title hyperspace-arrival TTS fix, nested control-config sections, digit-aware location TTS normalization, and the README/docs surface tightening. Verified with `uv run python3 -m unittest discover -s tests` (`335` tests, `0.161s`).
+- Added an `AGENTS.md` rule to keep the hand-written README TOC updated whenever top-level README sections move; GitHub's automatic Outline menu exists, but it does not replace the inline TOC block.
+- Reshaped `README.md` so `Start Here` now leads with `uv sync` plus `uv run python3 control_room.py`, points deeper setup to `docs/getting-started/quickstart.md`, and moves the Control Room / haul explanation above the broader repo overview.
+- TTS now normalizes `3+` digit runs in spoken system/station names so callouts like `HIP 58412` are rendered as `HIP 5 8 4 1 2` while shorter tags like `B13-2` remain intact; verified with `uv run python3 -m unittest discover -s tests` (`333` tests, `0.158s`).
+- `speak.py` now supports `--system-name` and `--station-name` so the CLI smoke test can exercise the same digit-splitting name normalization as in-app TTS without changing generic raw-text speech; verified with `uv run python3 -m unittest discover -s tests` (`335` tests, `0.154s`).
+
+## 2026-06-10
+
+- Control Room startup now logs the current app version in `ACTIVITY` and can perform a short GitHub latest-release check to gently notify operators only when a newer release exists; added `control_room.check_for_updates = true|false` plus reusable `edap.version` helpers. Verified with `uv run python3 -m unittest discover -s tests` (`343` tests, `0.153s`).
+- Refined the startup wording so the version line says `Currently running latest version (...)` only when GitHub confirms the local release is current, otherwise it says `Currently running version ...` and adds a separate `A newer ED AutoPilot Mk II release is available: ...` line. Verified with `uv run python3 -m unittest discover -s tests` (`344` tests, `0.141s`).
+- Prepared release `v1.7.2`: bumped project version metadata and rolled the Control Room startup version/update notices into the maintained stable-release handoff.
+- Refactored Control Room version/update lookups behind an injectable version source so the harness no longer depends on the repo's live release number; restored the historical `Last updated: YYYY-MM-DD (session N)` format in `docs/STATUS.md` as `session 56`. Verified with `uv run python3 -m unittest discover -s tests` (`344` tests, `0.134s`).
+- Recounted `docs/STATUS.md` history from the field-removal commit and corrected the restored counter from the provisional `session 56` estimate to commit-derived `session 106`.
+- Buffered Control Room's `artifacts/control-room.log` journal mirror so steady-state event appends flush every 20 events instead of every event, while shutdown still forces a final flush before close; verified with `uv run python3 -m unittest discover -s tests` (`351` tests, `0.149s`).
+- Added TTS backlog protection in `edap/tts.py`: the queued speaker now bounds pending items, drops oldest stale backlog when full, and coalesces repeated queued announcement types once speech is already in flight. Verified with `uv run python3 -m unittest discover -s tests` (`351` tests, `0.147s`).

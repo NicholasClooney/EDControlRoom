@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from threading import Event
 import unittest
 
 from edap.config import TTSConfig
-from edap.tts import AnnouncementId, TTSAnnouncer, format_credits_short, normalize_tts_value
+from edap.tts import AnnouncementId, QueuedSpeaker, TTSAnnouncer, format_credits_short, normalize_tts_value
 
 
 class _FakeBackend:
@@ -14,7 +15,54 @@ class _FakeBackend:
         self.spoken.append(text)
 
 
+class _BlockingBackend:
+    def __init__(self) -> None:
+        self.spoken: list[str] = []
+        self.started = Event()
+        self.release = Event()
+
+    def speak(self, text: str) -> None:
+        self.spoken.append(text)
+        if len(self.spoken) == 1:
+            self.started.set()
+            self.release.wait(timeout=1.0)
+
+
 class TTSHelpersTests(unittest.TestCase):
+    def test_queued_speaker_coalesces_stale_pending_items_with_same_key(self) -> None:
+        backend = _BlockingBackend()
+        speaker = QueuedSpeaker(backend, max_backlog=4)
+        self.addCleanup(speaker.close)
+
+        speaker.enqueue("First item")
+        self.assertTrue(backend.started.wait(timeout=1.0))
+
+        speaker.enqueue("Route update one", collapse_key=AnnouncementId.DESTINATION_SET)
+        speaker.enqueue("Route update two", collapse_key=AnnouncementId.DESTINATION_SET)
+        speaker.enqueue("Route update three", collapse_key=AnnouncementId.DESTINATION_SET)
+
+        backend.release.set()
+        speaker.close()
+
+        self.assertEqual(backend.spoken, ["First item", "Route update three"])
+
+    def test_queued_speaker_drops_oldest_pending_items_when_backlog_is_full(self) -> None:
+        backend = _BlockingBackend()
+        speaker = QueuedSpeaker(backend, max_backlog=2)
+        self.addCleanup(speaker.close)
+
+        speaker.enqueue("First item")
+        self.assertTrue(backend.started.wait(timeout=1.0))
+
+        speaker.enqueue("Second item")
+        speaker.enqueue("Third item")
+        speaker.enqueue("Fourth item")
+
+        backend.release.set()
+        speaker.close()
+
+        self.assertEqual(backend.spoken, ["First item", "Third item", "Fourth item"])
+
     def test_format_credits_short_humanizes_thousands_and_millions(self) -> None:
         self.assertEqual(format_credits_short(84_200), "84 thousand credits")
         self.assertEqual(format_credits_short(1_250_000), "1.2 million credits")
@@ -193,4 +241,37 @@ class TTSHelpersTests(unittest.TestCase):
         self.assertEqual(
             backend.spoken,
             ["Ready to jump, commander.", "Ready to jump, VRYAE."],
+        )
+
+    def test_announcer_coalesces_stale_destination_updates(self) -> None:
+        backend = _BlockingBackend()
+        announcer = TTSAnnouncer(
+            TTSConfig(
+                enabled=True,
+                title_mode="custom",
+                title="captain",
+                disabled_messages=(),
+                phrases={
+                    "station_cleared": "Ready to jump, {title}.",
+                    "destination_set": "Setting destination to {system_name}.",
+                },
+            ),
+            platform_name="macos",
+            backend=backend,
+        )
+        self.addCleanup(announcer.close)
+
+        announcer.announce(AnnouncementId.STATION_CLEARED)
+        self.assertTrue(backend.started.wait(timeout=1.0))
+
+        announcer.announce(AnnouncementId.DESTINATION_SET, system_name="Achenar")
+        announcer.announce(AnnouncementId.DESTINATION_SET, system_name="Alioth")
+        announcer.announce(AnnouncementId.DESTINATION_SET, system_name="HIP 58412")
+
+        backend.release.set()
+        announcer.close()
+
+        self.assertEqual(
+            backend.spoken,
+            ["Ready to jump, captain.", "Setting destination to HIP 5 8 4 1 2."],
         )

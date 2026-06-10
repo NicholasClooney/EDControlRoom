@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass
 from enum import Enum
-from queue import Empty, Queue
 import re
 from shutil import which
 import subprocess
-from threading import Thread
+from threading import Condition, Thread
 from typing import Protocol
 
 from edap.config import TTSConfig
@@ -119,28 +119,62 @@ def build_speech_backend(platform_name: str) -> SpeechBackend:
 
 
 class QueuedSpeaker:
-    def __init__(self, backend: SpeechBackend) -> None:
+    def __init__(self, backend: SpeechBackend, *, max_backlog: int = 8) -> None:
+        if max_backlog < 1:
+            raise ValueError("QueuedSpeaker max_backlog must be at least 1.")
         self._backend = backend
-        self._queue: Queue[str | None] = Queue()
+        self._max_backlog = max_backlog
+        self._pending: deque[_SpeechItem] = deque()
+        self._condition = Condition()
+        self._closed = False
+        self._speaking = False
         self._thread = Thread(target=self._run, daemon=True)
         self._thread.start()
 
-    def enqueue(self, text: str) -> None:
-        self._queue.put(text)
+    def enqueue(self, text: str, *, collapse_key: object | None = None) -> None:
+        item = _SpeechItem(text=text, collapse_key=collapse_key)
+        with self._condition:
+            if self._closed:
+                return
+            if (
+                collapse_key is not None
+                and self._speaking
+                and any(queued.collapse_key == collapse_key for queued in self._pending)
+            ):
+                self._pending = deque(
+                    queued for queued in self._pending if queued.collapse_key != collapse_key
+                )
+            while len(self._pending) >= self._max_backlog:
+                self._pending.popleft()
+            self._pending.append(item)
+            self._condition.notify()
 
     def close(self) -> None:
-        self._queue.put(None)
+        with self._condition:
+            self._closed = True
+            self._condition.notify_all()
         self._thread.join(timeout=1.0)
 
     def _run(self) -> None:
         while True:
+            with self._condition:
+                while not self._pending and not self._closed:
+                    self._condition.wait(timeout=0.1)
+                if not self._pending and self._closed:
+                    return
+                item = self._pending.popleft()
+                self._speaking = True
             try:
-                text = self._queue.get(timeout=0.1)
-            except Empty:
-                continue
-            if text is None:
-                return
-            self._backend.speak(text)
+                self._backend.speak(item.text)
+            finally:
+                with self._condition:
+                    self._speaking = False
+
+
+@dataclass(frozen=True)
+class _SpeechItem:
+    text: str
+    collapse_key: object | None = None
 
 
 class TTSAnnouncer:
@@ -187,7 +221,7 @@ class TTSAnnouncer:
         if not rendered or rendered == self._last_text:
             return
         self._last_text = rendered
-        self._speaker.enqueue(rendered)
+        self._speaker.enqueue(rendered, collapse_key=message_id)
 
     def _resolve_title(self) -> str:
         if self._config.title_mode == "commander":

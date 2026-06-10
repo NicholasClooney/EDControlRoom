@@ -12,6 +12,8 @@ debug = true
 [control_room]
 state_file = ".control_room_state.json"
 history_limit = 20
+# Maximum retained lines in the ACTIVITY pane before old lines are discarded.
+activity_log_max_lines = 2000
 # Delay before ship-affecting control-room commands begin execution.
 command_delay_seconds = 5.0
 # Poll cadence for Status.json refreshes and market/haul panel upkeep.

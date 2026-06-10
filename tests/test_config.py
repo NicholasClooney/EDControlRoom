@@ -56,6 +56,7 @@ class LoadConfigTests(unittest.TestCase):
             self.assertEqual(config.runtime.platform, "macos")
             self.assertEqual(config.control_room.state_file, Path(".control_room_state.json"))
             self.assertEqual(config.control_room.history_limit, 20)
+            self.assertEqual(config.control_room.activity_log_max_lines, 2000)
             self.assertEqual(config.control_room.command_delay_seconds, 5.0)
             self.assertEqual(config.control_room.status_refresh_seconds, 2.0)
             self.assertTrue(config.control_room.check_for_updates)
@@ -169,6 +170,29 @@ check_for_updates = false
             config = load_config(config_path)
 
             self.assertFalse(config.control_room.check_for_updates)
+
+    def test_loads_control_room_activity_log_limit_override(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            _write_config(
+                config_path,
+                """
+[paths]
+
+[controls]
+
+[screen]
+
+[runtime]
+
+[control_room]
+activity_log_max_lines = 500
+""".strip(),
+            )
+
+            config = load_config(config_path)
+
+            self.assertEqual(config.control_room.activity_log_max_lines, 500)
 
     def test_defaults_runtime_platform_from_host_when_omitted(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -402,6 +426,28 @@ status_refresh_seconds = -0.1
             )
 
             with self.assertRaisesRegex(ConfigError, "control_room.status_refresh_seconds"):
+                load_config(config_path)
+
+    def test_rejects_non_positive_control_room_activity_log_limit(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            _write_config(
+                config_path,
+                """
+[paths]
+
+[controls]
+
+[screen]
+
+[runtime]
+
+[control_room]
+activity_log_max_lines = 0
+""".strip(),
+            )
+
+            with self.assertRaisesRegex(ConfigError, "control_room.activity_log_max_lines"):
                 load_config(config_path)
 
     def test_rejects_non_positive_market_critical_level_multiplier(self) -> None:

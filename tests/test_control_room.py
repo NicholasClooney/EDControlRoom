@@ -25,7 +25,7 @@ from edap.config import (
     ScreenConfig,
     TTSConfig,
 )
-from edap.control_room.app import ActivityLog
+from edap.control_room.app import ActivityLog, _JOURNAL_ARTIFACT_LOG_FLUSH_EVERY
 from edap.control_room.events import apply_ship_event
 from edap.control_room import rendering as control_room_rendering
 from edap.control_room.models import MarketData, ShipState
@@ -37,7 +37,7 @@ from edap.control_room.workers import PendingRoutineCancelled, RoutineCancelled
 from edap.version import GitHubRelease
 
 
-def _make_config(journal_dir: Path) -> AppConfig:
+def _make_config(journal_dir: Path, *, activity_log_max_lines: int = 2000) -> AppConfig:
     return AppConfig(
         paths=PathsConfig(journal_dir=journal_dir, bindings_file=None),
         controls=ControlsConfig(
@@ -77,6 +77,7 @@ def _make_config(journal_dir: Path) -> AppConfig:
         control_room=ControlRoomConfig(
             state_file=journal_dir / ".control_room_state.json",
             history_limit=20,
+            activity_log_max_lines=activity_log_max_lines,
             command_delay_seconds=0.0,
             status_refresh_seconds=2.0,
         ),
@@ -84,14 +85,21 @@ def _make_config(journal_dir: Path) -> AppConfig:
     )
 
 
-def _make_context(journal_dir: Path) -> RuntimeContext:
+def _make_context(
+    journal_dir: Path,
+    *,
+    activity_log_max_lines: int = 2000,
+) -> RuntimeContext:
     resolved = ResolvedPath(
         configured={"path": str(journal_dir), "status": "ok", "reason": "test journal dir"},
         auto_detected={"path": str(journal_dir), "status": "ok", "reason": "test journal dir"},
         effective={"path": str(journal_dir), "status": "ok", "source": "configured", "reason": "test journal dir"},
     )
     return RuntimeContext(
-        config=_make_config(journal_dir),
+        config=_make_config(
+            journal_dir,
+            activity_log_max_lines=activity_log_max_lines,
+        ),
         game_paths=None,
         journal=resolved,
         bindings=resolved,
@@ -127,9 +135,13 @@ class _FakeVersionSource:
 
 
 class _HarnessApp(ControlRoomApp):
-    def __init__(self, ctx: RuntimeContext) -> None:
+    def __init__(self, ctx: RuntimeContext, *, activity_log_max_lines: int | None = None) -> None:
         self.version_source = _FakeVersionSource()
-        super().__init__(ctx, version_source=self.version_source)
+        super().__init__(
+            ctx,
+            activity_log_max_lines=activity_log_max_lines,
+            version_source=self.version_source,
+        )
         self._journal_artifact_log_path = ctx.config.control_room.state_file.parent / "control-room-artifact.log"
         self.logged: list[str] = []
         self.exit_calls = 0
@@ -189,8 +201,10 @@ class _ShutdownHarnessApp(ControlRoomApp):
             return
         self._shutdown_finalized = True
         if self._journal_artifact_log_handle is not None:
+            self._flush_journal_artifact_log()
             self._journal_artifact_log_handle.close()
             self._journal_artifact_log_handle = None
+            self._journal_artifact_log_pending_writes = 0
         self._tts.close()
         self.exit()
 
@@ -249,6 +263,28 @@ class _FakeTTS:
 
     def close(self) -> None:
         return None
+
+
+class _ArtifactLogHandleStub:
+    def __init__(self) -> None:
+        self.parts: list[str] = []
+        self.flush_calls = 0
+        self.close_calls = 0
+        self.closed = False
+
+    def write(self, value: str) -> int:
+        self.parts.append(value)
+        return len(value)
+
+    def flush(self) -> None:
+        self.flush_calls += 1
+
+    def close(self) -> None:
+        self.close_calls += 1
+        self.closed = True
+
+    def getvalue(self) -> str:
+        return "".join(self.parts)
 
 
 class ControlRoomCommandTests(unittest.TestCase):
@@ -885,6 +921,7 @@ class ControlRoomBindingsTests(unittest.TestCase):
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 history_limit=2,
+                activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=self.app._config.control_room.command_delay_seconds,
             ),
         )
@@ -1146,6 +1183,36 @@ class ControlRoomBindingsTests(unittest.TestCase):
         self.assertEqual(len(lines), 1)
         self.assertEqual(json.loads(lines[0]), {"event": "SupercruiseExit", "Body": "Wells Terminal"})
 
+    def test_append_journal_event_defers_flush_until_batch_threshold(self) -> None:
+        handle = _ArtifactLogHandleStub()
+        self.app._journal_artifact_log_handle = handle
+
+        self.app._append_journal_event({"event": "FSDTarget", "Name": "Achenar"})
+
+        self.assertEqual(handle.flush_calls, 0)
+        self.assertEqual(self.app._journal_artifact_log_pending_writes, 1)
+
+        for index in range(_JOURNAL_ARTIFACT_LOG_FLUSH_EVERY - 1):
+            self.app._append_journal_event({"event": "Scan", "BodyName": f"Body {index}"})
+
+        self.assertEqual(handle.flush_calls, 1)
+        self.assertEqual(self.app._journal_artifact_log_pending_writes, 0)
+
+    def test_finalize_shutdown_flushes_pending_control_room_artifact_log_writes(self) -> None:
+        app = _ShutdownHarnessApp(_make_context(Path(self.tmpdir.name)))
+        app._tts = _FakeTTS()
+        handle = _ArtifactLogHandleStub()
+        app._journal_artifact_log_handle = handle
+        app._journal_artifact_log_pending_writes = 2
+
+        app._finalize_shutdown()
+
+        self.assertEqual(handle.flush_calls, 1)
+        self.assertEqual(handle.close_calls, 1)
+        self.assertTrue(handle.closed)
+        self.assertEqual(app.exit_calls, 1)
+        self.assertEqual(app._journal_artifact_log_pending_writes, 0)
+
     def test_finalize_shutdown_closes_control_room_artifact_log(self) -> None:
         app = _ShutdownHarnessApp(_make_context(Path(self.tmpdir.name)))
         app._tts = _FakeTTS()
@@ -1165,6 +1232,30 @@ class ControlRoomBindingsTests(unittest.TestCase):
 
 
 class ActivityLogTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmpdir.cleanup)
+
+    def test_activity_log_accepts_explicit_max_lines(self) -> None:
+        activity = ActivityLog(max_lines=17)
+
+        self.assertEqual(activity.max_lines, 17)
+
+    def test_control_room_defaults_activity_log_max_lines_from_config(self) -> None:
+        app = ControlRoomApp(
+            _make_context(Path(self.tmpdir.name), activity_log_max_lines=17)
+        )
+
+        self.assertEqual(app._activity_log_max_lines, 17)
+
+    def test_control_room_injected_max_lines_override_config(self) -> None:
+        app = ControlRoomApp(
+            _make_context(Path(self.tmpdir.name), activity_log_max_lines=17),
+            activity_log_max_lines=5,
+        )
+
+        self.assertEqual(app._activity_log_max_lines, 5)
+
     def test_manual_scroll_pauses_auto_follow_for_ten_seconds(self) -> None:
         timer = _TimerStub()
         changes: list[bool] = []
@@ -1367,6 +1458,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 history_limit=self.app._config.control_room.history_limit,
+                activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=self.app._config.control_room.command_delay_seconds,
                 status_refresh_seconds=self.app._config.control_room.status_refresh_seconds,
                 check_for_updates=False,
@@ -1554,6 +1646,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 history_limit=self.app._config.control_room.history_limit,
+                activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=5.0,
             ),
         )
@@ -1588,6 +1681,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 history_limit=self.app._config.control_room.history_limit,
+                activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=5.0,
             ),
         )
@@ -1623,6 +1717,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 history_limit=self.app._config.control_room.history_limit,
+                activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=5.0,
             ),
         )
@@ -1656,6 +1751,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 history_limit=self.app._config.control_room.history_limit,
+                activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=5.0,
             ),
         )
@@ -1691,6 +1787,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 history_limit=self.app._config.control_room.history_limit,
+                activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=5.0,
             ),
         )
@@ -1728,6 +1825,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 history_limit=self.app._config.control_room.history_limit,
+                activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=5.0,
             ),
         )
@@ -1756,6 +1854,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 history_limit=self.app._config.control_room.history_limit,
+                activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=5.0,
             ),
         )
@@ -1778,6 +1877,7 @@ class ControlRoomDispatchTests(unittest.TestCase):
             control_room=ControlRoomConfig(
                 state_file=self.app._config.control_room.state_file,
                 history_limit=self.app._config.control_room.history_limit,
+                activity_log_max_lines=self.app._config.control_room.activity_log_max_lines,
                 command_delay_seconds=5.0,
             ),
         )

@@ -129,6 +129,8 @@ _STARTUP_BINDING_WARNING_IGNORED_ACTIONS = frozenset({
 _DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | dest <system> | market ... | reload | q"
 _ACTIVITY_AUTO_FOLLOW_DEBOUNCE_SECONDS = 10.0
 _JOURNAL_ARTIFACT_LOG_PATH = Path("artifacts/control-room.log")
+_JOURNAL_ARTIFACT_LOG_BUFFER_SIZE = 8192
+_JOURNAL_ARTIFACT_LOG_FLUSH_EVERY = 20
 
 _RoutineCancelled = _workers.RoutineCancelled
 _CancellationProxy = _workers.CancellationProxy
@@ -191,12 +193,13 @@ class ActivityLog(RichLog):
     def __init__(
         self,
         *,
+        max_lines: int | None = None,
         pause_seconds: float = _ACTIVITY_AUTO_FOLLOW_DEBOUNCE_SECONDS,
         time_fn: Callable[[], float] | None = None,
         on_pause_changed: Callable[[bool], None] | None = None,
         **kwargs: Any,
     ) -> None:
-        super().__init__(**kwargs)
+        super().__init__(max_lines=max_lines, **kwargs)
         self._pause_seconds = pause_seconds
         self._time_fn = time_fn or time.monotonic
         self._on_pause_changed = on_pause_changed
@@ -352,6 +355,7 @@ class ControlRoomApp(App[None]):
         ctx: RuntimeContext,
         market_filter: str | None = None,
         *,
+        activity_log_max_lines: int | None = None,
         version_source: VersionSource | None = None,
     ) -> None:
         super().__init__()
@@ -369,8 +373,14 @@ class ControlRoomApp(App[None]):
         self._prompt_state = PromptState()
         self._history_state = HistoryState()
         self._state_path: Path = self._config.control_room.state_file
+        self._activity_log_max_lines = (
+            self._config.control_room.activity_log_max_lines
+            if activity_log_max_lines is None
+            else activity_log_max_lines
+        )
         self._journal_artifact_log_path = _JOURNAL_ARTIFACT_LOG_PATH
         self._journal_artifact_log_handle: IO[str] | None = None
+        self._journal_artifact_log_pending_writes = 0
         self._saved_state = ControlRoomState()
         self._replay_state = ReplayBrowserState()
         self._watcher_worker: Any | None = None
@@ -589,7 +599,13 @@ class ControlRoomApp(App[None]):
             with Vertical(id="left"):
                 yield Static(id="status")
                 with Vertical(id="activity-pane"):
-                    yield ActivityLog(id="activity", markup=True, highlight=True, wrap=True)
+                    yield ActivityLog(
+                        id="activity",
+                        markup=True,
+                        highlight=True,
+                        wrap=True,
+                        max_lines=self._activity_log_max_lines,
+                    )
                     with Vertical(id="resume-browser"):
                         yield Static(
                             "Replay history  |  Enter execute  |  ! execute now  |  e edit  |  * set default haul  |  Esc/q close",
@@ -948,25 +964,46 @@ class ControlRoomApp(App[None]):
             return
         handle.write(json.dumps(ev))
         handle.write("\n")
-        handle.flush()
+        self._journal_artifact_log_pending_writes += 1
+        if self._journal_artifact_log_pending_writes >= _JOURNAL_ARTIFACT_LOG_FLUSH_EVERY:
+            self._flush_journal_artifact_log()
 
     def _ensure_journal_artifact_log_handle(self) -> IO[str] | None:
         if self._journal_artifact_log_handle is not None:
             return self._journal_artifact_log_handle
         try:
             self._journal_artifact_log_path.parent.mkdir(parents=True, exist_ok=True)
-            self._journal_artifact_log_handle = self._journal_artifact_log_path.open("a", encoding="utf-8")
+            self._journal_artifact_log_handle = self._journal_artifact_log_path.open(
+                "a",
+                encoding="utf-8",
+                buffering=_JOURNAL_ARTIFACT_LOG_BUFFER_SIZE,
+            )
         except OSError:
             return None
         return self._journal_artifact_log_handle
+
+    def _flush_journal_artifact_log(self) -> None:
+        handle = self._journal_artifact_log_handle
+        if handle is None or self._journal_artifact_log_pending_writes == 0:
+            return
+        try:
+            handle.flush()
+        except OSError:
+            return
+        self._journal_artifact_log_pending_writes = 0
 
     def _finalize_shutdown(self) -> None:
         if self._shutdown_finalized:
             return
         self._shutdown_finalized = True
         if self._journal_artifact_log_handle is not None:
-            self._journal_artifact_log_handle.close()
+            self._flush_journal_artifact_log()
+            try:
+                self._journal_artifact_log_handle.close()
+            except OSError:
+                pass
             self._journal_artifact_log_handle = None
+            self._journal_artifact_log_pending_writes = 0
         self._tts.close()
         self.workers.cancel_group(self, "watchers")
         self.workers.cancel_group(self, "routines")
