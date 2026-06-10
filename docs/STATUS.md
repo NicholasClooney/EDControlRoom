@@ -1,29 +1,24 @@
 # Project Status
 
-_This is the startup handoff document for the repo. Keep it current, compact, and biased toward what the next session needs immediately. Hard limit: 80 lines. If an update would push this file past the limit, move displaced detail to `status-archive.md` or a more specific doc, then trim this file back down._
+_This is the startup handoff document for the repo. Keep it current, compact, and biased toward what the next session needs immediately. Hard limit: 80 lines. If an update would push this file past the limit, move displaced older status/session detail to `docs/status-archive.md` or a more specific doc, then trim this file back down._
 
-Last updated: 2026-06-10 (session 112)
+Last updated: 2026-06-10 (session 113)
 
 ## Current Snapshot
 
 - Plan 0001 (macOS MVP portability) is complete. Shared runtime, config loading, journal parsing, bindings lookup, and synthetic input are in place and live-validated on macOS + CrossOver.
 - Windows now has early real-world validation from CMDR VRYAE, so the platform story is macOS-primary with initial Windows confirmation rather than macOS-only live validation.
 - Current work is follow-up, not a rewrite: journal-driven routines, two-way hauling, CV/capture validation, and operator diagnostics.
-- Stable release `v1.7.3` now packages bounded queued TTS/session growth, buffered Control Room journal-log flushing, injectable Control Room version metadata for tests, and the accompanying config/test/docs coverage for those runtime hardening changes.
+- Stable release `v1.7.3` packages bounded queued TTS/session growth, buffered Control Room journal-log flushing, injectable Control Room version metadata for tests, and the related config/test/docs coverage.
 - `control_room.py` is the primary operator surface. `run_routine.py`, `ship_controls.py`, `diagnostics.py`, `speak.py`, and the journal/bindings helpers remain the main manual-validation tools.
 - `bindings_files.py` now provides a quick operator utility to list `.binds` files from the detected bindings folder, copy them into the repo-local gitignored `backup/bindings/` folder, restore from numbered or interactive backup selections, and apply shipped default presets onto the active custom file after confirmation while saving a safety backup first.
-- Operator-facing usage for `bindings_files.py` now lives in `docs/operators/bindings-files.md`, and `README.md` now calls out that `apply-default` is implemented but not yet live-validated against a real Elite session.
-- README and the operator docs are now being tightened around a smaller "start here" surface so haul behavior, Control Room interrupt semantics, and bindings-file workflows are easier to discover without reading the full status handoff.
-- The current docs pass also removes redundant `--config config.toml` examples from the main operator guides and launcher/probe usage strings; repo-root `config.toml` is now documented as optional and auto-loaded when present.
-- README `Start Here` now leads with `uv sync` plus `uv run python3 control_room.py`, points deeper setup to the quickstart guide, and surfaces Control Room + haul context earlier in the page.
-- `docs/getting-started/quickstart.md` now leads operators from setup straight into Control Room, consolidates the repeated optional-config guidance into one shared note, and limits journal/input probe commands to an issue-driven troubleshooting section with clearer command intent.
-- `docs/operators/control-room.md` now includes the shipped Control Room screenshot, calls out the core keyboard shortcuts (`Ctrl-R`, `Ctrl-C`, `Ctrl-D`) in a dedicated operator-facing section, and trims the previous developer-style notes into shorter usage-oriented behavior notes.
-- README and `docs/operators/control-room.md` now both repeat the key operator constraint that EDAP only works by sending keyboard input into the focused game window, including the reason for the default 5-second command delay and the `instant` toggle for remote-shell use.
-- That focus/delay guidance in README and `docs/operators/control-room.md` is now phrased more directly for operators: fire the command, switch back to Elite during the default 5-second delay, or use `instant` when that pause is not needed.
+- Operator-facing `bindings_files.py` usage now lives in `docs/operators/bindings-files.md`; `README.md` also notes that `apply-default` exists but still lacks live validation against a real Elite session.
+- README, quickstart, and Control Room operator docs were tightened around a smaller "start here" surface: `uv sync` plus `uv run python3 control_room.py` now lead, redundant optional-config examples were removed, shortcut/focus/delay guidance is more explicit, and journal/input probe commands are framed as troubleshooting-only.
 - `AGENTS.md` now explicitly requires future README section edits to keep the hand-written README TOC in sync, because GitHub's automatic Outline menu is not an inline TOC replacement.
 - Windows bindings auto-detection now matches macOS/Linux by selecting the newest `.binds` file by modification time instead of the lexicographically last filename.
 - Web-control UI research is now captured in `docs/research/0005-web-control-ui-options.md`, including the current NiceGUI-first prototype recommendation and the iPhone Safari LAN-HTTP caveat from NiceGUI issue `#5802`.
 - Elite preset-location research is now captured in `docs/research/0006-elite-bindings-preset-locations.md`, confirming that CrossOver user bindings live under `Options/Bindings` while Frontier's built-in presets come from the installed `ControlSchemes` folder, and that controller bindings are stored as logical `Device`/`Key` tokens backed by `DeviceMappings.xml`.
+- Architectural rule: prefer strong non-optional callback types when production callers always provide them; if tests need silence, pass explicit no-op callbacks instead of widening runtime APIs to `None`.
 
 ## Active Capabilities
 
@@ -50,6 +45,7 @@ Last updated: 2026-06-10 (session 112)
 - The config loader now also accepts grouped control subtables such as `[controls.market]` and `[controls.haul.two_way]`, so `config.example.toml` can stay organized while local `config.toml` files only need the specific overrides a commander wants.
 - Windows input injection now builds the full Win32 `INPUT` union shape and surfaces native `GetLastError()` detail on `SendInput` failures.
 - CI runs the unittest suite cross-platform and enforces a 3-second full-suite ceiling; `tools/report_test_timing.py` can rank slow tests locally.
+- Routine callback APIs should stay strongly typed in production-facing code; tests should use explicit no-op progress/announcement callbacks when silence is intentional.
 
 ## Key Caveats
 
@@ -74,7 +70,7 @@ Last updated: 2026-06-10 (session 112)
 ## Handoff Links
 
 - Rolling recent session notes: [session-log.md](session-log.md)
-- Archive for detailed validation notes and displaced status detail: [status-archive.md](status-archive.md)
+- Archive for detailed validation notes and displaced older status/session detail: [status-archive.md](status-archive.md)
 - Maintained plans: [plans/](plans/)
 - Operator workflows: [operators/](operators/)
 - Deeper research/history: [research/](research/) and [devlog/](devlog/)

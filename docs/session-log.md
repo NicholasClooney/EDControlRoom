@@ -4,6 +4,7 @@ _This is the rolling short-form log for recent sessions. Keep entries concise an
 
 ## 2026-06-10
 
+- Compacted `docs/STATUS.md` to restore headroom and recorded the callback-typing rule: keep progress/announcement callbacks non-optional when production callers always pass them, and use explicit no-op callbacks in tests instead of `None`.
 - Reworded the repeated focus/delay guidance in `README.md` and `docs/operators/control-room.md` to be more operator-friendly: fire the command, switch back to Elite during the 5-second delay, or use `instant` when running from a remote shell.
 - Added repeated operator-facing focus/delay guidance to `README.md` and `docs/operators/control-room.md`: EDAP needs the game window focused because it sends keyboard input, Control Room waits 5 seconds before ship-affecting commands by default, and `instant` toggles that delay for remote-shell use.
 - Refined `docs/operators/control-room.md` for operators: added the shipped screenshot, documented the most-used keyboard shortcuts up front, and replaced the old developer-style notes block with shorter user-facing behavior notes.

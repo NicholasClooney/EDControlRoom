@@ -2,6 +2,21 @@
 
 _This file holds the detailed validation history, longer capability notes, refactor follow-ups, and archival handoff detail that no longer belongs in `docs/STATUS.md`._
 
+## Archived On 2026-06-10
+
+The content below was trimmed out of `docs/STATUS.md` when the startup handoff was compacted and reordered to restore line-budget headroom.
+
+### Trimmed Current Snapshot Bullets
+
+- Operator-facing usage for `bindings_files.py` now lives in `docs/operators/bindings-files.md`, and `README.md` now calls out that `apply-default` is implemented but not yet live-validated against a real Elite session.
+- README and the operator docs are now being tightened around a smaller "start here" surface so haul behavior, Control Room interrupt semantics, and bindings-file workflows are easier to discover without reading the full status handoff.
+- The current docs pass also removes redundant `--config config.toml` examples from the main operator guides and launcher/probe usage strings; repo-root `config.toml` is now documented as optional and auto-loaded when present.
+- README `Start Here` now leads with `uv sync` plus `uv run python3 control_room.py`, points deeper setup to the quickstart guide, and surfaces Control Room + haul context earlier in the page.
+- `docs/getting-started/quickstart.md` now leads operators from setup straight into Control Room, consolidates the repeated optional-config guidance into one shared note, and limits journal/input probe commands to an issue-driven troubleshooting section with clearer command intent.
+- `docs/operators/control-room.md` now includes the shipped Control Room screenshot, calls out the core keyboard shortcuts (`Ctrl-R`, `Ctrl-C`, `Ctrl-D`) in a dedicated operator-facing section, and trims the previous developer-style notes into shorter usage-oriented behavior notes.
+- README and `docs/operators/control-room.md` now both repeat the key operator constraint that EDAP only works by sending keyboard input into the focused game window, including the reason for the default 5-second command delay and the `instant` toggle for remote-shell use.
+- That focus/delay guidance in README and `docs/operators/control-room.md` is now phrased more directly for operators: fire the command, switch back to Elite during the default 5-second delay, or use `instant` when that pause is not needed.
+
 ## Archive Policy
 
 - `docs/STATUS.md` is the compact startup handoff.
