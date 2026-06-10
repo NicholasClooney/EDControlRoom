@@ -2,7 +2,7 @@
 
 _This is the startup handoff document for the repo. Keep it current, compact, and biased toward what the next session needs immediately. Hard limit: 80 lines. If an update would push this file past the limit, move displaced older status/session detail to `docs/status-archive.md` or a more specific doc, then trim this file back down._
 
-Last updated: 2026-06-10 (session 120)
+Last updated: 2026-06-10 (session 121)
 
 ## Current Snapshot
 
@@ -17,6 +17,7 @@ Last updated: 2026-06-10 (session 120)
 
 ## Active Capabilities
 
+- Market trade routines now re-center the commodity quantity dialog with `UI_Left x5` then `UI_Up x5`, giving buy/sell flows a wider safety margin when the commodity view opens off-focus.
 - Journal/runtime: journal tailing, bindings lookup, runtime construction, and shared platform seams are working.
 - Control Room: live Textual UI with ship status, market panel, haul stats, replay/history, persisted state, routine dispatch, queued cross-platform TTS announcements, and a repo-local `artifacts/control-room.log` journal-event mirror for sessions where the standalone watcher is not running.
 - Control Room's ActivityLog now honors `control_room.activity_log_max_lines` at widget creation time, and the app layer also accepts an explicit injected override so retention can be pinned in tests or alternate launch surfaces without touching config loading.
@@ -35,6 +36,7 @@ Last updated: 2026-06-10 (session 120)
 
 ## Current Next Steps
 
+1. Bring the full `uv run python3 -m unittest discover -s tests` runtime back under the `0.2s` target; the latest passing run was `354 tests in 0.275s`, and `tools/report_test_timing.py` did not show a single dominant hotspot.
 1. Live-validate the updated two-way haul startup/resume path and haul telemetry, especially station-2 starts, station-1 run finalization, and `Market.json` fallback behavior.
 2. Live-test haul with auto launch/landing disabled where possible, especially whether routing still holds once `Undocked` fires and whether `Music` `NoTrack` needs a fallback clear-of-station signal.
 3. Expand Windows validation beyond the current community live check, including more `diagnostics.py --send-test-key` runs and capture of any remaining `WinError` detail.
