@@ -2,10 +2,11 @@
 
 _This is the startup handoff document for the repo. Keep it current, compact, and biased toward what the next session needs immediately. Hard limit: 80 lines. If an update would push this file past the limit, move displaced older status/session detail to `docs/status-archive.md` or a more specific doc, then trim this file back down._
 
-Last updated: 2026-06-10 (session 113)
+Last updated: 2026-06-10 (session 115)
 
 ## Current Snapshot
 
+- Callback API policy is now narrower than the earlier handoff note: shared no-op callbacks are allowed in tests, but production-facing routine APIs must require explicit progress/announcement callbacks and must not default to no-op helpers.
 - Plan 0001 (macOS MVP portability) is complete. Shared runtime, config loading, journal parsing, bindings lookup, and synthetic input are in place and live-validated on macOS + CrossOver.
 - Windows now has early real-world validation from CMDR VRYAE, so the platform story is macOS-primary with initial Windows confirmation rather than macOS-only live validation.
 - Current work is follow-up, not a rewrite: journal-driven routines, two-way hauling, CV/capture validation, and operator diagnostics.
@@ -18,10 +19,12 @@ Last updated: 2026-06-10 (session 113)
 - Windows bindings auto-detection now matches macOS/Linux by selecting the newest `.binds` file by modification time instead of the lexicographically last filename.
 - Web-control UI research is now captured in `docs/research/0005-web-control-ui-options.md`, including the current NiceGUI-first prototype recommendation and the iPhone Safari LAN-HTTP caveat from NiceGUI issue `#5802`.
 - Elite preset-location research is now captured in `docs/research/0006-elite-bindings-preset-locations.md`, confirming that CrossOver user bindings live under `Options/Bindings` while Frontier's built-in presets come from the installed `ControlSchemes` folder, and that controller bindings are stored as logical `Device`/`Key` tokens backed by `DeviceMappings.xml`.
-- Architectural rule: prefer strong non-optional callback types when production callers always provide them; if tests need silence, pass explicit no-op callbacks instead of widening runtime APIs to `None`.
+- Architectural rule: prefer strong non-optional callback types when production callers always provide them; if tests need silence, pass explicit no-op callbacks instead of widening runtime APIs to `None`, and do not put no-op defaults on production routine APIs.
 
 ## Active Capabilities
 
+- Routine callbacks: production-facing routine entrypoints now require explicit progress/announcement callbacks with no default no-op parameters, while tests may use shared no-op wrappers/helpers to keep silent call sites concise.
+- Routine callbacks: progress/announcement APIs now use shared no-op helpers plus concrete non-optional callback types in the routine layer, so production entrypoints keep strong callback contracts while silent tests route through explicit no-op adapters instead of `None`.
 - Journal/runtime: journal tailing, bindings lookup, runtime construction, and shared platform seams are working.
 - Control Room: live Textual UI with ship status, market panel, haul stats, replay/history, persisted state, routine dispatch, queued cross-platform TTS announcements, and a repo-local `artifacts/control-room.log` journal-event mirror for sessions where the standalone watcher is not running.
 - Control Room's ActivityLog now honors `control_room.activity_log_max_lines` at widget creation time, and the app layer also accepts an explicit injected override so retention can be pinned in tests or alternate launch surfaces without touching config loading.

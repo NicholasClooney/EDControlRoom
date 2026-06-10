@@ -9,21 +9,70 @@ from edap.actions import ActionDispatchResult
 from edap.binding_lookup import NormalizedBinding
 from edap.routines import (
     RoutineResult,
-    auto_zero_throttle_on_arrival,
-    dock,
+    auto_zero_throttle_on_arrival as _auto_zero_throttle_on_arrival,
+    dock as _dock,
     docking_request_sequence,
-    escape_mass_lock,
-    jump,
-    market_buy,
-    market_sell,
-    set_gal_map_destination,
+    escape_mass_lock as _escape_mass_lock,
+    jump as _jump,
+    market_buy as _market_buy,
+    market_sell as _market_sell,
+    set_gal_map_destination as _set_gal_map_destination,
     set_speed_zero_then_wait,
-    station_refuel_menu,
+    station_refuel_menu as _station_refuel_menu,
     station_refuel_menu_sequence,
-    undock,
+    undock as _undock,
 )
+from edap.routines._callbacks import noop_announce, noop_progress
 from edap.tts import AnnouncementId
 from tests.fakes import FakeShipControls, FakeWatcher
+
+
+def auto_zero_throttle_on_arrival(*args, **kwargs):
+    kwargs.setdefault("progress_fn", noop_progress)
+    return _auto_zero_throttle_on_arrival(*args, **kwargs)
+
+
+def jump(*args, **kwargs):
+    kwargs.setdefault("progress_fn", noop_progress)
+    return _jump(*args, **kwargs)
+
+
+def station_refuel_menu(*args, **kwargs):
+    kwargs.setdefault("progress_fn", noop_progress)
+    return _station_refuel_menu(*args, **kwargs)
+
+
+def dock(*args, **kwargs):
+    kwargs.setdefault("progress_fn", noop_progress)
+    kwargs.setdefault("announce_fn", noop_announce)
+    return _dock(*args, **kwargs)
+
+
+def undock(*args, **kwargs):
+    kwargs.setdefault("progress_fn", noop_progress)
+    return _undock(*args, **kwargs)
+
+
+def market_buy(*args, **kwargs):
+    kwargs.setdefault("progress_fn", noop_progress)
+    kwargs.setdefault("announce_fn", noop_announce)
+    return _market_buy(*args, **kwargs)
+
+
+def market_sell(*args, **kwargs):
+    kwargs.setdefault("progress_fn", noop_progress)
+    kwargs.setdefault("announce_fn", noop_announce)
+    return _market_sell(*args, **kwargs)
+
+
+def escape_mass_lock(*args, **kwargs):
+    kwargs.setdefault("progress_fn", noop_progress)
+    return _escape_mass_lock(*args, **kwargs)
+
+
+def set_gal_map_destination(*args, **kwargs):
+    kwargs.setdefault("progress_fn", noop_progress)
+    return _set_gal_map_destination(*args, **kwargs)
 
 
 class RoutinesTests(unittest.TestCase):

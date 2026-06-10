@@ -14,6 +14,7 @@ from edap.routines._base import (
     SupportsPollEvents,
     _is_in_supercruise_event,
 )
+from edap.routines._callbacks import AnnouncementCallback, ProgressCallback
 from edap.routines.docking import _undock_until_undocked, _wait_for_clear_of_station, dock, station_refuel_menu
 from edap.routines.escape import escape_mass_lock
 from edap.routines.galaxy_map import set_gal_map_destination
@@ -248,17 +249,15 @@ class _HaulCtx:
     market_critical_level_multiplier: float
     time_fn: Callable[[], float]
     sleeper: Callable[[float], None]
-    progress_fn: Callable[[str], None] | None
-    announce_fn: Callable[..., None] | None
+    progress_fn: ProgressCallback
+    announce_fn: AnnouncementCallback
 
 
 def _engage_hyperspace_after_escape(ctx: _HaulCtx) -> None:
     if not ctx.auto_hyperspace_engage:
         return
-    if ctx.progress_fn is not None:
-        ctx.progress_fn('Mass lock cleared - engaging hyperspace via raw key "k"...')
-    if ctx.announce_fn is not None:
-        ctx.announce_fn(AnnouncementId.STATION_CLEARED)
+    ctx.progress_fn('Mass lock cleared - engaging hyperspace via raw key "k"...')
+    ctx.announce_fn(AnnouncementId.STATION_CLEARED)
     ctx.controls.tap_key("k")
 
 
@@ -266,13 +265,11 @@ def _open_navigation_panel_after_arrival(ctx: _HaulCtx) -> None:
     if not ctx.open_nav_panel_after_hyperspace_arrival:
         return
     if ctx.nav_panel_open_delay_s > 0:
-        if ctx.progress_fn is not None:
-            ctx.progress_fn(f"Waiting {ctx.nav_panel_open_delay_s:.1f}s before opening navigation panel...")
+        ctx.progress_fn(f"Waiting {ctx.nav_panel_open_delay_s:.1f}s before opening navigation panel...")
         ctx.sleeper(ctx.nav_panel_open_delay_s)
-    if ctx.progress_fn is not None:
-        ctx.progress_fn("Hyperspace complete - opening left panel for navigation...")
+    ctx.progress_fn("Hyperspace complete - opening left panel for navigation...")
     dispatch = ctx.controls.focus_left_panel()
-    if dispatch.status != "ok" and ctx.progress_fn is not None:
+    if dispatch.status != "ok":
         ctx.progress_fn(f"Warning: could not open left panel ({dispatch.reason or dispatch.status}); continuing")
 
 
@@ -298,7 +295,7 @@ def _detect_start_phase(
     *,
     station_1: StationLeg,
     station_2: StationLeg,
-    progress_fn: Callable[[str], None] | None = None,
+    progress_fn: ProgressCallback,
 ) -> Phase:
     ship_status = "unknown"
     current_station = ""
@@ -344,13 +341,12 @@ def _detect_start_phase(
         if current_station:
             ship_status = "docked"
 
-    if progress_fn is not None:
-        progress_fn(
-            "Two-way phase detect: "
-            f"status={ship_status}, station={current_station!r}, system={current_system!r}, "
-            f"has_station_1_cargo={has_station_1_cargo}, has_station_2_cargo={has_station_2_cargo}, "
-            f"full_station_1_cargo={has_full_station_1_cargo}, full_station_2_cargo={has_full_station_2_cargo}"
-        )
+    progress_fn(
+        "Two-way phase detect: "
+        f"status={ship_status}, station={current_station!r}, system={current_system!r}, "
+        f"has_station_1_cargo={has_station_1_cargo}, has_station_2_cargo={has_station_2_cargo}, "
+        f"full_station_1_cargo={has_full_station_1_cargo}, full_station_2_cargo={has_full_station_2_cargo}"
+    )
 
     if ship_status == "unknown":
         return Phase.AT_STATION_1_SELL
@@ -411,8 +407,7 @@ def _run_market_sell(
     next_phase: Phase,
 ) -> tuple[RoutineResult, Phase]:
     if not _sellable_cargo(_read_cargo_json(ctx.journal_dir)):
-        if ctx.progress_fn is not None:
-            ctx.progress_fn(f"Cargo hold empty - skipping {leg.label} sell.")
+        ctx.progress_fn(f"Cargo hold empty - skipping {leg.label} sell.")
         return (
             RoutineResult(
                 action="market_sell",
@@ -424,10 +419,8 @@ def _run_market_sell(
             ),
             next_phase,
         )
-    if ctx.progress_fn is not None:
-        ctx.progress_fn(f"Selling {leg.sell_commodity} at {leg.label} (MAX)...")
-    if ctx.announce_fn is not None:
-        ctx.announce_fn(AnnouncementId.SELLING_CARGO, commodity_name=leg.sell_commodity)
+    ctx.progress_fn(f"Selling {leg.sell_commodity} at {leg.label} (MAX)...")
+    ctx.announce_fn(AnnouncementId.SELLING_CARGO, commodity_name=leg.sell_commodity)
     result = market_sell(
         ctx.controls,
         ctx.watcher,
@@ -463,10 +456,8 @@ def _run_market_buy(
     leg: StationLeg,
     next_phase: Phase,
 ) -> tuple[RoutineResult, Phase]:
-    if ctx.progress_fn is not None:
-        ctx.progress_fn(f"Buying {leg.buy_commodity} at {leg.label} (MAX)...")
-    if ctx.announce_fn is not None:
-        ctx.announce_fn(AnnouncementId.BUYING_CARGO, commodity_name=leg.buy_commodity)
+    ctx.progress_fn(f"Buying {leg.buy_commodity} at {leg.label} (MAX)...")
+    ctx.announce_fn(AnnouncementId.BUYING_CARGO, commodity_name=leg.buy_commodity)
     result = market_buy(
         ctx.controls,
         ctx.watcher,
@@ -512,8 +503,7 @@ def _undock_and_route(
     destination_system: str,
     next_phase: Phase,
 ) -> tuple[RoutineResult, Phase]:
-    if ctx.progress_fn is not None:
-        ctx.progress_fn(f"Undocking from {current_leg.label}...")
+    ctx.progress_fn(f"Undocking from {current_leg.label}...")
     result, pending_events = _undock_until_undocked(
         ctx.controls,
         ctx.watcher,
@@ -527,10 +517,8 @@ def _undock_and_route(
         return result, next_phase
 
     if destination_system:
-        if ctx.progress_fn is not None:
-            ctx.progress_fn(f"Setting galaxy map destination: {destination_system}...")
-        if ctx.announce_fn is not None:
-            ctx.announce_fn(AnnouncementId.DESTINATION_SET, system_name=destination_system)
+        ctx.progress_fn(f"Setting galaxy map destination: {destination_system}...")
+        ctx.announce_fn(AnnouncementId.DESTINATION_SET, system_name=destination_system)
         set_gal_map_destination(
             ctx.controls,
             destination=destination_system,
@@ -550,13 +538,11 @@ def _undock_and_route(
         pending_events=pending_events,
     )
     if clear_result.dispatch.status != "ok":
-        if ctx.progress_fn is not None:
-            ctx.progress_fn(
-                "Error: "
-                f"{clear_result.dispatch.reason}; haul aborted. You can resume haul with replay / ctrl-r."
-            )
-        if ctx.announce_fn is not None:
-            ctx.announce_fn(AnnouncementId.HAUL_ABORTED)
+        ctx.progress_fn(
+            "Error: "
+            f"{clear_result.dispatch.reason}; haul aborted. You can resume haul with replay / ctrl-r."
+        )
+        ctx.announce_fn(AnnouncementId.HAUL_ABORTED)
         return clear_result, next_phase
     escape_mass_lock(
         ctx.controls,
@@ -580,13 +566,10 @@ def _depart_system(
     destination_system: str,
     next_phase: Phase,
 ) -> tuple[RoutineResult | None, Phase]:
-    if ctx.progress_fn is not None:
-        ctx.progress_fn(f"Departing {current_leg.label} system in normal space...")
+    ctx.progress_fn(f"Departing {current_leg.label} system in normal space...")
     if destination_system:
-        if ctx.progress_fn is not None:
-            ctx.progress_fn(f"Setting galaxy map destination: {destination_system}...")
-        if ctx.announce_fn is not None:
-            ctx.announce_fn(AnnouncementId.DESTINATION_SET, system_name=destination_system)
+        ctx.progress_fn(f"Setting galaxy map destination: {destination_system}...")
+        ctx.announce_fn(AnnouncementId.DESTINATION_SET, system_name=destination_system)
         set_gal_map_destination(
             ctx.controls,
             destination=destination_system,
@@ -617,15 +600,14 @@ def _run_transit(
     recent_events = _read_latest_journal_events(ctx.journal_dir)
     resume_state = _detect_transit_resume_state(recent_events, destination_leg)
     pending_events: list[dict[str, object]] = []
-    if ctx.progress_fn is not None:
-        if resume_state == _TransitResumeState.AWAITING_DOCKED:
-            ctx.progress_fn(f"Docking already in progress for {destination_leg.label} - waiting for Docked.")
-        elif resume_state == _TransitResumeState.ARRIVED_IN_DESTINATION_SYSTEM:
-            ctx.progress_fn(f"Already in supercruise in {destination_leg.label} system - opening navigation panel.")
-        elif resume_state == _TransitResumeState.POST_DROP_NEAR_STATION:
-            ctx.progress_fn(f"Already in normal space near {destination_leg.label} - skipping drop wait.")
-        else:
-            ctx.progress_fn(f"Waiting for hyperspace arrival in {destination_leg.label} system...")
+    if resume_state == _TransitResumeState.AWAITING_DOCKED:
+        ctx.progress_fn(f"Docking already in progress for {destination_leg.label} - waiting for Docked.")
+    elif resume_state == _TransitResumeState.ARRIVED_IN_DESTINATION_SYSTEM:
+        ctx.progress_fn(f"Already in supercruise in {destination_leg.label} system - opening navigation panel.")
+    elif resume_state == _TransitResumeState.POST_DROP_NEAR_STATION:
+        ctx.progress_fn(f"Already in normal space near {destination_leg.label} - skipping drop wait.")
+    else:
+        ctx.progress_fn(f"Waiting for hyperspace arrival in {destination_leg.label} system...")
 
     if resume_state == _TransitResumeState.AWAITING_DOCKED:
         return (
@@ -648,11 +630,9 @@ def _run_transit(
             time_fn=ctx.time_fn,
         )
         if not arrival_observed:
-            if ctx.progress_fn is not None:
-                ctx.progress_fn("Warning: hyperspace arrival event not observed; continuing toward station.")
+            ctx.progress_fn("Warning: hyperspace arrival event not observed; continuing toward station.")
         else:
-            if ctx.progress_fn is not None:
-                ctx.progress_fn("Arrived in destination system")
+            ctx.progress_fn("Arrived in destination system")
             _open_navigation_panel_after_arrival(ctx)
     elif resume_state == _TransitResumeState.ARRIVED_IN_DESTINATION_SYSTEM:
         _open_navigation_panel_after_arrival(ctx)
@@ -789,8 +769,8 @@ def haul_loop_two_way(
     market_critical_level_multiplier: float = 10.0,
     time_fn: Callable[[], float] = monotonic,
     sleeper: Callable[[float], None] = sleep,
-    progress_fn: Callable[[str], None] | None = None,
-    announce_fn: Callable[..., None] | None = None,
+    progress_fn: ProgressCallback,
+    announce_fn: AnnouncementCallback,
     stop_requested_fn: Callable[[], bool] | None = None,
 ) -> RoutineResult:
     if iterations < 0:
@@ -855,7 +835,7 @@ def haul_loop_two_way(
         station_2=ctx.station_2,
         progress_fn=progress_fn,
     )
-    if progress_fn is not None and resolved_start_phase != Phase.AT_STATION_1_SELL:
+    if resolved_start_phase != Phase.AT_STATION_1_SELL:
         progress_fn(f"Resuming from phase: {resolved_start_phase.name}")
 
     last_result: RoutineResult | None = None
@@ -863,16 +843,14 @@ def haul_loop_two_way(
     first_cycle = True
     while iterations == 0 or iteration < iterations:
         iteration += 1
-        if progress_fn is not None:
-            iter_label = f" of {iterations}" if iterations > 0 else ""
-            progress_fn(f"=== Two-way haul iteration {iteration}{iter_label} ===")
+        iter_label = f" of {iterations}" if iterations > 0 else ""
+        progress_fn(f"=== Two-way haul iteration {iteration}{iter_label} ===")
         phase = resolved_start_phase if first_cycle else Phase.AT_STATION_1_SELL
         first_cycle = False
 
         while True:
             if _should_stop_before_station_1_buy(phase, stop_requested_fn):
-                if progress_fn is not None:
-                    progress_fn("Stop requested at station 1; halting before station 1 buy.")
+                progress_fn("Stop requested at station 1; halting before station 1 buy.")
                 return last_result or _stopped_routine_result("stopped before station 1 buy")
             result, next_phase = _PHASE_RUNNERS[phase](ctx)
             if result is not None:
@@ -884,15 +862,13 @@ def haul_loop_two_way(
                 and stop_requested_fn is not None
                 and stop_requested_fn()
             ):
-                if progress_fn is not None:
-                    progress_fn("Stop requested at cycle boundary; halting before station 1 buy.")
+                progress_fn("Stop requested at cycle boundary; halting before station 1 buy.")
                 return last_result or _stopped_routine_result("stopped at station 1 cycle boundary")
             if phase == Phase.TRANSIT_TO_STATION_1:
                 break
             phase = next_phase
 
-        if progress_fn is not None:
-            progress_fn(f"Iteration {iteration} complete.")
+        progress_fn(f"Iteration {iteration} complete.")
 
     assert last_result is not None
     return last_result

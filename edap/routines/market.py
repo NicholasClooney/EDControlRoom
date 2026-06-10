@@ -12,6 +12,7 @@ from edap.routines._base import (
     SupportsPollEvents,
     _wait_for_event_with_pending,
 )
+from edap.routines._callbacks import AnnouncementCallback, ProgressCallback
 from edap.tts import AnnouncementId
 
 
@@ -270,8 +271,8 @@ def _report_market_level(
     journal_dir: Path,
     side: str,
     critical_level_multiplier: float,
-    progress_fn: Callable[[str], None] | None,
-    announce_fn: Callable[..., None] | None,
+    progress_fn: ProgressCallback,
+    announce_fn: AnnouncementCallback,
 ) -> None:
     units_key = "Stock" if side == "buy" else "Demand"
     market_side = "supply" if side == "buy" else "demand"
@@ -279,34 +280,30 @@ def _report_market_level(
     commodity_name = _market_localised(item, "Name") or str(item.get("Name", ""))
     cargo_capacity = _read_last_cargo_capacity(journal_dir)
     if cargo_capacity is None or cargo_capacity <= 0:
-        if progress_fn is not None:
-            progress_fn(
-                f"Station {market_side} for {commodity_name} is {units} units; "
-                "cargo capacity unavailable, skipping low-level threshold check."
-            )
+        progress_fn(
+            f"Station {market_side} for {commodity_name} is {units} units; "
+            "cargo capacity unavailable, skipping low-level threshold check."
+        )
         return
 
     low_threshold = int(cargo_capacity * critical_level_multiplier)
     if units < low_threshold:
-        if progress_fn is not None:
-            progress_fn(
-                f"Warning: Station {market_side} for {commodity_name} is low at "
-                f"{units} units (critical below {low_threshold})."
-            )
-        if announce_fn is not None:
-            announce_fn(
-                AnnouncementId.MARKET_LEVEL_LOW,
-                market_side=market_side,
-                commodity_name=commodity_name,
-                units=units,
-            )
-        return
-
-    if progress_fn is not None:
         progress_fn(
-            f"Station {market_side} for {commodity_name} looks normal at "
+            f"Warning: Station {market_side} for {commodity_name} is low at "
             f"{units} units (critical below {low_threshold})."
         )
+        announce_fn(
+            AnnouncementId.MARKET_LEVEL_LOW,
+            market_side=market_side,
+            commodity_name=commodity_name,
+            units=units,
+        )
+        return
+
+    progress_fn(
+        f"Station {market_side} for {commodity_name} looks normal at "
+        f"{units} units (critical below {low_threshold})."
+    )
 
 
 def _market_error(action: str, reason: str) -> RoutineResult:
@@ -321,11 +318,10 @@ def _market_ui_reset(
     *,
     step_delay_s: float,
     sleeper: Callable[[float], None],
-    progress_fn: Callable[[str], None] | None,
+    progress_fn: ProgressCallback,
 ) -> ActionDispatchResult:
-    if progress_fn is not None:
-        progress_fn("Resetting UI state...")
-        progress_fn("  UI_Back x4 (reset to station menu)")
+    progress_fn("Resetting UI state...")
+    progress_fn("  UI_Back x4 (reset to station menu)")
     dispatch = ActionDispatchResult(action="UI_Back", status="ok")
     for _ in range(4):
         dispatch = controls.ui_back()
@@ -341,10 +337,9 @@ def _market_back_out_to_station_menu(
     *,
     step_delay_s: float,
     sleeper: Callable[[float], None],
-    progress_fn: Callable[[str], None] | None,
+    progress_fn: ProgressCallback,
 ) -> ActionDispatchResult:
-    if progress_fn is not None:
-        progress_fn("  UI_Back x4 (return to station menu)")
+    progress_fn("  UI_Back x4 (return to station menu)")
     dispatch = ActionDispatchResult(action="UI_Back", status="ok")
     for _ in range(4):
         dispatch = controls.ui_back()
@@ -360,11 +355,10 @@ def _market_reset_trade_dialog_focus(
     *,
     nav_delay_s: float,
     sleeper: Callable[[float], None],
-    progress_fn: Callable[[str], None] | None,
+    progress_fn: ProgressCallback,
 ) -> ActionDispatchResult:
-    if progress_fn is not None:
-        progress_fn("Resetting trade dialog focus to quantity controls...")
-        progress_fn("  UI_Left x3 (bias to left edge of dialog)")
+    progress_fn("Resetting trade dialog focus to quantity controls...")
+    progress_fn("  UI_Left x3 (bias to left edge of dialog)")
     dispatch = ActionDispatchResult(action="UI_Left", status="ok")
     for _ in range(3):
         dispatch = controls.ui_left()
@@ -373,8 +367,7 @@ def _market_reset_trade_dialog_focus(
         if nav_delay_s > 0:
             sleeper(nav_delay_s)
 
-    if progress_fn is not None:
-        progress_fn("  UI_Up x3 (bias to quantity row)")
+    progress_fn("  UI_Up x3 (bias to quantity row)")
     dispatch = ActionDispatchResult(action="UI_Up", status="ok")
     for _ in range(3):
         dispatch = controls.ui_up()
@@ -401,8 +394,8 @@ def market_buy(
     max_attempts: int = 3,
     time_fn: Callable[[], float] = monotonic,
     sleeper: Callable[[float], None] = sleep,
-    progress_fn: Callable[[str], None] | None = None,
-    announce_fn: Callable[..., None] | None = None,
+    progress_fn: ProgressCallback,
+    announce_fn: AnnouncementCallback,
     critical_level_multiplier: float = 10.0,
 ) -> RoutineResult:
     return _market_trade(
@@ -433,8 +426,8 @@ def market_sell(
     max_attempts: int = 3,
     time_fn: Callable[[], float] = monotonic,
     sleeper: Callable[[float], None] = sleep,
-    progress_fn: Callable[[str], None] | None = None,
-    announce_fn: Callable[..., None] | None = None,
+    progress_fn: ProgressCallback,
+    announce_fn: AnnouncementCallback,
     critical_level_multiplier: float = 10.0,
 ) -> RoutineResult:
     return _market_trade(
@@ -466,8 +459,8 @@ def _market_trade(
     max_attempts: int,
     time_fn: Callable[[], float],
     sleeper: Callable[[float], None],
-    progress_fn: Callable[[str], None] | None,
-    announce_fn: Callable[..., None] | None,
+    progress_fn: ProgressCallback,
+    announce_fn: AnnouncementCallback,
     critical_level_multiplier: float,
 ) -> RoutineResult:
     event_type = "MarketBuy" if side == "buy" else "MarketSell"
@@ -477,11 +470,10 @@ def _market_trade(
     last_failure: RoutineResult | None = None
     for attempt in range(1, max_attempts + 1):
         if attempt > 1:
-            if progress_fn is not None:
-                progress_fn(
-                    f"Retrying {side} of '{target}' "
-                    f"(attempt {attempt}/{max_attempts})..."
-                )
+            progress_fn(
+                f"Retrying {side} of '{target}' "
+                f"(attempt {attempt}/{max_attempts})..."
+            )
             # Bail out of any lingering dialog/list back to station services
             for _ in range(4):
                 controls.ui_back()
@@ -537,8 +529,8 @@ def _market_trade_attempt(
     skip_station_check: bool,
     time_fn: Callable[[], float],
     sleeper: Callable[[float], None],
-    progress_fn: Callable[[str], None] | None,
-    announce_fn: Callable[..., None] | None,
+    progress_fn: ProgressCallback,
+    announce_fn: AnnouncementCallback,
     critical_level_multiplier: float,
 ) -> RoutineResult:
     if side == "sell":
@@ -556,11 +548,9 @@ def _market_trade_attempt(
         return RoutineResult(action="UI_Back", dispatch=dispatch, details={"phase": "reset"})
 
     # Navigate to commodities market first -- the game writes Market.json when the screen opens
-    if progress_fn is not None:
-        progress_fn("Navigating to commodities market...")
+    progress_fn("Navigating to commodities market...")
 
-    if progress_fn is not None:
-        progress_fn("  UI_Select (enter station services)")
+    progress_fn("  UI_Select (enter station services)")
     dispatch = controls.ui_select()
     if dispatch.status != "ok":
         return RoutineResult(action=dispatch.action, dispatch=dispatch, details={"phase": "navigate_to_market"})
@@ -571,8 +561,7 @@ def _market_trade_attempt(
         (controls.ui_down, "UI_Down (to commodities market)", nav_delay_s),
         (controls.ui_select, "UI_Select (open market)", step_delay_s),
     ]:
-        if progress_fn is not None:
-            progress_fn(f"  {label}")
+        progress_fn(f"  {label}")
         dispatch = fn()
         if dispatch.status != "ok":
             return RoutineResult(action=dispatch.action, dispatch=dispatch, details={"phase": "navigate_to_market"})
@@ -589,8 +578,7 @@ def _market_trade_attempt(
             return _market_error(event_type, "Market.json not found")
         with market_path.open() as fh:
             data = json.load(fh)
-        if progress_fn is not None:
-            progress_fn("Station check skipped")
+        progress_fn("Station check skipped")
     else:
         _RETRIES = 3
         _RETRY_DELAY_S = 10.0
@@ -622,9 +610,8 @@ def _market_trade_attempt(
             if fail_reason is None:
                 break
             if attempt < _RETRIES:
-                if progress_fn is not None:
-                    progress_fn(f"Station check failed (attempt {attempt}/{_RETRIES}): {fail_reason}")
-                    progress_fn(f"  Retrying in {_RETRY_DELAY_S:.0f}s...")
+                progress_fn(f"Station check failed (attempt {attempt}/{_RETRIES}): {fail_reason}")
+                progress_fn(f"  Retrying in {_RETRY_DELAY_S:.0f}s...")
                 sleeper(_RETRY_DELAY_S)
             else:
                 return _market_error(event_type, f"Station check failed after {_RETRIES} attempts: {fail_reason}")
@@ -644,8 +631,7 @@ def _market_trade_attempt(
     if item is None:
         return _market_error(event_type, f"'{target}' matched navigation list but not market item data")
 
-    if progress_fn is not None:
-        progress_fn(f"Target '{target}' at position {item_index} in {side} list ({len(sorted_items)} items)")
+    progress_fn(f"Target '{target}' at position {item_index} in {side} list ({len(sorted_items)} items)")
     _report_market_level(
         item,
         journal_dir=market_path.parent,
@@ -657,16 +643,14 @@ def _market_trade_attempt(
 
     # For sell: navigate sidebar from BUY to SELL tab before entering the list
     if side == "sell":
-        if progress_fn is not None:
-            progress_fn("  UI_Down (BUY -> SELL tab)")
+        progress_fn("  UI_Down (BUY -> SELL tab)")
         dispatch = controls.ui_down()
         if dispatch.status != "ok":
             return RoutineResult(action="UI_Down", dispatch=dispatch, details={"phase": "navigate_to_sell_tab"})
         if nav_delay_s > 0:
             sleeper(nav_delay_s)
 
-        if progress_fn is not None:
-            progress_fn("  UI_Select (enter SELL tab)")
+        progress_fn("  UI_Select (enter SELL tab)")
         dispatch = controls.ui_select()
         if dispatch.status != "ok":
             return RoutineResult(action="UI_Select", dispatch=dispatch, details={"phase": "navigate_to_sell_tab"})
@@ -674,8 +658,7 @@ def _market_trade_attempt(
             sleeper(step_delay_s)
 
     # Enter the commodity list (cursor lands on the first item)
-    if progress_fn is not None:
-        progress_fn("  UI_Right (enter commodity list)")
+    progress_fn("  UI_Right (enter commodity list)")
     dispatch = controls.ui_right()
     if dispatch.status != "ok":
         return RoutineResult(action="UI_Right", dispatch=dispatch, details={"phase": "enter_list"})
@@ -684,8 +667,7 @@ def _market_trade_attempt(
 
     # Navigate down to target item (category headers are non-navigable separators)
     if item_index > 0:
-        if progress_fn is not None:
-            progress_fn(f"  UI_Down x{item_index} (navigate to '{target}')")
+        progress_fn(f"  UI_Down x{item_index} (navigate to '{target}')")
         for _ in range(item_index):
             dispatch = controls.ui_down()
             if dispatch.status != "ok":
@@ -694,8 +676,7 @@ def _market_trade_attempt(
                 sleeper(nav_delay_s)
 
     # Open the trade dialog for this item
-    if progress_fn is not None:
-        progress_fn(f"  UI_Select (open '{target}' dialog)")
+    progress_fn(f"  UI_Select (open '{target}' dialog)")
     dispatch = controls.ui_select()
     if dispatch.status != "ok":
         return RoutineResult(action="UI_Select", dispatch=dispatch, details={"phase": "select_item"})
@@ -725,24 +706,22 @@ def _market_trade_attempt(
             buy_limit, buy_limit_reason = _read_buy_quantity_limit(market_path.parent, item)
             if buy_limit is not None:
                 hold_s = min(max_hold_s, buy_limit * buy_hold_seconds_per_ton)
-            if progress_fn is not None:
-                if buy_limit is None:
-                    progress_fn(
-                        f"  UI_Right hold {hold_s:.2f}s "
-                        f"(fill to max; {buy_limit_reason}, using cap)"
-                    )
-                else:
-                    progress_fn(
-                        f"  UI_Right hold {hold_s:.2f}s "
-                        f"(fill to max {buy_limit_reason} at {buy_hold_seconds_per_ton:.4f}s/t)"
-                    )
+            if buy_limit is None:
+                progress_fn(
+                    f"  UI_Right hold {hold_s:.2f}s "
+                    f"(fill to max; {buy_limit_reason}, using cap)"
+                )
+            else:
+                progress_fn(
+                    f"  UI_Right hold {hold_s:.2f}s "
+                    f"(fill to max {buy_limit_reason} at {buy_hold_seconds_per_ton:.4f}s/t)"
+                )
             qty_dispatch = controls.ui_right(hold_s=hold_s)
             if qty_dispatch.status != "ok":
                 return RoutineResult(action="UI_Right", dispatch=qty_dispatch, details={"phase": "set_quantity"})
         else:
             qty = int(amount)
-            if progress_fn is not None:
-                progress_fn(f"  UI_Right x{qty} (set quantity to {qty})")
+            progress_fn(f"  UI_Right x{qty} (set quantity to {qty})")
             qty_dispatch = None
             for _ in range(qty):
                 qty_dispatch = controls.ui_right()
@@ -757,16 +736,15 @@ def _market_trade_attempt(
         hold_s = max_hold_s
         if sell_qty is not None:
             hold_s = min(max_hold_s, sell_qty * buy_hold_seconds_per_ton)
-        if progress_fn is not None:
-            if sell_qty is None:
-                progress_fn(
-                    f"  UI_Right hold {hold_s:.2f}s (restore sell quantity; cargo count unavailable, using cap)"
-                )
-            else:
-                progress_fn(
-                    f"  UI_Right hold {hold_s:.2f}s "
-                    f"(restore sell quantity to {sell_qty}t at {buy_hold_seconds_per_ton:.4f}s/t)"
-                )
+        if sell_qty is None:
+            progress_fn(
+                f"  UI_Right hold {hold_s:.2f}s (restore sell quantity; cargo count unavailable, using cap)"
+            )
+        else:
+            progress_fn(
+                f"  UI_Right hold {hold_s:.2f}s "
+                f"(restore sell quantity to {sell_qty}t at {buy_hold_seconds_per_ton:.4f}s/t)"
+            )
         qty_dispatch = controls.ui_right(hold_s=hold_s)
         if qty_dispatch.status != "ok":
             return RoutineResult(action="UI_Right", dispatch=qty_dispatch, details={"phase": "set_quantity"})
@@ -775,23 +753,20 @@ def _market_trade_attempt(
 
     # Confirm trade
     confirm_label = "BUY" if side == "buy" else "SELL"
-    if progress_fn is not None:
-        progress_fn(f"  UI_Down (to {confirm_label} button)")
+    progress_fn(f"  UI_Down (to {confirm_label} button)")
     dispatch = controls.ui_down()
     if dispatch.status != "ok":
         return RoutineResult(action="UI_Down", dispatch=dispatch, details={"phase": "confirm"})
     if nav_delay_s > 0:
         sleeper(nav_delay_s)
 
-    if progress_fn is not None:
-        progress_fn(f"  UI_Select (confirm {confirm_label})")
+    progress_fn(f"  UI_Select (confirm {confirm_label})")
     trade_dispatch = controls.ui_select()
     if trade_dispatch.status != "ok":
         return RoutineResult(action="UI_Select", dispatch=trade_dispatch, details={"phase": "confirm"})
 
     # Wait for journal confirmation
-    if progress_fn is not None:
-        progress_fn(f"Waiting for {event_type} event (timeout {trade_timeout_s:.0f}s)...")
+    progress_fn(f"Waiting for {event_type} event (timeout {trade_timeout_s:.0f}s)...")
     trade_event, _ = _wait_for_event_with_pending(
         watcher,
         predicate=lambda e: _is_market_event(e, event_type, target),
@@ -810,11 +785,10 @@ def _market_trade_attempt(
             details={"phase": "wait_for_event"},
         )
 
-    if progress_fn is not None:
-        count = trade_event.get("Count", "?")
-        cr_key = "TotalCost" if side == "buy" else "TotalSale"
-        cr_val = trade_event.get(cr_key, "?")
-        progress_fn(f"{event_type}: {count}x {target}, {cr_val} CR total")
+    count = trade_event.get("Count", "?")
+    cr_key = "TotalCost" if side == "buy" else "TotalSale"
+    cr_val = trade_event.get(cr_key, "?")
+    progress_fn(f"{event_type}: {count}x {target}, {cr_val} CR total")
 
     # Return to station menu
     back_dispatch = _market_back_out_to_station_menu(

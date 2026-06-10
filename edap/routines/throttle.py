@@ -4,6 +4,7 @@ from time import sleep
 from typing import Callable, Iterable
 
 from edap.routines._base import RoutineResult, SupportsSetSpeedZero
+from edap.routines._callbacks import ProgressCallback
 
 
 def set_speed_zero_then_wait(
@@ -34,15 +35,14 @@ def auto_zero_throttle_on_arrival(
     *,
     repeat: int = 1,
     hold_s: float = 0.0,
-    progress_fn: Callable[[str], None] | None = None,
+    progress_fn: ProgressCallback,
 ) -> RoutineResult:
     for event in events:
         if event.get("event") != "SupercruiseExit":
             continue
 
-        if progress_fn is not None:
-            system = event.get("StarSystem", "")
-            progress_fn(f"SupercruiseExit: {system}" if system else "SupercruiseExit")
+        system = event.get("StarSystem", "")
+        progress_fn(f"SupercruiseExit: {system}" if system else "SupercruiseExit")
         dispatch = controls.set_speed_zero(repeat=repeat, hold_s=hold_s)
         return RoutineResult(
             action="SetSpeedZero",

@@ -17,6 +17,7 @@ from edap.routines._base import (
     _is_undocked_event,
     _wait_for_event_with_pending,
 )
+from edap.routines._callbacks import AnnouncementCallback, ProgressCallback
 from edap.tts import AnnouncementId
 
 
@@ -145,7 +146,7 @@ def station_refuel_menu(
     settle_s: float = 2.0,
     time_fn: Callable[[], float] = monotonic,
     sleeper: Callable[[float], None] = sleep,
-    progress_fn: Callable[[str], None] | None = None,
+    progress_fn: ProgressCallback,
     pending_events: list[dict[str, object]] | None = None,
 ) -> RoutineResult:
     if dock_timeout_s < 0:
@@ -153,8 +154,7 @@ def station_refuel_menu(
     if settle_s < 0:
         raise ValueError("settle_s must be non-negative")
 
-    if progress_fn is not None:
-        progress_fn("Waiting for Docked...")
+    progress_fn("Waiting for Docked...")
     docked_event, _ = _wait_for_event_with_pending(
         watcher,
         predicate=_is_docked_event,
@@ -173,9 +173,8 @@ def station_refuel_menu(
             details={"phase": "wait_for_docked", "dock_timeout_s": dock_timeout_s},
         )
 
-    if progress_fn is not None:
-        station = docked_event.get("StationName", "")
-        progress_fn(f"Docked: {station}" if station else "Docked")
+    station = docked_event.get("StationName", "")
+    progress_fn(f"Docked: {station}" if station else "Docked")
     if settle_s > 0:
         sleeper(settle_s)
 
@@ -204,9 +203,9 @@ def dock(
     deny_retry_delay_s: float = 5.0,
     time_fn: Callable[[], float] = monotonic,
     sleeper: Callable[[float], None] = sleep,
-    progress_fn: Callable[[str], None] | None = None,
+    progress_fn: ProgressCallback,
     pending_events: list[dict[str, object]] | None = None,
-    announce_fn: Callable[..., None] | None = None,
+    announce_fn: AnnouncementCallback,
     announce_station_name: str = "",
 ) -> RoutineResult:
     if max_retries < 1:
@@ -229,8 +228,7 @@ def dock(
     supercruise_exit_event: dict[str, object] | None = None
     queued_events = list(pending_events or [])
     if wait_for_supercruise_exit:
-        if progress_fn is not None:
-            progress_fn("Waiting for SupercruiseExit...")
+        progress_fn("Waiting for SupercruiseExit...")
         supercruise_exit_event, queued_events = _wait_for_event_with_pending(
             watcher,
             predicate=_is_supercruise_exit_event,
@@ -248,15 +246,12 @@ def dock(
                 ),
                 details={"phase": "wait_for_supercruise_exit", "dock_timeout_s": dock_timeout_s},
             )
-        if progress_fn is not None:
-            system = supercruise_exit_event.get("StarSystem", "")
-            progress_fn(f"SupercruiseExit: {system}" if system else "SupercruiseExit")
+        system = supercruise_exit_event.get("StarSystem", "")
+        progress_fn(f"SupercruiseExit: {system}" if system else "SupercruiseExit")
         if supercruise_exit_settle_s > 0:
-            if progress_fn is not None:
-                progress_fn(f"Settling for {supercruise_exit_settle_s:.1f}s after SupercruiseExit...")
+            progress_fn(f"Settling for {supercruise_exit_settle_s:.1f}s after SupercruiseExit...")
             sleeper(supercruise_exit_settle_s)
-        if progress_fn is not None:
-            progress_fn("Boosting toward station...")
+        progress_fn("Boosting toward station...")
         controls.boost()
         if boost_settle_s > 0:
             sleeper(boost_settle_s)
@@ -272,11 +267,10 @@ def dock(
 
     request_event: dict[str, object] | None = None
     zero_dispatch: ActionDispatchResult | None = None
-    if announce_fn is not None and announce_station_name:
+    if announce_station_name:
         announce_fn(AnnouncementId.DOCKING_REQUEST, station_name=announce_station_name)
     for attempt in range(1, max_retries + 1):
-        if progress_fn is not None:
-            progress_fn(f"Sending dock request (attempt {attempt}/{max_retries})...")
+        progress_fn(f"Sending dock request (attempt {attempt}/{max_retries})...")
         request_dispatch = docking_request_sequence(controls, step_delay_s=step_delay_s, sleeper=sleeper)
         if request_dispatch.status != "ok":
             return RoutineResult(
@@ -286,8 +280,7 @@ def dock(
                 details={"phase": "dispatch", "attempt": attempt, "max_retries": max_retries},
             )
 
-        if progress_fn is not None:
-            progress_fn("Waiting for docking response...")
+        progress_fn("Waiting for docking response...")
         response_event, queued_events = _wait_for_event_with_pending(
             watcher,
             predicate=_is_docking_response_event,
@@ -296,24 +289,20 @@ def dock(
             pending_events=queued_events,
         )
         if response_event is None:
-            if progress_fn is not None:
-                progress_fn("No docking response, retrying...")
+            progress_fn("No docking response, retrying...")
             continue
 
         if response_event.get("event") == "DockingDenied":
-            if progress_fn is not None:
-                reason = response_event.get("Reason", "")
-                progress_fn(f"DockingDenied: {reason} -- retrying in {deny_retry_delay_s:.0f}s...")
+            reason = response_event.get("Reason", "")
+            progress_fn(f"DockingDenied: {reason} -- retrying in {deny_retry_delay_s:.0f}s...")
             sleeper(deny_retry_delay_s)
             continue
 
         request_event = response_event
-        if progress_fn is not None:
-            evt = request_event.get("event", "")
-            station = request_event.get("StationName", "")
-            progress_fn(f"{evt}: {station}" if station else str(evt))
-        if announce_fn is not None:
-            announce_fn(AnnouncementId.AUTO_DOCKING_ENGAGED)
+        evt = request_event.get("event", "")
+        station = request_event.get("StationName", "")
+        progress_fn(f"{evt}: {station}" if station else str(evt))
+        announce_fn(AnnouncementId.AUTO_DOCKING_ENGAGED)
         zero_dispatch = controls.set_speed_zero(repeat=2)
         break
 
@@ -329,8 +318,7 @@ def dock(
             details={"phase": "wait_for_docking_request", "attempts": max_retries},
         )
 
-    if progress_fn is not None:
-        progress_fn("Waiting for Docked...")
+    progress_fn("Waiting for Docked...")
     docked_event, queued_events = _wait_for_event_with_pending(
         watcher,
         predicate=_is_docked_event,
@@ -350,9 +338,8 @@ def dock(
             details={"phase": "wait_for_docked", "dock_timeout_s": dock_timeout_s},
         )
 
-    if progress_fn is not None:
-        station = docked_event.get("StationName", "")
-        progress_fn(f"Docked: {station}" if station else "Docked")
+    station = docked_event.get("StationName", "")
+    progress_fn(f"Docked: {station}" if station else "Docked")
 
     details = {
         "supercruise_exit_event": supercruise_exit_event,
@@ -379,7 +366,7 @@ def dock(
         trigger_event=docked_event,
         pre_wait_s=settle_s,
     )
-    if refuel_result.dispatch.status == "ok" and announce_fn is not None:
+    if refuel_result.dispatch.status == "ok":
         announce_fn(AnnouncementId.SHIP_SERVICED)
     return RoutineResult(
         action=refuel_result.action,
@@ -403,7 +390,7 @@ def undock(
     step_delay_s: float = 0.3,
     time_fn: Callable[[], float] = monotonic,
     sleeper: Callable[[float], None] = sleep,
-    progress_fn: Callable[[str], None] | None = None,
+    progress_fn: ProgressCallback,
 ) -> RoutineResult:
     result, pending_events = _undock_until_undocked(
         controls,
@@ -444,15 +431,14 @@ def _undock_until_undocked(
     step_delay_s: float = 0.3,
     time_fn: Callable[[], float] = monotonic,
     sleeper: Callable[[float], None] = sleep,
-    progress_fn: Callable[[str], None] | None = None,
+    progress_fn: ProgressCallback,
 ) -> tuple[RoutineResult, list[dict[str, object]]]:
     if undock_timeout_s < 0:
         raise ValueError("undock_timeout_s must be non-negative")
     if step_delay_s < 0:
         raise ValueError("step_delay_s must be non-negative")
 
-    if progress_fn is not None:
-        progress_fn("Resetting UI state...")
+    progress_fn("Resetting UI state...")
     dispatch = controls.ui_back(repeat=10)
     if dispatch.status != "ok":
         return RoutineResult(
@@ -473,8 +459,7 @@ def _undock_until_undocked(
     if step_delay_s > 0:
         sleeper(step_delay_s)
 
-    if progress_fn is not None:
-        progress_fn("Navigating to Launch...")
+    progress_fn("Navigating to Launch...")
     dispatch = controls.ui_down()
     if dispatch.status != "ok":
         return RoutineResult(
@@ -497,8 +482,7 @@ def _undock_until_undocked(
     # are not missed on the first poll.
     pending_events = watcher.poll()
 
-    if progress_fn is not None:
-        progress_fn(f"Waiting for Undocked (timeout {undock_timeout_s:.0f}s)...")
+    progress_fn(f"Waiting for Undocked (timeout {undock_timeout_s:.0f}s)...")
     undocked_event, pending_events = _wait_for_event_with_pending(
         watcher,
         predicate=_is_undocked_event,
@@ -517,9 +501,8 @@ def _undock_until_undocked(
             details={"phase": "wait_for_undocked", "undock_timeout_s": undock_timeout_s},
         ), []
 
-    if progress_fn is not None:
-        station = undocked_event.get("StationName", "")
-        progress_fn(f"Undocked: {station}" if station else "Undocked")
+    station = undocked_event.get("StationName", "")
+    progress_fn(f"Undocked: {station}" if station else "Undocked")
 
     return RoutineResult(
         action="Undocked",
@@ -535,14 +518,13 @@ def _wait_for_clear_of_station(
     undocked_event: dict[str, object] | None,
     no_track_timeout_s: float = 600.0,
     time_fn: Callable[[], float] = monotonic,
-    progress_fn: Callable[[str], None] | None = None,
+    progress_fn: ProgressCallback,
     pending_events: list[dict[str, object]] | None = None,
 ) -> RoutineResult:
     if no_track_timeout_s < 0:
         raise ValueError("no_track_timeout_s must be non-negative")
 
-    if progress_fn is not None:
-        progress_fn(f"Waiting for NoTrack / clear of station (timeout {no_track_timeout_s:.0f}s)...")
+    progress_fn(f"Waiting for NoTrack / clear of station (timeout {no_track_timeout_s:.0f}s)...")
 
     no_track_event, _ = _wait_for_event_with_pending(
         watcher,
@@ -563,8 +545,7 @@ def _wait_for_clear_of_station(
             details={"phase": "wait_for_no_track", "no_track_timeout_s": no_track_timeout_s},
         )
 
-    if progress_fn is not None:
-        progress_fn("Confirmed clear of station via NoTrack")
+    progress_fn("Confirmed clear of station via NoTrack")
     return RoutineResult(
         action="NoTrack",
         dispatch=ActionDispatchResult(action="NoTrack", status="ok"),

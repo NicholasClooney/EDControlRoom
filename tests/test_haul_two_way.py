@@ -6,7 +6,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from edap.routines.haul_two_way import Phase, StationLeg, _detect_start_phase, haul_loop_two_way
+from edap.routines._callbacks import noop_announce, noop_progress
+from edap.routines.haul_two_way import Phase, StationLeg, _detect_start_phase, haul_loop_two_way as _haul_loop_two_way
 from edap.routines._base import ActionDispatchResult, RoutineResult
 from edap.tts import AnnouncementId
 from tests.fakes import FakeShipControls, FakeWatcher
@@ -17,6 +18,12 @@ _SYSTEM_1 = "Sol"
 _SYSTEM_2 = "Achenar"
 _CARGO_1 = "Aluminium"
 _CARGO_2 = "Bertrandite"
+
+
+def haul_loop_two_way(*args, **kwargs):
+    kwargs.setdefault("progress_fn", noop_progress)
+    kwargs.setdefault("announce_fn", noop_announce)
+    return _haul_loop_two_way(*args, **kwargs)
 
 
 def _ticking_clock(step: float = 0.01):
@@ -76,6 +83,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 journal_dir,
                 station_1=_station_1_leg(),
                 station_2=_station_2_leg(),
+                progress_fn=noop_progress,
             )
 
         self.assertEqual(phase, Phase.UNDOCK_STATION_1)
@@ -98,6 +106,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 journal_dir,
                 station_1=_station_1_leg(),
                 station_2=_station_2_leg(),
+                progress_fn=noop_progress,
             )
 
         self.assertEqual(phase, Phase.UNDOCK_STATION_2)
@@ -120,6 +129,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                 journal_dir,
                 station_1=_station_1_leg(),
                 station_2=_station_2_leg(),
+                progress_fn=noop_progress,
             )
 
         self.assertEqual(phase, Phase.AT_STATION_1_BUY)
