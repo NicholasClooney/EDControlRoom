@@ -30,6 +30,8 @@ See [docs/STATUS.md](docs/STATUS.md) for the current port status, what is stubbe
 - If `docs/STATUS.md` goes over 80 lines, trim each bullet-based status section down to its 5 newest bullets and move the older trimmed bullets into `docs/status-archive.md`.
 - When archiving trimmed `docs/STATUS.md` content, prepend the newest archive block at the top of `docs/status-archive.md`.
 - Do not read the whole `docs/status-archive.md` file just to prepend new archival content. Read only enough of the top of the file to insert the new block correctly, roughly `head -n 15`.
+- `docs/STATUS.md` is a handoff document, not a policy document. If a working rule, architectural constraint, or style preference belongs in `AGENTS.md`, put it there once and do not restate it across `Current Snapshot`, `Active Capabilities`, or `Key Caveats`. A single short pointer in `docs/STATUS.md` (e.g. "new callback policy lives in AGENTS.md") is enough when the next session needs to know the rule exists.
+- Before adding a new bullet to `docs/STATUS.md`, check whether the same idea is already present in another section in different words. If it is, update the existing bullet in place instead of adding a parallel one. Status-file duplication eats the 80-line budget without adding information.
 
 Use [docs/session-log.md](docs/session-log.md) for concise rolling session notes.
 
