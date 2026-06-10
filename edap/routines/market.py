@@ -358,18 +358,18 @@ def _market_reset_trade_dialog_focus(
     progress_fn: ProgressCallback,
 ) -> ActionDispatchResult:
     progress_fn("Resetting trade dialog focus to quantity controls...")
-    progress_fn("  UI_Left x3 (bias to left edge of dialog)")
+    progress_fn("  UI_Left x5 (bias to left edge of dialog)")
     dispatch = ActionDispatchResult(action="UI_Left", status="ok")
-    for _ in range(3):
+    for _ in range(5):
         dispatch = controls.ui_left()
         if dispatch.status != "ok":
             return dispatch
         if nav_delay_s > 0:
             sleeper(nav_delay_s)
 
-    progress_fn("  UI_Up x3 (bias to quantity row)")
+    progress_fn("  UI_Up x5 (bias to quantity row)")
     dispatch = ActionDispatchResult(action="UI_Up", status="ok")
-    for _ in range(3):
+    for _ in range(5):
         dispatch = controls.ui_up()
         if dispatch.status != "ok":
             return dispatch

@@ -787,18 +787,22 @@ class RoutinesTests(unittest.TestCase):
         self.assertEqual(result.dispatch.status, "ok")
         dialog_index = controls.calls.index({"action": "UI_Select", "repeat": 1, "hold_s": 0.0}, 7)
         self.assertEqual(
-            controls.calls[dialog_index + 1:dialog_index + 7],
+            controls.calls[dialog_index + 1:dialog_index + 11],
             [
                 {"action": "UI_Left", "repeat": 1, "hold_s": 0.0},
                 {"action": "UI_Left", "repeat": 1, "hold_s": 0.0},
                 {"action": "UI_Left", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Left", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Left", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Up", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Up", "repeat": 1, "hold_s": 0.0},
                 {"action": "UI_Up", "repeat": 1, "hold_s": 0.0},
                 {"action": "UI_Up", "repeat": 1, "hold_s": 0.0},
                 {"action": "UI_Up", "repeat": 1, "hold_s": 0.0},
             ],
         )
         self.assertEqual(
-            controls.calls[dialog_index + 7:dialog_index + 9],
+            controls.calls[dialog_index + 11:dialog_index + 13],
             [
                 {"action": "UI_Right", "repeat": 1, "hold_s": 0.0},
                 {"action": "UI_Down", "repeat": 1, "hold_s": 0.0},
@@ -1465,18 +1469,22 @@ class RoutinesTests(unittest.TestCase):
         self.assertEqual(result.dispatch.status, "ok")
         dialog_index = controls.calls.index({"action": "UI_Select", "repeat": 1, "hold_s": 0.0}, 9)
         self.assertEqual(
-            controls.calls[dialog_index + 1:dialog_index + 7],
+            controls.calls[dialog_index + 1:dialog_index + 11],
             [
                 {"action": "UI_Left", "repeat": 1, "hold_s": 0.0},
                 {"action": "UI_Left", "repeat": 1, "hold_s": 0.0},
                 {"action": "UI_Left", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Left", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Left", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Up", "repeat": 1, "hold_s": 0.0},
+                {"action": "UI_Up", "repeat": 1, "hold_s": 0.0},
                 {"action": "UI_Up", "repeat": 1, "hold_s": 0.0},
                 {"action": "UI_Up", "repeat": 1, "hold_s": 0.0},
                 {"action": "UI_Up", "repeat": 1, "hold_s": 0.0},
             ],
         )
         self.assertEqual(
-            controls.calls[dialog_index + 7:dialog_index + 10],
+            controls.calls[dialog_index + 11:dialog_index + 14],
             [
                 {"action": "UI_Right", "repeat": 1, "hold_s": 0.64},
                 {"action": "UI_Down", "repeat": 1, "hold_s": 0.0},
