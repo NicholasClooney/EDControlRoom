@@ -154,6 +154,8 @@ Use the repo `uv` environment for tests:
 uv run python3 -m unittest discover -s tests
 ```
 
+Releases are now PR-driven through `.github/workflows/release-please.yml`. If you want the repo's normal CI to run on bot-authored release PRs as well, add a `RELEASE_PLEASE_TOKEN` repository secret backed by a PAT or GitHub App token instead of relying only on the default `GITHUB_TOKEN`.
+
 For commits, use Conventional Commits.
 
 Examples:
