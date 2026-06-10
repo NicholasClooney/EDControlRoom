@@ -2,10 +2,11 @@
 
 _This is the startup handoff document for the repo. Keep it current, compact, and biased toward what the next session needs immediately. Hard limit: 80 lines. If an update would push this file past the limit, move displaced older status/session detail to `docs/status-archive.md` or a more specific doc, then trim this file back down._
 
-Last updated: 2026-06-10 (session 121)
+Last updated: 2026-06-10 (session 122)
 
 ## Current Snapshot
 
+- PR title policy now lives in `AGENTS.md` and the GitHub PR template: use Conventional Commit-style titles for normal PRs, default `dev` -> `main` promotions to `chore: promote dev to main`, and reserve `release: ...` for versioned release PRs.
 - Active docs and small user-facing CLI text now consistently say `EDControlRoom` instead of older shorthand where the project is being presented to operators.
 - Active docs now use `EDControlRoom` branding for the current project name; old product-name references were removed from the maintained handoff/operator docs.
 - Haul docs now describe the commander-facing value explicitly: after the drop near station, EDControlRoom handles docking request, station services, cargo trade, refuel/repair, routing, departure, mass-lock clearance, and FSD priming before handing jump alignment back to the commander via TTS.

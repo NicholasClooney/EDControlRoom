@@ -115,6 +115,15 @@ Examples:
 - `docs: update README for macOS-first roadmap`
 - `fix: handle missing bindings file gracefully`
 
+## PR Title Style
+
+- Use Conventional Commit style for pull request titles too: `feat: ...`, `fix: ...`, `refactor: ...`, `docs: ...`, `chore: ...`.
+- PR titles should describe the net effect of the PR, not enumerate every commit inside it.
+- If a PR mixes unrelated work, split it instead of stacking multiple type prefixes into one title.
+- For normal feature/fix/refactor/docs PRs, use the matching Conventional Commit type in the PR title.
+- For branch-promotion PRs from `dev` to `main`, default to `chore: promote dev to main`.
+- Reserve `release: ...` titles for versioned release PRs only when the branch is promoting a specific release.
+
 ### Mixed Changesets
 
 - If a commit/review diff mixes concerns or includes unrelated edits, tell the user before committing.
