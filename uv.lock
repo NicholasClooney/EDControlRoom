@@ -4,7 +4,7 @@ requires-python = ">=3.12"
 
 [[package]]
 name = "edautopilot"
-version = "1.7.2"
+version = "1.7.3"
 source = { virtual = "." }
 dependencies = [
     { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'" },

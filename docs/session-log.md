@@ -4,6 +4,7 @@ _This is the rolling short-form log for recent sessions. Keep entries concise an
 
 ## 2026-06-10
 
+- Cut release prep for `v1.7.3`: bumped package metadata, refreshed maintained status/session notes, and targeted the post-`v1.7.2` runtime-hardening slice (bounded queued TTS/session growth, buffered journal-log flushes, injectable version source).
 - Added `control_room.activity_log_max_lines` to the Control Room runtime surface: `ActivityLog` now receives the configured retention limit by default, and `ControlRoomApp(..., activity_log_max_lines=...)` can still inject an explicit override for tests or alternate launch surfaces.
 - Bounded queued TTS backlog in-process and coalesced stale queued repeats by announcement type once speech is already in flight, so long sessions keep the latest relevant callout without unbounded queue growth.
 - Buffered Control Room's `artifacts/control-room.log` mirror so steady-state journal appends flush every 20 events instead of every event, while shutdown still forces a final flush before close.

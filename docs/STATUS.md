@@ -2,14 +2,14 @@
 
 _This is the startup handoff document for the repo. Keep it current, compact, and biased toward what the next session needs immediately. Hard limit: 80 lines. If an update would push this file past the limit, move displaced detail to `status-archive.md` or a more specific doc, then trim this file back down._
 
-Last updated: 2026-06-10 (session 107)
+Last updated: 2026-06-10 (session 108)
 
 ## Current Snapshot
 
 - Plan 0001 (macOS MVP portability) is complete. Shared runtime, config loading, journal parsing, bindings lookup, and synthetic input are in place and live-validated on macOS + CrossOver.
 - Windows now has early real-world validation from CMDR VRYAE, so the platform story is macOS-primary with initial Windows confirmation rather than macOS-only live validation.
 - Current work is follow-up, not a rewrite: journal-driven routines, two-way hauling, CV/capture validation, and operator diagnostics.
-- Stable release `v1.7.2` now packages the docked-location bootstrap fix, configured-title hyperspace-arrival TTS fix, nested control-config sections, digit-aware location TTS normalization plus `speak.py` smoke-test flags, the tightened docs/README operator surface, and the new Control Room startup version/update notices.
+- Stable release `v1.7.3` now packages bounded queued TTS/session growth, buffered Control Room journal-log flushing, injectable Control Room version metadata for tests, and the accompanying config/test/docs coverage for those runtime hardening changes.
 - `control_room.py` is the primary operator surface. `run_routine.py`, `ship_controls.py`, `diagnostics.py`, `speak.py`, and the journal/bindings helpers remain the main manual-validation tools.
 - `bindings_files.py` now provides a quick operator utility to list `.binds` files from the detected bindings folder, copy them into the repo-local gitignored `backup/bindings/` folder, restore from numbered or interactive backup selections, and apply shipped default presets onto the active custom file after confirmation while saving a safety backup first.
 - Operator-facing usage for `bindings_files.py` now lives in `docs/operators/bindings-files.md`, and `README.md` now calls out that `apply-default` is implemented but not yet live-validated against a real Elite session.
