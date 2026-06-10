@@ -2,7 +2,7 @@
 
 _This is the startup handoff document for the repo. Keep it current, compact, and biased toward what the next session needs immediately. Hard limit: 80 lines. If an update would push this file past the limit, move displaced detail to `status-archive.md` or a more specific doc, then trim this file back down._
 
-Last updated: 2026-06-10 (session 110)
+Last updated: 2026-06-10 (session 112)
 
 ## Current Snapshot
 
@@ -18,6 +18,8 @@ Last updated: 2026-06-10 (session 110)
 - README `Start Here` now leads with `uv sync` plus `uv run python3 control_room.py`, points deeper setup to the quickstart guide, and surfaces Control Room + haul context earlier in the page.
 - `docs/getting-started/quickstart.md` now leads operators from setup straight into Control Room, consolidates the repeated optional-config guidance into one shared note, and limits journal/input probe commands to an issue-driven troubleshooting section with clearer command intent.
 - `docs/operators/control-room.md` now includes the shipped Control Room screenshot, calls out the core keyboard shortcuts (`Ctrl-R`, `Ctrl-C`, `Ctrl-D`) in a dedicated operator-facing section, and trims the previous developer-style notes into shorter usage-oriented behavior notes.
+- README and `docs/operators/control-room.md` now both repeat the key operator constraint that EDAP only works by sending keyboard input into the focused game window, including the reason for the default 5-second command delay and the `instant` toggle for remote-shell use.
+- That focus/delay guidance in README and `docs/operators/control-room.md` is now phrased more directly for operators: fire the command, switch back to Elite during the default 5-second delay, or use `instant` when that pause is not needed.
 - `AGENTS.md` now explicitly requires future README section edits to keep the hand-written README TOC in sync, because GitHub's automatic Outline menu is not an inline TOC replacement.
 - Windows bindings auto-detection now matches macOS/Linux by selecting the newest `.binds` file by modification time instead of the lexicographically last filename.
 - Web-control UI research is now captured in `docs/research/0005-web-control-ui-options.md`, including the current NiceGUI-first prototype recommendation and the iPhone Safari LAN-HTTP caveat from NiceGUI issue `#5802`.

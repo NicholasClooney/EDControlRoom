@@ -26,6 +26,9 @@ See [docs/STATUS.md](docs/STATUS.md) for the maintained status, validation notes
 
 - run `uv sync`
 - run `uv run python3 control_room.py`
+- after you fire off a ship-affecting command, make sure to switch back to Elite Dangerous; EDAP works by sending keyboard input to the game window
+- those commands wait `5` seconds by default, so you have time to switch back to Elite before the first key press
+- if you are remotely connected to the shell and do not need that safety pause, use `instant` in Control Room to toggle the delay off or back on
 - use `haul` as the main end-to-end workflow once Control Room is open
 - for setup details, platform-specific notes, and more first commands, continue to [docs/getting-started/quickstart.md](docs/getting-started/quickstart.md)
 - use [docs/operators/control-room.md](docs/operators/control-room.md) for day-to-day operation
@@ -38,6 +41,8 @@ See [docs/STATUS.md](docs/STATUS.md) for the maintained status, validation notes
 - `replay` / `Ctrl-R` reopens recent commands, including haul setups
 - one saved default haul setup persists across restarts
 - Control Room mirrors consumed journal events into `artifacts/control-room.log`
+- after you fire off a ship-affecting command, switch back to Elite while the default `5` second launch delay runs
+- `instant` toggles that delay on or off for future commands when you are operating from a remote shell session or otherwise do not need the safety pause
 
 Interrupt behavior during `haul` is haul-aware: the first `Ctrl-C` or `Ctrl-D` queues a stop after the current station-1 return sale and before the next buy. A second interrupt cancels immediately.
 

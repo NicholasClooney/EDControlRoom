@@ -11,6 +11,8 @@ uv run python3 control_room.py --market aluminium
 
 If `config.toml` exists in the repo root, EDAP loads it automatically. Create one only when you need explicit overrides beyond the built-in auto-detection.
 
+EDAP works by sending keyboard input to Elite Dangerous. After you fire off any command that should affect the ship or UI, switch back to the game window before the delay expires.
+
 ![Control Room screenshot](../assets/control-room.png)
 
 ## What It Is
@@ -69,6 +71,8 @@ Interrupt behavior during `haul` is special:
 
 ## Useful Behavior
 
+- Ship-affecting commands wait `5` seconds before starting by default, so you have time to switch back to Elite before EDAP sends any key presses.
+- `instant`, `instant on`, and `instant off` control that default launch delay for future commands. This is mainly useful when you are remotely connected to the shell and do not need the normal safety pause.
 - Startup writes version information into `ACTIVITY`, and when update checks are enabled it also tells you if a newer ED AutoPilot Mk II release is available.
 - In replay/history, typing applies a simple prefix filter and `Backspace` removes characters from that filter.
 - `sell` with no explicit item falls back to `Cargo.json` if the in-memory cargo manifest is empty.
