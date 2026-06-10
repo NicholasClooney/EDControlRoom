@@ -2,15 +2,16 @@
 
 _This is the startup handoff document for the repo. Keep it current, compact, and biased toward what the next session needs immediately. Hard limit: 80 lines. If an update would push this file past the limit, move displaced older status/session detail to `docs/status-archive.md` or a more specific doc, then trim this file back down._
 
-Last updated: 2026-06-10 (session 117)
+Last updated: 2026-06-10 (session 119)
 
 ## Current Snapshot
 
+- Active docs now use `EDControlRoom` branding for the current project name; old product-name references were removed from the maintained handoff/operator docs.
+- Haul docs now describe the commander-facing value explicitly: after the drop near station, EDAP handles docking request, station services, cargo trade, refuel/repair, routing, departure, mass-lock clearance, and FSD priming before handing jump alignment back to the commander via TTS.
 - Routine callback policy now lives in `AGENTS.md` under Working Rules: production routine APIs require explicit progress/announcement callbacks, shared no-op helpers in `edap/routines/callbacks.py` are test-only.
 - Plan 0001 (macOS MVP portability) is complete. Shared runtime, config loading, journal parsing, bindings lookup, and synthetic input are in place and live-validated on macOS + CrossOver.
 - Windows now has early real-world validation from CMDR VRYAE, so the platform story is macOS-primary with initial Windows confirmation rather than macOS-only live validation.
 - Current work is follow-up, not a rewrite: journal-driven routines, two-way hauling, CV/capture validation, and operator diagnostics.
-- Stable release `v1.7.3` packages bounded queued TTS/session growth, buffered Control Room journal-log flushing, injectable Control Room version metadata for tests, and the related config/test/docs coverage.
 - `control_room.py` is the primary operator surface. `run_routine.py`, `ship_controls.py`, `diagnostics.py`, `speak.py`, and the journal/bindings helpers remain the main manual-validation tools.
 
 ## Active Capabilities
@@ -24,17 +25,17 @@ Last updated: 2026-06-10 (session 117)
 
 ## Key Caveats
 
+- Current haul still has hard station-automation assumptions: docking waits for `DockingGranted` then `Docked`, and station departure waits for the post-launch `Music` `NoTrack` event as the clear-of-station cue; route setting/FSD priming do not require auto-alignment, but launch/docking still need live validation without auto launch/landing.
 - Elite may hide or refuse to load a `Custom` preset when that `.binds` file includes controller mappings for a device that is not currently connected or exposed; reconnect the controller or fall back to a keyboard-only preset before treating it as a missing-file problem.
 - The legacy autopilot loop is still not ported. The repo is automation/runtime tooling plus journal-driven routines, not a complete autopilot.
 - Two-way hauling is the active operator path, but it still needs more live validation around startup/resume, station-role detection, and telemetry closure.
 - TTS exists on macOS with Linux/Windows fallbacks, but only the macOS path should be assumed close to live-validated operator quality.
-- Windows has early live validation, but it still needs broader coverage after the `INPUT` layout fix to separate residual focus/UIPI issues from backend bugs.
 - CV is still in validation/scaffolding mode. Template matching has been refreshed against CrossOver captures, but there is no continuous alignment loop yet.
 
 ## Current Next Steps
 
 1. Live-validate the updated two-way haul startup/resume path and haul telemetry, especially station-2 starts, station-1 run finalization, and `Market.json` fallback behavior.
-2. Live-test the bounded/coalescing queued TTS behavior on macOS and trim noisy phrasing, especially the low supply/demand warnings.
+2. Live-test haul with auto launch/landing disabled where possible, especially whether routing still holds once `Undocked` fires and whether `Music` `NoTrack` needs a fallback clear-of-station signal.
 3. Expand Windows validation beyond the current community live check, including more `diagnostics.py --send-test-key` runs and capture of any remaining `WinError` detail.
 4. Continue the next portability follow-up slice from plans 0002-0004: CV capture/performance measurement, journal latency measurement, and diagnostics/dashboard work.
 5. After the next live Control Room run, verify the startup warning wording against the actual Odyssey Controls menu labels for panel and galaxy-map bindings.

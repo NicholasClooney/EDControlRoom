@@ -1,8 +1,8 @@
-# EDAutopilot MK II
+# EDControlRoom
 
-Multiplatform Elite Dangerous automation tooling focused on a shared runtime across macOS, Windows, and Linux. The active runtime is live-validated on macOS with Elite running through CrossOver by myself, @NicholasClooney, and the Windows path is now also live-validated by community member CMDR VRYAE. Linux remains unvalidated.
+Multiplatform Elite Dangerous command-and-routine tooling focused on a shared runtime across macOS, Windows, and Linux. The active runtime is live-validated on macOS with Elite running through CrossOver by myself, @NicholasClooney, and the Windows path is now also live-validated by community member CMDR VRYAE. Linux remains unvalidated.
 
-The current operator surface is [`control_room.py`](control_room.py). The project is not a full autopilot yet; it is a live runtime and routine stack built around journal parsing, bindings lookup, synthetic input, and early workflow automation.
+The current operator surface is [`control_room.py`](control_room.py). The project is not a hands-off flight bot; it is a live runtime and routine stack built around journal parsing, bindings lookup, synthetic input, and early workflow automation.
 
 ![ED Control Room](docs/assets/control-room.png)
 
@@ -27,7 +27,7 @@ See [docs/STATUS.md](docs/STATUS.md) for the maintained status, validation notes
 - run `uv sync`
 - run `uv run python3 control_room.py`
 - Important Note:
-    - after you fire off a ship-affecting command, make sure to switch back to Elite Dangerous; EDAP works by sending keyboard input to the game window
+    - after you fire off a ship-affecting command, make sure to switch back to Elite Dangerous; EDControlRoom works by sending keyboard input to the game window
     - those commands wait `5` seconds by default, so you have time to switch back to Elite before the first key press
     - if you are remotely connected to the shell and do not need that safety pause, use `instant` in Control Room to toggle the delay off or back on
     
@@ -51,13 +51,17 @@ Interrupt behavior during `haul` is haul-aware: the first `Ctrl-C` or `Ctrl-D` q
 
 ## Haul Workflow
 
-`haul` is the strongest current end-to-end routine and the clearest example of what the active runtime is for. It automates a repeatable trade loop between two stations: resuming from the current game state, docking when needed, navigating station services, buying the target commodity, launching, plotting the return destination, and selling cargo at the other end.
+`haul` is the strongest current end-to-end routine and the clearest example of what the active runtime is for.
 
-That makes it directly useful for high-volume A-to-B cargo work such as community goal hauling loops, where the repetitive station-to-station trading cycle is the part worth automating.
+It is built to take the boring bits off the commander: from the moment you drop near a station, it handles the repeatable station-side work for you, including requesting docking, working through station services, buying or selling cargo, refuel and repair steps, setting the route for the next leg, leaving the station, clearing mass lock, and then priming the FSD automatically.
+
+There is no auto-alignment. Instead, once the ship is clear and the drive is primed, EDControlRoom uses TTS to call the commander by title or name and say the ship is ready to jump, which is the cue for commanders to take over for alignment and the next jump.
+
+That makes it directly useful for high-volume A-to-B cargo work such as community goal hauling loops, where the repetitive station-to-station trading cycle is the part worth automating and the commander can stay focused on the parts that still benefit from human attention.
 
 Around that primary flow, the active routine surface also includes `dock`, `undock`, `jump`, `buy`, `sell`, and `dest`.
 
-These are built to be manually exercised against a live Elite session running through CrossOver, not left unattended.
+These are built to be manually exercised against a live Elite session, not left unattended.
 
 ## Current Surface
 

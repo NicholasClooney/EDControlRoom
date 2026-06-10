@@ -9,9 +9,9 @@ uv run python3 control_room.py
 uv run python3 control_room.py --market aluminium
 ```
 
-If `config.toml` exists in the repo root, EDAP loads it automatically. Create one only when you need explicit overrides beyond the built-in auto-detection.
+If `config.toml` exists in the repo root, EDControlRoom loads it automatically. Create one only when you need explicit overrides beyond the built-in auto-detection.
 
-EDAP works by sending keyboard input to Elite Dangerous. After you fire off any command that should affect the ship or UI, switch back to the game window before the delay expires.
+EDControlRoom works by sending keyboard input to Elite Dangerous. After you fire off any command that should affect the ship or UI, switch back to the game window before the delay expires.
 
 ![Control Room screenshot](../assets/control-room.png)
 
@@ -42,6 +42,8 @@ EDAP works by sending keyboard input to Elite Dangerous. After you fire off any 
 ## Haul
 
 - `haul [commodity]` runs the active two-way haul loop used by `run_routine.py --routine haul_loop`
+- haul is aimed at commanders who want the station-side repetition handled for them: after a drop near station it requests docking, runs station services, buys or sells cargo, refuels, repairs, routes the next leg, launches, clears mass lock, and primes the FSD
+- haul does not auto-align for the next jump; after station clearance it uses TTS to call the commander by title or name and announce that the ship is ready to jump as the handoff cue
 - haul resumes from current journal and sidecar state rather than assuming a fresh start
 - one default haul setup can be saved and reused across restarts
 - `replay` / `Ctrl-R` is the quickest way to relaunch recent haul commands or rerun a saved pattern without retyping it
@@ -71,9 +73,9 @@ Interrupt behavior during `haul` is special:
 
 ## Useful Behavior
 
-- Ship-affecting commands wait `5` seconds before starting by default, so you have time to switch back to Elite before EDAP sends any key presses.
+- Ship-affecting commands wait `5` seconds before starting by default, so you have time to switch back to Elite before EDControlRoom sends any key presses.
 - `instant`, `instant on`, and `instant off` control that default launch delay for future commands. This is mainly useful when you are remotely connected to the shell and do not need the normal safety pause.
-- Startup writes version information into `ACTIVITY`, and when update checks are enabled it also tells you if a newer ED AutoPilot Mk II release is available.
+- Startup writes version information into `ACTIVITY`, and when update checks are enabled it also tells you if a newer EDControlRoom release is available.
 - In replay/history, typing applies a simple prefix filter and `Backspace` removes characters from that filter.
 - `sell` with no explicit item falls back to `Cargo.json` if the in-memory cargo manifest is empty.
 - Cross-session command history and one saved default haul profile are persisted in `.control_room_state.json` by default.
