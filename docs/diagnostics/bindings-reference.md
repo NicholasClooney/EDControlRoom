@@ -41,7 +41,7 @@ CrossOver setup. It is not written as `BoostButton`.
 If a future routine needs boost, request `UseBoostJuice` in action lists and
 binding lookups.
 
-`read_bindings()` in [edap/bindings.py](/Users/nicholasclooney/Source/Projects/EDAutoPilotMKII/edap/bindings.py:79) currently resolves only one keyboard binding per action. If both `Primary` and `Secondary` are keyboard bindings, the `Secondary` entry overwrites the `Primary` entry in the runtime lookup.
+`read_bindings()` in [edap/bindings.py](../../edap/bindings.py) currently resolves only one keyboard binding per action. If both `Primary` and `Secondary` are keyboard bindings, the `Secondary` entry overwrites the `Primary` entry in the runtime lookup.
 
 Non-keyboard slots do not override a keyboard slot. Practical effect:
 
@@ -87,7 +87,7 @@ The repo normalizes those XML tokens into backend-neutral names before dispatch:
 - `Key_LeftShift` -> `left_shift`
 - `Space` or `Key_Space` -> `space`
 
-The normalization logic lives in [edap/bindings.py](/Users/nicholasclooney/Source/Projects/EDAutoPilotMKII/edap/bindings.py:62) and [edap/binding_lookup.py](/Users/nicholasclooney/Source/Projects/EDAutoPilotMKII/edap/binding_lookup.py:107).
+The normalization logic lives in [edap/bindings.py](../../edap/bindings.py) and [edap/binding_lookup.py](../../edap/binding_lookup.py).
 
 ## Discovery Note
 

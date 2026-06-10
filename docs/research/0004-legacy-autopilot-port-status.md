@@ -4,7 +4,7 @@ Date: 2026-05-26
 
 ## Scope
 
-This note maps the original (upstream EDAutopilot) autopilot architecture against what has been ported into the macOS-first `edap/` package, and records the still-unverified pieces on the new platform.
+This note maps the original upstream autopilot architecture against what has been ported into the macOS-first `edap/` package, and records the still-unverified pieces on the new platform.
 
 The intent is to give future work a clear "what exists, what is stub, what is not ported, and what is unproven" map without having to re-read the legacy code each time.
 
