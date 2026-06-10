@@ -21,6 +21,8 @@ See [docs/STATUS.md](docs/STATUS.md) for the current port status, what is stubbe
 
 - Read `docs/STATUS.md` before starting substantial work.
 - Update `docs/STATUS.md` at the end of any session that changes project understanding, port status, completed work, open gaps, or recommended next steps.
+- Treat the `Last updated: YYYY-MM-DD (session N)` line in `docs/STATUS.md` as the canonical session counter for the repo.
+- Whenever `docs/STATUS.md` or `docs/session-log.md` is updated, increment that `session N` value exactly once for the current work session, even if only one of those two files changed.
 - Keep it concise and current so the next agent can resume from it directly.
 - Keep `docs/STATUS.md` bounded to at most 80 lines. If a new update would push it past the limit, move displaced detail into `docs/status-archive.md` or a more specific supporting doc, then rewrite `docs/STATUS.md` back down to a compact handoff instead of letting it grow indefinitely.
 
