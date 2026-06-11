@@ -6,7 +6,8 @@ from typing import Any, Callable, Protocol
 from rich.markup import escape
 from textual.worker import get_current_worker
 
-from edap.control_room.failure_messages import describe_routine_failure
+from edap.control_room import error_text
+from edap.control_room.failure_messages import describe_routine_exception, describe_routine_failure
 from edap.progress_controls import ProgressShipControls
 from edap.state import JournalWatcher
 
@@ -80,7 +81,7 @@ def start_watcher_loop(app: WorkerHost) -> None:
 
 def check_routine_ready(app: WorkerHost) -> bool:
     if app._controls is None:
-        app._log("[red]Controls unavailable — check bindings config[/]")
+        app._log(f"[red]{escape(error_text.render(app._config, 'controls_unavailable'))}[/]")
         return False
     if app._routine_active:
         app._log("[yellow]A routine is already running — wait for it to finish[/]")
@@ -175,7 +176,7 @@ def run_routine_thread(
                     f"[green]Done: {escape(result.action)} ({escape(status)})[/]",
                 )
             else:
-                message, suggestion = describe_routine_failure(result)
+                message, suggestion = describe_routine_failure(result, app._config)
                 app.call_from_thread(
                     app._log,
                     f"[red]Failed: {escape(result.action)} -- {escape(message)}[/]",
@@ -190,7 +191,10 @@ def run_routine_thread(
     except RoutineCancelled:
         app.call_from_thread(app._log, "[yellow]Routine cancelled.[/]")
     except Exception as exc:
-        app.call_from_thread(app._log, f"[red]Routine error: {escape(str(exc))}[/]")
+        message, suggestion = describe_routine_exception(exc, app._config)
+        app.call_from_thread(app._log, f"[red]{escape(message)}[/]")
+        if suggestion:
+            app.call_from_thread(app._log, f"[yellow]Try: {escape(suggestion)}[/]")
     finally:
         app.call_from_thread(clear_routine, app)
 

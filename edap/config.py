@@ -9,6 +9,7 @@ import tomllib
 DEFAULT_CONFIG_PATH = Path("config.toml")
 EXAMPLE_CONFIG_PATH = Path("config.example.toml")
 DEFAULT_TTS_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "tts.toml"
+DEFAULT_ERROR_MESSAGES_CONFIG_PATH = Path(__file__).resolve().parent.parent / "defaults" / "error_messages.toml"
 
 VALID_PLATFORMS = {"linux", "macos", "windows"}
 VALID_CAPTURE_MODES = {"fullscreen", "region"}
@@ -108,6 +109,15 @@ class TTSConfig:
 
 
 @dataclass(frozen=True)
+class ErrorMessagesConfig:
+    templates: dict[str, str] = field(default_factory=dict)
+
+
+def default_error_messages_config() -> ErrorMessagesConfig:
+    return ErrorMessagesConfig(templates=_string_dict(_load_default_error_messages_table(), "templates"))
+
+
+@dataclass(frozen=True)
 class AppConfig:
     paths: PathsConfig
     controls: ControlsConfig
@@ -115,6 +125,7 @@ class AppConfig:
     runtime: RuntimeConfig
     control_room: ControlRoomConfig
     tts: TTSConfig = field(default_factory=TTSConfig)
+    error_messages: ErrorMessagesConfig = field(default_factory=default_error_messages_config)
 
 
 class ConfigError(ValueError):
@@ -129,6 +140,17 @@ def _load_default_tts_table() -> dict[str, object]:
     value = raw.get("tts", {})
     if not isinstance(value, dict):
         raise ConfigError("Default TTS config section `tts` must be a table.")
+    return value
+
+
+def _load_default_error_messages_table() -> dict[str, object]:
+    with DEFAULT_ERROR_MESSAGES_CONFIG_PATH.open("rb") as handle:
+        raw = tomllib.load(handle)
+    if not isinstance(raw, dict):
+        raise ConfigError("Default error-messages config root must be a TOML table.")
+    value = raw.get("error_messages", {})
+    if not isinstance(value, dict):
+        raise ConfigError("Default error-messages config section `error_messages` must be a table.")
     return value
 
 
@@ -374,7 +396,9 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
     runtime = _require_table(raw, "runtime")
     control_room = _optional_table(raw, "control_room")
     tts = _optional_table(raw, "tts")
+    error_messages = _optional_table(raw, "error_messages")
     default_tts = _load_default_tts_table()
+    default_error_messages = _load_default_error_messages_table()
 
     capture_regions: dict[str, CaptureRegionConfig] = {
         "center": CaptureRegionConfig(
@@ -548,6 +572,12 @@ def load_config(path: Path | str = DEFAULT_CONFIG_PATH) -> AppConfig:
             phrases={
                 **_string_dict(default_tts, "phrases"),
                 **_string_dict(tts, "phrases"),
+            },
+        ),
+        error_messages=ErrorMessagesConfig(
+            templates={
+                **_string_dict(default_error_messages, "templates"),
+                **_string_dict(error_messages, "templates"),
             },
         ),
     )

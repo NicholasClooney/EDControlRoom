@@ -13,6 +13,7 @@ from edap.tts import AnnouncementId
 
 
 class CommandHost(Protocol):
+    _config: AppConfig
     _verbose_controls: bool
     _instant_mode: bool
     _market_filter: str | None

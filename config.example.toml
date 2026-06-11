@@ -38,6 +38,11 @@ disabled_messages = []
 # from defaults/tts.toml.
 # destination_set = "Setting destination to {system_name}."
 
+[error_messages.templates]
+# Override only the operator-facing error lines you want to change. Unspecified
+# entries still come from defaults/error_messages.toml.
+# station_mismatch_message = "Station mismatch: market data indicates {market_station}, but we are docked at {docked_station}."
+
 [controls]
 start_hotkey = "home"
 stop_hotkey = "end"

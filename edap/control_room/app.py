@@ -53,6 +53,7 @@ from edap.config import AppConfig
 from edap.control_room import (
     bootstrap as _bootstrap,
     commands as _commands,
+    error_text,
     events as _events,
     facade as _facade,
     haul_tracking as _haul_tracking,
@@ -1148,9 +1149,12 @@ def main() -> None:
 
     if journal_dir is None:
         print(
-            "ERROR: journal directory not found "
-            f"(source: {ctx.journal.cli_source_status()}). "
-            "Set paths.journal_dir in config.toml.",
+            "ERROR: "
+            + error_text.render(
+                loaded.config,
+                "journal_dir_not_found",
+                source_status=ctx.journal.cli_source_status(),
+            ),
             file=sys.stderr,
         )
         sys.exit(1)

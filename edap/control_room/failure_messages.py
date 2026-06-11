@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 
+from edap.config import AppConfig
+from edap.control_room import error_text
 from edap.routines import RoutineResult
 
 
@@ -12,76 +14,178 @@ _ROUTE_MISMATCH_RE = re.compile(
     r"route mismatch: expected (?P<expected>.+?), got (?P<actual>.+)"
 )
 _MARKET_NOT_FOUND_RE = re.compile(r"'(?P<target>.+)' not found in market list")
+_MARKET_EVENT_TIMEOUT_RE = re.compile(
+    r"(?P<event_type>MarketBuy|MarketSell) for '(?P<target>.+)' not observed within (?P<timeout_s>\d+(?:\.\d+)?)s"
+)
 
 
-def describe_routine_failure(result: RoutineResult) -> tuple[str, str | None]:
+def describe_routine_failure(
+    result: RoutineResult,
+    config: AppConfig,
+) -> tuple[str, str | None]:
     reason = (result.dispatch.reason or result.dispatch.status or "unknown error").strip()
 
-    station_message = _describe_station_mismatch(reason)
+    station_message = _describe_station_mismatch(reason, config)
     if station_message is not None:
         return station_message
 
-    route_message = _describe_route_mismatch(reason)
+    route_message = _describe_route_mismatch(reason, config)
     if route_message is not None:
         return route_message
 
-    market_message = _describe_market_target_mismatch(reason)
+    market_message = _describe_market_target_mismatch(reason, config)
     if market_message is not None:
         return market_message
 
+    event_timeout_message = _describe_trade_event_timeout(reason, config)
+    if event_timeout_message is not None:
+        return event_timeout_message
+
     if "no docked station state found in journal" in reason:
         return (
-            "Couldn't confirm your current docked station from the journal yet.",
-            "Wait until Elite has fully written the Docked state, then retry.",
+            error_text.render(config, "journal_docked_state_missing_message"),
+            error_text.render(config, "journal_docked_state_missing_suggestion"),
         )
 
     if reason == "Market.json not found":
         return (
-            "Couldn't read the station market screen yet.",
-            "Open the commodities market fully, wait a moment, then retry.",
+            error_text.render(config, "market_data_missing_message"),
+            error_text.render(config, "market_data_missing_suggestion"),
         )
 
     if reason.startswith("sell requires an in-station start"):
         return (
-            "Sell can only start while you are docked in station.",
-            "Dock first, then rerun the sell step.",
+            error_text.render(config, "sell_requires_docked_message"),
+            error_text.render(config, "sell_requires_docked_suggestion"),
+        )
+
+    if reason.startswith("sell return-to-station check failed:"):
+        return (
+            error_text.render(config, "sell_return_station_check_message"),
+            error_text.render(config, "sell_return_station_check_suggestion"),
+        )
+
+    if reason == "amount must be at least 1":
+        return (error_text.render(config, "amount_minimum_message"), None)
+
+    if reason == "cargo hold empty":
+        return (
+            error_text.render(config, "cargo_hold_empty_message"),
+            error_text.render(config, "cargo_hold_empty_suggestion"),
+        )
+
+    if reason == "jump did not reach in_supercruise before retry budget was exhausted":
+        return (
+            error_text.render(config, "jump_retry_exhausted_message"),
+            error_text.render(config, "jump_retry_exhausted_suggestion"),
+        )
+
+    if reason == "docked event was not observed before timeout":
+        return (
+            error_text.render(config, "docked_timeout_message"),
+            error_text.render(config, "docked_timeout_suggestion"),
+        )
+
+    if reason == "supercruise exit was not observed before timeout":
+        return (
+            error_text.render(config, "supercruise_exit_timeout_message"),
+            error_text.render(config, "supercruise_exit_timeout_suggestion"),
+        )
+
+    if reason == "docking request/grant was not observed before retry budget was exhausted":
+        return (
+            error_text.render(config, "docking_request_timeout_message"),
+            error_text.render(config, "docking_request_timeout_suggestion"),
+        )
+
+    if reason.startswith("Undocked event was not observed within"):
+        return (
+            error_text.render(config, "undocked_timeout_message"),
+            error_text.render(config, "undocked_timeout_suggestion"),
+        )
+
+    if reason.startswith("NoTrack music event was not observed within"):
+        return (
+            error_text.render(config, "no_track_timeout_message"),
+            error_text.render(config, "no_track_timeout_suggestion"),
         )
 
     return (_clean_reason(reason), None)
 
 
-def _describe_station_mismatch(reason: str) -> tuple[str, str] | None:
+def describe_routine_exception(exc: Exception, config: AppConfig) -> tuple[str, str | None]:
+    return (
+        error_text.render(config, "routine_unexpected_exception", error=str(exc)),
+        error_text.render(config, "routine_unexpected_exception_suggestion"),
+    )
+
+
+def _describe_station_mismatch(reason: str, config: AppConfig) -> tuple[str, str] | None:
     match = _STATION_MISMATCH_RE.search(reason)
     if match is None:
         return None
     market_station = _strip_quotes(match.group("market"))
     docked_station = _strip_quotes(match.group("docked"))
     return (
-        f"Station mismatch: market data indicates {market_station}, but we are docked at {docked_station}.",
-        "Open replay history with Ctrl-R, press e to edit the station name, then rerun. If this is a different route, start a new haul with the correct station parameters.",
+        error_text.render(
+            config,
+            "station_mismatch_message",
+            market_station=market_station,
+            docked_station=docked_station,
+        ),
+        error_text.render(config, "station_mismatch_suggestion"),
     )
 
 
-def _describe_route_mismatch(reason: str) -> tuple[str, str] | None:
+def _describe_route_mismatch(reason: str, config: AppConfig) -> tuple[str, str] | None:
     match = _ROUTE_MISMATCH_RE.search(reason)
     if match is None:
         return None
     expected = _strip_quotes(match.group("expected"))
     actual = _strip_quotes(match.group("actual"))
     return (
-        f"Destination mismatch: expected a route to {expected}, but Elite plotted {actual}.",
-        "Use Ctrl-R then e to edit the destination or haul parameters, or start a new haul with the correct route.",
+        error_text.render(
+            config,
+            "route_mismatch_message",
+            expected=expected,
+            actual=actual,
+        ),
+        error_text.render(config, "route_mismatch_suggestion"),
     )
 
 
-def _describe_market_target_mismatch(reason: str) -> tuple[str, str] | None:
+def _describe_market_target_mismatch(reason: str, config: AppConfig) -> tuple[str, str] | None:
     match = _MARKET_NOT_FOUND_RE.search(reason)
+    if match is not None:
+        target = match.group("target")
+        return (
+            error_text.render(config, "market_target_not_found_message", target=target),
+            error_text.render(config, "market_target_not_found_suggestion"),
+        )
+
+    data_match = re.search(r"'(?P<target>.+)' matched navigation list but not market item data", reason)
+    if data_match is None:
+        return None
+    target = data_match.group("target")
+    return (
+        error_text.render(config, "market_target_data_mismatch_message", target=target),
+        error_text.render(config, "market_target_data_mismatch_suggestion"),
+    )
+
+
+def _describe_trade_event_timeout(reason: str, config: AppConfig) -> tuple[str, str] | None:
+    match = _MARKET_EVENT_TIMEOUT_RE.search(reason)
     if match is None:
         return None
-    target = match.group("target")
     return (
-        f"Commodity mismatch: {target} was not found in this station's market list.",
-        "Check the commodity name and station, then use Ctrl-R and e to edit the saved command or start a new haul with the correct parameters.",
+        error_text.render(
+            config,
+            "trade_event_timeout_message",
+            event_type=match.group("event_type"),
+            target=match.group("target"),
+            timeout_s=float(match.group("timeout_s")),
+        ),
+        error_text.render(config, "trade_event_timeout_suggestion"),
     )
 
 

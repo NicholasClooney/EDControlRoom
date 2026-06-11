@@ -7,6 +7,7 @@ from typing import Any
 
 from rich.markup import escape
 
+from edap.control_room import error_text
 from edap.control_room.history import now_iso
 from edap.control_room.interfaces import TradeHost
 from edap.control_room_state import CommandHistoryEntry
@@ -79,7 +80,7 @@ def cmd_buy(app: TradeHost, rest: str, *, skip_delay: bool = False) -> None:
             params={"target": "", "amount": None},
             timestamp=now_iso(),
         ))
-        app._log("[red]Usage: buy <item> [amount|max][/]")
+        app._log(f"[red]{escape(error_text.render(app._config, 'buy_usage'))}[/]")
         return
     if amount is None or not target:
         app._record_history_entry(CommandHistoryEntry(
@@ -88,7 +89,7 @@ def cmd_buy(app: TradeHost, rest: str, *, skip_delay: bool = False) -> None:
             params={"target": target, "amount": None},
             timestamp=now_iso(),
         ))
-        app._log(f"[red]Invalid amount — use a positive integer or MAX[/]")
+        app._log(f"[red]{escape(error_text.render(app._config, 'invalid_amount'))}[/]")
         return
     app._record_history_entry(CommandHistoryEntry(
         raw=f"buy {rest}",
@@ -143,7 +144,7 @@ def cmd_sell(app: TradeHost, rest: str, *, skip_delay: bool = False) -> None:
                 params={"target": "", "amount": None},
                 timestamp=now_iso(),
             ))
-            app._log("[red]Usage: sell <item> [amount|max][/]")
+            app._log(f"[red]{escape(error_text.render(app._config, 'sell_usage'))}[/]")
             return
         if amount is None or not target:
             app._record_history_entry(CommandHistoryEntry(
@@ -152,7 +153,7 @@ def cmd_sell(app: TradeHost, rest: str, *, skip_delay: bool = False) -> None:
                 params={"target": target, "amount": None},
                 timestamp=now_iso(),
             ))
-            app._log("[red]Invalid amount — use a positive integer or MAX[/]")
+            app._log(f"[red]{escape(error_text.render(app._config, 'invalid_amount'))}[/]")
             return
         app._record_history_entry(CommandHistoryEntry(
             raw=f"sell {rest}",
@@ -212,7 +213,7 @@ def sell_all(app: TradeHost, *, skip_delay: bool = False) -> None:
         inventory = _sellable_cargo(_read_cargo_inventory(app._journal_dir))
         used_fallback = bool(inventory)
     if not inventory:
-        app._log("[yellow]Nothing sellable in cargo (empty, all stolen, or all mission cargo)[/]")
+        app._log(f"[yellow]{escape(error_text.render(app._config, 'sell_all_empty'))}[/]")
         return
 
     progress = app._make_progress()
@@ -225,7 +226,7 @@ def sell_all(app: TradeHost, *, skip_delay: bool = False) -> None:
 
     names = ", ".join(item.get("Name_Localised") or item.get("Name", "?") for item in inventory)
     if used_fallback:
-        app._log("[yellow]Cargo journal state was empty; using Cargo.json fallback for sell-all[/]")
+        app._log(f"[yellow]{escape(error_text.render(app._config, 'sell_all_fallback'))}[/]")
     max_attempts = app._config.controls.market_trade_max_attempts
     buy_hold_seconds_per_ton = app._config.controls.market_buy_hold_seconds_per_ton
     critical_level_multiplier = app._config.controls.market_critical_level_multiplier
