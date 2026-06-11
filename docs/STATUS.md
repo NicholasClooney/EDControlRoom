@@ -2,10 +2,11 @@
 
 _This is the startup handoff document for the repo. Keep it current, compact, and biased toward what the next session needs immediately. Hard limit: 80 lines. If an update would push this file past the limit, move displaced older status/session detail to `docs/status-archive.md` or a more specific doc, then trim this file back down._
 
-Last updated: 2026-06-11 (session 131)
+Last updated: 2026-06-11 (session 132)
 
 ## Current Snapshot
 
+- GitHub Actions `Tests` now runs on `pull_request` for PR validation and on `push` only for `main`, which removes duplicate branch+PR test runs for the same PR commit while preserving direct-`main` coverage.
 - GitHub-operation policy now lives in `AGENTS.md`: use `gh` commands by default for PRs, issues, Actions, releases, and other repo interactions.
 - Standalone `multi_leg_haul` / `mult` now exists beside the existing two-way `haul` path: it loads either the new external EDControlRoom multi-leg JSON schema or a Spansh trade-result payload/URL, then resumes from live journal/cargo/market state instead of persisted execution state.
 - The Python distribution/runtime metadata now uses `EDControlRoom` as the project name (`pyproject.toml`, `uv.lock`, version lookup constant, and Control Room update-status text), and release/update checks now point at the moved GitHub repository slug `TheClooneyCollection/EDControlRoom`.

@@ -4,6 +4,7 @@ _This is the rolling short-form log for recent sessions. Keep entries concise an
 
 ## 2026-06-11
 
+- Scoped `.github/workflows/tests.yml` so `push` runs only on `main` while `pull_request` keeps PR validation, removing duplicate `push` + `pull_request` test runs for the same PR commit.
 - Added a standalone `multi_leg_haul` / `mult` control-room path plus `edap.routines.haul_multi_leg`: it loads either the new EDControlRoom multi-leg JSON schema or a Spansh result payload, derives stop/phase from live journal + cargo + market state, and keeps the existing two-way `haul` flow untouched; full suite green at `360 tests in 0.135s`.
 
 ## 2026-06-10
