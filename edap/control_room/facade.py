@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from rich.markup import escape
 
+from edap.control_room import error_text
 from edap.control_room import (
     commands as _commands,
     persistence as _persistence,
@@ -251,7 +252,7 @@ class ControlRoomFacade:
                 reloaded.append(module.__name__)
             except Exception as exc:
                 self._app._log(
-                    f"[red]Reload failed for {escape(module.__name__)}: {escape(str(exc))}[/]"
+                    f"[red]{escape(error_text.render(self._app._config, 'reload_failed', module_name=module.__name__, error=str(exc)))}[/]"
                 )
                 return
         self._app._log("[green]Hot-reloaded modules:[/]")

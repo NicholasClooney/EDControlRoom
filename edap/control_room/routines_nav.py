@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from rich.markup import escape
 
+from edap.control_room import error_text
 from edap.control_room.history import now_iso
 from edap.control_room.interfaces import NavigationHost
 from edap.control_room_state import CommandHistoryEntry
@@ -18,7 +19,7 @@ def cmd_dest(
     if not app._check_routine_ready():
         return
     if not destination:
-        app._log("[red]Usage: dest <system name>[/]")
+        app._log(f"[red]{escape(error_text.render(app._config, 'dest_usage'))}[/]")
         return
     app._start_dest_prompt(
         destination,

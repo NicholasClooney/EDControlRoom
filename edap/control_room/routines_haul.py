@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from rich.markup import escape
 
+from edap.control_room import error_text
 from edap.control_room.history import now_iso
 from edap.control_room.interfaces import HaulHost
 from edap.control_room_state import CommandHistoryEntry
@@ -57,7 +58,7 @@ def dispatch_haul_loop(
         station_1_system = app._ship.system
         app._log(f"[dim]Station 1 system defaulting to current system: [cyan]{escape(station_1_system)}[/][/]")
     if not station_1_buying or not station_2_buying or not station_1 or not station_2 or not station_2_system:
-        app._log("[red]Two-way haul requires station 1/2 names, systems, and buying commodities.[/]")
+        app._log(f"[red]{escape(error_text.render(app._config, 'haul_params_required'))}[/]")
         return
 
     progress = app._make_progress()

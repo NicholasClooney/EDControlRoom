@@ -25,6 +25,7 @@ from edap.config import (
     ScreenConfig,
     TTSConfig,
 )
+from edap.control_room import error_text
 from edap.control_room.app import ActivityLog, _JOURNAL_ARTIFACT_LOG_FLUSH_EVERY
 from edap.control_room.failure_messages import describe_routine_failure
 from edap.control_room.events import apply_ship_event
@@ -816,7 +817,7 @@ class ControlRoomBindingsTests(unittest.TestCase):
 
         output = "\n".join(self.app.logged)
         self.assertEqual(captured_targets, ["Aluminium"])
-        self.assertIn("Cargo.json fallback", output)
+        self.assertIn("sell-all is using Cargo.json as a fallback", output)
         self.assertIn("Sell-all complete", output)
         self.assertNotIn("Nothing sellable in cargo", output)
 
@@ -1930,6 +1931,11 @@ class ControlRoomEventReducerTests(unittest.TestCase):
 
 
 class ControlRoomFailureMessageTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmpdir.cleanup)
+        self.app = _HarnessApp(_make_context(Path(self.tmpdir.name)))
+
     def test_station_mismatch_includes_edit_guidance(self) -> None:
         result = RoutineResult(
             action="MarketBuy",
@@ -1943,7 +1949,7 @@ class ControlRoomFailureMessageTests(unittest.TestCase):
             ),
         )
 
-        message, suggestion = describe_routine_failure(result)
+        message, suggestion = describe_routine_failure(result, self.app._config)
 
         self.assertIn("Station mismatch", message)
         self.assertIn("Hsulong Orbital", message)
@@ -1964,7 +1970,7 @@ class ControlRoomFailureMessageTests(unittest.TestCase):
             ),
         )
 
-        message, suggestion = describe_routine_failure(result)
+        message, suggestion = describe_routine_failure(result, self.app._config)
 
         self.assertIn("Destination mismatch", message)
         self.assertIn("Sol", message)
@@ -1982,7 +1988,7 @@ class ControlRoomFailureMessageTests(unittest.TestCase):
             ),
         )
 
-        message, suggestion = describe_routine_failure(result)
+        message, suggestion = describe_routine_failure(result, self.app._config)
 
         self.assertEqual(
             message,
@@ -2015,6 +2021,17 @@ class ControlRoomFailureMessageTests(unittest.TestCase):
         joined = "\n".join(app.logged)
         self.assertIn("Failed: MarketBuy -- Station mismatch", joined)
         self.assertIn("Try: Open replay history with Ctrl-R, press e to edit", joined)
+
+    def test_controls_unavailable_uses_configured_message(self) -> None:
+        self.app._controls = None
+
+        ready = self.app._check_routine_ready()
+
+        self.assertFalse(ready)
+        self.assertIn(
+            error_text.render(self.app._config, "controls_unavailable"),
+            "\n".join(self.app.logged),
+        )
 
 
 if __name__ == "__main__":

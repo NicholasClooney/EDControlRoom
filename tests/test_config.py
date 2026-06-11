@@ -72,6 +72,40 @@ class LoadConfigTests(unittest.TestCase):
                 config.tts.phrases["ship_serviced"],
                 "Ship is fully fueled up and repaired, {title}.",
             )
+            self.assertEqual(
+                config.error_messages.templates["station_mismatch_message"],
+                "Station mismatch: market data indicates {market_station}, but we are docked at {docked_station}.",
+            )
+
+    def test_error_message_partial_override_keeps_default_templates(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.toml"
+            _write_config(
+                config_path,
+                """
+[paths]
+
+[controls]
+
+[screen]
+
+[runtime]
+
+[error_messages.templates]
+station_mismatch_message = "Market data says {market_station}; docked station says {docked_station}."
+""".strip(),
+            )
+
+            config = load_config(config_path)
+
+            self.assertEqual(
+                config.error_messages.templates["station_mismatch_message"],
+                "Market data says {market_station}; docked station says {docked_station}.",
+            )
+            self.assertEqual(
+                config.error_messages.templates["route_mismatch_suggestion"],
+                "Use Ctrl-R then e to edit the destination or haul parameters, or start a new haul with the correct route.",
+            )
 
     def test_tts_partial_override_keeps_default_phrases(self) -> None:
         with TemporaryDirectory() as temp_dir:

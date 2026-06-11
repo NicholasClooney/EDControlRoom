@@ -6,6 +6,7 @@ from rich.markup import escape
 from textual.widgets import Input
 
 from edap.config import AppConfig
+from edap.control_room import error_text
 from edap.control_room.models import ShipState
 from edap.control_room_state import ControlRoomState
 
@@ -178,7 +179,7 @@ def handle_haul_confirm_prompt(
         )
         app.query_one("#cmd", Input).placeholder = default_placeholder
         return
-    app._log("[red]Press Enter for yes, or type no to cancel.[/]")
+    app._log(f"[red]{escape(error_text.render(app._config, 'confirm_yes_no'))}[/]")
 
 
 def handle_haul_prompt(
@@ -190,7 +191,7 @@ def handle_haul_prompt(
     if app._haul_prompt_step == "station_1_buying":
         resolved = value.strip() or app._haul_prompt_defaults.get("station_1_buying", "")
         if not resolved:
-            app._log("[red]Station 1 buying cargo is required.[/]")
+            app._log(f"[red]{escape(error_text.render(app._config, 'station_1_buying_required'))}[/]")
             return
         app._haul_params["station_1_buying"] = resolved
         app._log(f"  Station 1 buying: [cyan]{escape(resolved)}[/]")
@@ -251,7 +252,7 @@ def handle_haul_prompt(
     if app._haul_prompt_step == "station_2_buying":
         resolved = value.strip() or app._haul_prompt_defaults.get("station_2_buying", "")
         if not resolved:
-            app._log("[red]Station 2 buying cargo is required.[/]")
+            app._log(f"[red]{escape(error_text.render(app._config, 'station_2_buying_required'))}[/]")
             return
         app._haul_params["station_2_buying"] = resolved
         if resolved:
@@ -271,7 +272,7 @@ def handle_haul_prompt(
     if app._haul_prompt_step == "station_2":
         resolved = value.strip() or app._haul_prompt_defaults.get("station_2", "")
         if not resolved:
-            app._log("[red]Station 2 name is required.[/]")
+            app._log(f"[red]{escape(error_text.render(app._config, 'station_2_name_required'))}[/]")
             return
         app._haul_params["station_2"] = resolved
         if resolved:
@@ -291,7 +292,7 @@ def handle_haul_prompt(
     if app._haul_prompt_step == "station_2_system":
         resolved = value.strip() or app._haul_prompt_defaults.get("station_2_system", "")
         if not resolved:
-            app._log("[red]Station 2 system is required.[/]")
+            app._log(f"[red]{escape(error_text.render(app._config, 'station_2_system_required'))}[/]")
             return
         app._haul_params["station_2_system"] = resolved
         app._log(f"  Station 2 system: [cyan]{escape(resolved)}[/]")
@@ -375,9 +376,13 @@ def parse_optional_nonnegative_float(
     try:
         parsed = float(value)
     except ValueError:
-        app._log(f"[red]{escape(label)} must be a number.[/]")
+        app._log(
+            f"[red]{escape(error_text.render(app._config, 'number_required', label=label))}[/]"
+        )
         return None
     if parsed < 0:
-        app._log(f"[red]{escape(label)} must be non-negative.[/]")
+        app._log(
+            f"[red]{escape(error_text.render(app._config, 'nonnegative_required', label=label))}[/]"
+        )
         return None
     return parsed

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from rich.markup import escape
 
+from edap.control_room import error_text
 from edap.control_room.help import CONTROL_ROOM_COMMAND_INDEX, CONTROL_ROOM_COMMANDS
 from edap.control_room.history import now_iso
 from edap.control_room.interfaces import CommandHost
@@ -56,7 +57,7 @@ def dispatch(app: CommandHost, raw: str, *, skip_delay_override: bool | None = N
         app._cmd_haul(raw_rest, skip_delay=skip_delay, raw_command=raw)
     elif verb in {"dest", "set_dest"}:
         if not raw_rest:
-            app._log("[red]Usage: dest <system name>[/]")
+            app._log(f"[red]{escape(error_text.render(app._config, 'dest_usage'))}[/]")
         else:
             app._cmd_dest(raw_rest, skip_delay=skip_delay, raw_command=raw)
     elif verb == "market":
@@ -110,7 +111,9 @@ def cmd_help(app: CommandHost, rest: str) -> None:
 
     command = CONTROL_ROOM_COMMAND_INDEX.get(topic)
     if command is None:
-        app._log(f"[red]Unknown help topic: {escape(rest)}[/]")
+        app._log(
+            f"[red]{escape(error_text.render(app._config, 'unknown_help_topic', topic=rest))}[/]"
+        )
         return
 
     aliases = f"  Aliases: {', '.join(command.aliases)}" if command.aliases else ""
@@ -169,7 +172,7 @@ def cmd_market(app: CommandHost, rest: str) -> None:
     elif rest_lower.startswith("filter "):
         term = rest[7:].strip()
         if not term:
-            app._log("[red]Usage: market filter <item name>[/]")
+            app._log(f"[red]{escape(error_text.render(app._config, 'market_filter_usage'))}[/]")
             return
         app._market_filter = term.title()
         app._log(f"[dim]Market filter: {escape(app._market_filter)}[/]")
