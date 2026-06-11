@@ -516,6 +516,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
     def test_transit_opens_nav_panel_after_hyperspace_arrival_by_default(self) -> None:
         controls = FakeShipControls()
         sleep_calls: list[float] = []
+        announcements: list[tuple[AnnouncementId, dict[str, object]]] = []
         watcher = FakeWatcher([
             [{"event": "FSDJump", "StarSystem": _SYSTEM_2}],
             [{"event": "SupercruiseExit", "BodyType": "Station"}],
@@ -562,6 +563,7 @@ class TwoWayHaulLoopTests(unittest.TestCase):
                     trade_timeout_s=10.0,
                     time_fn=_ticking_clock(),
                     sleeper=lambda s: sleep_calls.append(s),
+                    announce_fn=lambda message_id, **values: announcements.append((message_id, values)),
                 )
 
         self.assertEqual(result.dispatch.status, "error")
@@ -569,6 +571,10 @@ class TwoWayHaulLoopTests(unittest.TestCase):
         self.assertEqual(actions.count("FocusLeftPanel"), 2)
         self.assertLess(actions.index("FocusLeftPanel"), actions.index("UseBoostJuice"))
         self.assertIn(3.0, sleep_calls)
+        self.assertIn(
+            (AnnouncementId.ARRIVAL_NEXT_STATION, {"station_name": _STATION_2}),
+            announcements,
+        )
 
     def test_transit_skips_nav_panel_when_disabled(self) -> None:
         controls = FakeShipControls()

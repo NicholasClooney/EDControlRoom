@@ -261,12 +261,14 @@ def _engage_hyperspace_after_escape(ctx: _HaulCtx) -> None:
     ctx.controls.hyper_super_combination()
 
 
-def _open_navigation_panel_after_arrival(ctx: _HaulCtx) -> None:
+def _open_navigation_panel_after_arrival(ctx: _HaulCtx, *, station_name: str = "") -> None:
     if not ctx.open_nav_panel_after_hyperspace_arrival:
         return
     if ctx.nav_panel_open_delay_s > 0:
         ctx.progress_fn(f"Waiting {ctx.nav_panel_open_delay_s:.1f}s before opening navigation panel...")
         ctx.sleeper(ctx.nav_panel_open_delay_s)
+    if station_name:
+        ctx.announce_fn(AnnouncementId.ARRIVAL_NEXT_STATION, station_name=station_name)
     ctx.progress_fn("Hyperspace complete - opening left panel for navigation...")
     dispatch = ctx.controls.focus_left_panel()
     if dispatch.status != "ok":
@@ -633,9 +635,9 @@ def _run_transit(
             ctx.progress_fn("Warning: hyperspace arrival event not observed; continuing toward station.")
         else:
             ctx.progress_fn("Arrived in destination system")
-            _open_navigation_panel_after_arrival(ctx)
+            _open_navigation_panel_after_arrival(ctx, station_name=destination_leg.station)
     elif resume_state == _TransitResumeState.ARRIVED_IN_DESTINATION_SYSTEM:
-        _open_navigation_panel_after_arrival(ctx)
+        _open_navigation_panel_after_arrival(ctx, station_name=destination_leg.station)
 
     result = dock(
         ctx.controls,

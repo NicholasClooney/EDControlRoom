@@ -19,6 +19,7 @@ from edap.multi_leg_haul import (
 from edap.routines import RoutineResult
 from edap.routines.callbacks import noop_announce, noop_progress
 from edap.routines.haul_multi_leg import Phase, multi_leg_haul as _multi_leg_haul
+from edap.tts import AnnouncementId
 from tests.fakes import FakeShipControls, FakeWatcher
 
 
@@ -119,6 +120,64 @@ class MultiLegHaulDefinitionTests(unittest.TestCase):
 
 
 class MultiLegHaulRoutineTests(unittest.TestCase):
+    def test_transit_announces_next_station_before_opening_nav_panel(self) -> None:
+        controls = FakeShipControls()
+        sleep_calls: list[float] = []
+        announcements: list[tuple[AnnouncementId, dict[str, object]]] = []
+        watcher = FakeWatcher([
+            [{"event": "FSDJump", "StarSystem": "HIP 68076"}],
+            [{"event": "SupercruiseExit", "BodyType": "Station"}],
+            [],
+            [{"event": "DockingGranted", "LandingPad": 1, "StationName": "Bolivar Horizons"}],
+            [{"event": "Docked", "StationName": "Bolivar Horizons"}],
+        ])
+        definition = _definition()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            (journal_dir / "Journal.240101000000.01.log").write_text(
+                '{"event":"FSDJump","StarSystem":"HIP 68076"}\n',
+                encoding="utf-8",
+            )
+            (journal_dir / "Market.json").write_text(
+                '{"StationName":"Pawelczyk Dock","StarSystem":"HIP 58412","Items":[]}\n',
+                encoding="utf-8",
+            )
+            (journal_dir / "Cargo.json").write_text(
+                '{"Inventory":[{"Name":"water purifiers","Name_Localised":"Water Purifiers","Count":460,"Stolen":0}]}\n',
+                encoding="utf-8",
+            )
+            with patch("edap.routines.haul_multi_leg.market_sell") as market_sell_mock:
+                market_sell_mock.return_value = RoutineResult(
+                    action="market_sell",
+                    dispatch=ActionDispatchResult(action="market_sell", status="error", reason="stop after transit"),
+                )
+                result = multi_leg_haul(
+                    controls,
+                    watcher,
+                    definition=definition,
+                    journal_dir=journal_dir,
+                    step_delay_s=0.0,
+                    settle_s=0.0,
+                    supercruise_exit_settle_s=0.0,
+                    boost_settle_s=0.0,
+                    dock_timeout_s=30.0,
+                    request_timeout_s=10.0,
+                    undock_timeout_s=10.0,
+                    trade_timeout_s=10.0,
+                    time_fn=_ticking_clock(),
+                    sleeper=lambda s: sleep_calls.append(s),
+                    announce_fn=lambda message_id, **values: announcements.append((message_id, values)),
+                )
+
+        self.assertEqual(result.dispatch.status, "error")
+        self.assertEqual([call["action"] for call in controls.calls].count("FocusLeftPanel"), 2)
+        self.assertIn(3.0, sleep_calls)
+        self.assertIn(
+            (AnnouncementId.ARRIVAL_NEXT_STATION, {"station_name": "Bolivar Horizons"}),
+            announcements,
+        )
+
     def test_route_can_resume_midway_from_destination_station(self) -> None:
         controls = FakeShipControls()
         watcher = FakeWatcher([
