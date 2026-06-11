@@ -64,6 +64,7 @@ Use [docs/session-log.md](docs/session-log.md) for concise rolling session notes
 - Treat macOS as the primary target until the diagnostic path is stable.
 - Preserve existing OpenCV/navigation behavior unless a change is required for portability.
 - Make incremental changes that are easy to validate.
+- Never use `git reset --hard` as a first option. Always consider safer alternatives first, and if a hard reset truly seems necessary, consult the user before doing it.
 - Prefer strong non-optional types when production/runtime callers always provide a value. Do not widen production APIs to `Optional[...]` just because tests want to omit an argument.
 - When tests need silent progress/announcement-style hooks, pass an explicit no-op helper or lambda from the test instead of relying on `None` in the runtime signature.
 - Do not give production code default no-op callback parameters. Production-facing APIs must require explicit callbacks; shared no-op callbacks are allowed only in tests or test-local wrappers/helpers.
