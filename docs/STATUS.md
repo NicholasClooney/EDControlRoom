@@ -2,7 +2,7 @@
 
 _This is the startup handoff document for the repo. Keep it current, compact, and biased toward what the next session needs immediately. Hard limit: 80 lines. If an update would push this file past the limit, move displaced older status/session detail to `docs/status-archive.md` or a more specific doc, then trim this file back down._
 
-Last updated: 2026-06-11 (session 129)
+Last updated: 2026-06-11 (session 130)
 
 ## Current Snapshot
 
@@ -21,6 +21,7 @@ Last updated: 2026-06-11 (session 129)
 
 ## Active Capabilities
 
+- GitHub Actions `test_timing` now allows the full unittest suite up to `5s` in `.github/workflows/tests.yml`, matching the current CI reality while the repo still tracks local timing regressions separately with `tools/check_test_timing.py` and `tools/report_test_timing.py`.
 - Operator-facing Control Room text now splits between YAML defaults: `defaults/error_messages.yaml` for paired failure `message`/`suggestion` entries and `defaults/messages.yaml` for other prompts/usage lines; `config.toml` overrides stay supported, including legacy flat error override keys.
 - Control Room routine failures now surface as `Failed: ...` with operator-facing explanations plus `Try:` recovery guidance for station mismatches, destination mismatches, and commodity-name mismatches; the suggested recovery path points at replay history (`Ctrl-R` then `e`) or restarting the haul with corrected parameters instead of leaving only `Done: <step> (error)`.
 - Market buy/sell routines now back out to station services before returning lookup or station-check errors that happen after the commodity market opens, so failed market selection does not leave the operator stranded inside the market UI.

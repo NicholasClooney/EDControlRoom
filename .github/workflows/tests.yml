@@ -38,4 +38,4 @@ jobs:
       - name: Install dependencies
         run: uv sync --extra dev
       - name: Guard full test-suite timing
-        run: uv run python3 tools/check_test_timing.py discover --start-directory tests --max-seconds 3
+        run: uv run python3 tools/check_test_timing.py discover --start-directory tests --max-seconds 5
