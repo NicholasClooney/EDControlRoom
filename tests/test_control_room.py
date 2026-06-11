@@ -26,6 +26,7 @@ from edap.config import (
     TTSConfig,
 )
 from edap.control_room.app import ActivityLog, _JOURNAL_ARTIFACT_LOG_FLUSH_EVERY
+from edap.control_room.failure_messages import describe_routine_failure
 from edap.control_room.events import apply_ship_event
 from edap.control_room import rendering as control_room_rendering
 from edap.control_room.models import MarketData, ShipState
@@ -33,7 +34,7 @@ from edap.control_room_state import CommandHistoryEntry
 from edap.routines import RoutineResult
 from edap.runtime import ResolvedPath, RuntimeContext
 from edap.tts import AnnouncementId
-from edap.control_room.workers import PendingRoutineCancelled, RoutineCancelled
+from edap.control_room.workers import PendingRoutineCancelled, RoutineCancelled, run_routine_thread
 from edap.version import GitHubRelease
 
 
@@ -1926,6 +1927,94 @@ class ControlRoomEventReducerTests(unittest.TestCase):
 
         self.assertEqual(ship.status, "in_space")
         self.assertIsNone(ship.station)
+
+
+class ControlRoomFailureMessageTests(unittest.TestCase):
+    def test_station_mismatch_includes_edit_guidance(self) -> None:
+        result = RoutineResult(
+            action="MarketBuy",
+            dispatch=ActionDispatchResult(
+                action="MarketBuy",
+                status="error",
+                reason=(
+                    "Station check failed after 3 attempts: "
+                    "Market.json is from 'Hsulong Orbital' but last Docked event is 'Jameson Memorial'"
+                ),
+            ),
+        )
+
+        message, suggestion = describe_routine_failure(result)
+
+        self.assertIn("Station mismatch", message)
+        self.assertIn("Hsulong Orbital", message)
+        self.assertIn("Jameson Memorial", message)
+        self.assertIn("market data indicates", message)
+        self.assertIn("we are docked at", message)
+        self.assertIsNotNone(suggestion)
+        self.assertIn("Ctrl-R", suggestion or "")
+        self.assertIn("press e to edit", suggestion or "")
+
+    def test_route_mismatch_includes_replay_guidance(self) -> None:
+        result = RoutineResult(
+            action="GalaxyMapOpen",
+            dispatch=ActionDispatchResult(
+                action="GalaxyMapOpen",
+                status="error",
+                reason="route mismatch: expected 'Sol', got 'Achenar'",
+            ),
+        )
+
+        message, suggestion = describe_routine_failure(result)
+
+        self.assertIn("Destination mismatch", message)
+        self.assertIn("Sol", message)
+        self.assertIn("Achenar", message)
+        self.assertIsNotNone(suggestion)
+        self.assertIn("Ctrl-R", suggestion or "")
+
+    def test_market_target_mismatch_uses_operator_language(self) -> None:
+        result = RoutineResult(
+            action="MarketSell",
+            dispatch=ActionDispatchResult(
+                action="MarketSell",
+                status="error",
+                reason="'Gold Ore' not found in market list (first items: ['Bertrandite'])",
+            ),
+        )
+
+        message, suggestion = describe_routine_failure(result)
+
+        self.assertEqual(
+            message,
+            "Commodity mismatch: Gold Ore was not found in this station's market list.",
+        )
+        self.assertIsNotNone(suggestion)
+        self.assertIn("commodity name", suggestion or "")
+
+    def test_worker_logs_failed_reason_and_try_line(self) -> None:
+        app = _HarnessApp(_make_context(Path(tempfile.mkdtemp())))
+
+        class _Worker:
+            is_cancelled = False
+
+        result = RoutineResult(
+            action="MarketBuy",
+            dispatch=ActionDispatchResult(
+                action="MarketBuy",
+                status="error",
+                reason=(
+                    "Station check failed after 3 attempts: "
+                    "Market.json is from 'Hsulong Orbital' but last Docked event is 'Jameson Memorial'"
+                ),
+            ),
+        )
+
+        with patch("edap.control_room.workers.get_current_worker", return_value=_Worker()):
+            run_routine_thread(app, lambda: result)
+
+        joined = "\n".join(app.logged)
+        self.assertIn("Failed: MarketBuy -- Station mismatch", joined)
+        self.assertIn("Try: Open replay history with Ctrl-R, press e to edit", joined)
 
 
 if __name__ == "__main__":

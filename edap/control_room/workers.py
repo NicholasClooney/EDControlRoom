@@ -6,6 +6,7 @@ from typing import Any, Callable, Protocol
 from rich.markup import escape
 from textual.worker import get_current_worker
 
+from edap.control_room.failure_messages import describe_routine_failure
 from edap.progress_controls import ProgressShipControls
 from edap.state import JournalWatcher
 
@@ -168,11 +169,22 @@ def run_routine_thread(
             app.call_from_thread(app._log, "[yellow]Routine cancelled.[/]")
         elif result is not None:
             status = result.dispatch.status
-            color = "green" if status == "ok" else "yellow"
-            app.call_from_thread(
-                app._log,
-                f"[{color}]Done: {escape(result.action)} ({escape(status)})[/]",
-            )
+            if status == "ok":
+                app.call_from_thread(
+                    app._log,
+                    f"[green]Done: {escape(result.action)} ({escape(status)})[/]",
+                )
+            else:
+                message, suggestion = describe_routine_failure(result)
+                app.call_from_thread(
+                    app._log,
+                    f"[red]Failed: {escape(result.action)} -- {escape(message)}[/]",
+                )
+                if suggestion:
+                    app.call_from_thread(
+                        app._log,
+                        f"[yellow]Try: {escape(suggestion)}[/]",
+                    )
     except PendingRoutineCancelled as exc:
         app.call_from_thread(app._log, f"[yellow]{escape(str(exc))}[/]")
     except RoutineCancelled:
