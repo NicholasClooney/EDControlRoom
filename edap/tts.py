@@ -22,6 +22,7 @@ class AnnouncementId(str, Enum):
     SALE_PROFIT = "sale_profit"
     JUMP_INITIATED = "jump_initiated"
     ARRIVAL = "arrival"
+    ARRIVAL_NEXT_STATION = "arrival_next_station"
     APPROACHING_STATION = "approaching_station"
     DOCKING_REQUEST = "docking_request"
     AUTO_DOCKING_ENGAGED = "auto_docking_engaged"
