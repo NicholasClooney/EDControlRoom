@@ -21,6 +21,7 @@ Last updated: 2026-06-11 (session 128)
 
 ## Active Capabilities
 
+- Operator-facing Control Room error text now lives in `defaults/error_messages.toml`, loads through `AppConfig.error_messages`, and can be overridden from `[error_messages.templates]` in `config.toml`; routine failures, startup path errors, command usage errors, and haul-prompt validation now render through that shared template table instead of hardcoded strings.
 - Control Room routine failures now surface as `Failed: ...` with operator-facing explanations plus `Try:` recovery guidance for station mismatches, destination mismatches, and commodity-name mismatches; the suggested recovery path points at replay history (`Ctrl-R` then `e`) or restarting the haul with corrected parameters instead of leaving only `Done: <step> (error)`.
 - Market buy/sell routines now back out to station services before returning lookup or station-check errors that happen after the commodity market opens, so failed market selection does not leave the operator stranded inside the market UI.
 - `release-please` now patches both `pyproject.toml` and the root `EDControlRoom` package entry in `uv.lock`, so release PRs can keep repo version metadata aligned without needing a separate `uv sync` commit step.
@@ -43,6 +44,7 @@ Last updated: 2026-06-11 (session 128)
 
 ## Current Next Steps
 
+1. Live-validate the new operator-facing failure wording in Control Room against real stale-market, wrong-station, and bad-commodity cases, and trim any messages that still sound too internal.
 1. Live-validate the new market error back-out path against the real station-services/menu stack, especially after stale `Market.json` or missing-commodity failures.
 1. Decide whether to keep GitHub release names manually curated to the `EDControlRoom vX.Y.Z - <short release label>` house style or add a follow-up workflow that rewrites the stock `release-please` release title after publish.
 1. Live-validate the updated two-way haul startup/resume path and haul telemetry, especially station-2 starts, station-1 run finalization, and `Market.json` fallback behavior.
