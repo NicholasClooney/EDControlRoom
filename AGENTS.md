@@ -50,6 +50,7 @@ Use [docs/session-log.md](docs/session-log.md) for concise rolling session notes
 
 ### GitHub Actions Checks
 
+- When operating on GitHub for this repo, use `gh` commands by default for PRs, issues, Actions, releases, and other repo interactions rather than browser/manual UI flows.
 - Use compact `gh` queries first so Actions debugging does not flood context.
 - Recent run summary: `gh run list --limit 8 --json databaseId,workflowName,displayTitle,headBranch,event,status,conclusion,updatedAt`
 - Single run job summary: `gh run view <run-id> --json databaseId,workflowName,displayTitle,headBranch,event,status,conclusion,jobs,updatedAt`

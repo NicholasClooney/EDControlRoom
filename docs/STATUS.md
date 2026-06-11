@@ -2,10 +2,11 @@
 
 _This is the startup handoff document for the repo. Keep it current, compact, and biased toward what the next session needs immediately. Hard limit: 80 lines. If an update would push this file past the limit, move displaced older status/session detail to `docs/status-archive.md` or a more specific doc, then trim this file back down._
 
-Last updated: 2026-06-11 (session 127)
+Last updated: 2026-06-11 (session 128)
 
 ## Current Snapshot
 
+- GitHub-operation policy now lives in `AGENTS.md`: use `gh` commands by default for PRs, issues, Actions, releases, and other repo interactions.
 - The Python distribution/runtime metadata now uses `EDControlRoom` as the project name (`pyproject.toml`, `uv.lock`, version lookup constant, and Control Room update-status text), and release/update checks now point at the moved GitHub repository slug `TheClooneyCollection/EDControlRoom`.
 - `release-please` is now wired for PR-based releases on `main` with the repo rooted at manifest version `1.7.3`; use a `RELEASE_PLEASE_TOKEN` secret instead of plain `GITHUB_TOKEN` if release PRs should trigger the normal CI workflows.
 - PR title policy now lives in `AGENTS.md` and the GitHub PR template: use Conventional Commit-style titles for normal PRs, default `dev` -> `main` promotions to `chore: promote dev to main`, and reserve `release: ...` for versioned release PRs.
