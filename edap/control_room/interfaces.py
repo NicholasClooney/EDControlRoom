@@ -70,6 +70,7 @@ class RoutineHost(Protocol):
     _ship: ShipState
     _active_routine_name: str | None
     _haul_stop_requested: bool
+    _time_fn: Callable[[], float]
 
     def _log(self, msg: str) -> None: ...
     def _announce_tts(self, message_id: AnnouncementId, /, **values: object) -> None: ...

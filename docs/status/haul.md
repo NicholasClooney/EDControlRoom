@@ -1,5 +1,6 @@
 # Haul Status
 ## Current
+- Market sell routines now merge the hidden-cargo subset from `Cargo.json` back into the demand-sorted `Market.json` sell list so hidden commodities no longer misindex later sale rows.
 - Two-way `haul` remains the primary operator path.
 - Standalone `multi_leg_haul` / `mult` handles finite external JSON or Spansh-driven routes without changing the two-way haul flow.
 - Multi-leg resume derives state from live journal, cargo, and market data instead of persisted routine state.
