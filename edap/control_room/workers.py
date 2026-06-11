@@ -202,7 +202,7 @@ def run_routine_thread(
 def clear_routine(app: WorkerHost) -> None:
     app._routine_active = False
     app._routine_worker = None
-    if app._active_routine_name == "haul":
+    if app._active_routine_name in {"haul", "multi_leg_haul"}:
         app._stop_haul_stats()
         app._clear_pending_haul_stop()
     app._active_routine_name = None

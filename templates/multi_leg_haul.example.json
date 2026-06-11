@@ -1,0 +1,68 @@
+{
+  "schema": "edcontrolroom.multi_leg_haul",
+  "version": 1,
+  "route_name": "Pawelczyk Dock -> Pawelczyk Dock (2 legs)",
+  "source": {
+    "provider": "spansh",
+    "job": "example-job-id",
+    "url": "https://spansh.co.uk/trade/results/example",
+    "parameters": {
+      "max_cargo": "460",
+      "requires_large_pad": 1
+    }
+  },
+  "legs": [
+    {
+      "index": 1,
+      "source": {
+        "system": "HIP 58412",
+        "station": "Pawelczyk Dock",
+        "distance_to_arrival": 18
+      },
+      "destination": {
+        "system": "HIP 68076",
+        "station": "Bolivar Horizons",
+        "distance_to_arrival": 1214
+      },
+      "distance_ly": 39.0604999487974,
+      "total_profit": 774180,
+      "cumulative_profit": 774180,
+      "cargo": [
+        {
+          "commodity": "Water Purifiers",
+          "amount": 460,
+          "buy_price": 403,
+          "sell_price": 2086,
+          "profit_per_unit": 1683,
+          "total_profit": 774180
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "source": {
+        "system": "HIP 68076",
+        "station": "Bolivar Horizons",
+        "distance_to_arrival": 1214
+      },
+      "destination": {
+        "system": "HIP 58412",
+        "station": "Pawelczyk Dock",
+        "distance_to_arrival": 18
+      },
+      "distance_ly": 30.068232951281,
+      "total_profit": 8117160,
+      "cumulative_profit": 8891340,
+      "cargo": [
+        {
+          "commodity": "Aluminium",
+          "amount": 460,
+          "buy_price": 2674,
+          "sell_price": 20320,
+          "profit_per_unit": 17646,
+          "total_profit": 8117160
+        }
+      ]
+    }
+  ]
+}

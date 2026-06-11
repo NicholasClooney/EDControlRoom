@@ -53,6 +53,13 @@ CONTROL_ROOM_COMMANDS: list[CommandHelp] = [
         detail="Starts a symmetric loop: at station 1 it sells the cargo bought at station 2, then buys station 1's outbound cargo; at station 2 it does the reverse. Control room prompts for both station names, both systems, both outbound cargo names, the galaxy-map settle delay, and the docking timeout.",
     ),
     CommandHelp(
+        name="multi_leg_haul",
+        usage="multi_leg_haul <route.json | spansh-url>",
+        summary="Run a standalone multi-leg haul route from our JSON schema or a Spansh result.",
+        detail="Loads a generalized multi-leg haul definition, then resumes from live journal/cargo/market state rather than persisted session state. Use this for finite multi-hop trading routes that buy and sell the exact commodity list on each leg.",
+        aliases=("mult",),
+    ),
+    CommandHelp(
         name="dest",
         usage="dest <system>",
         summary="Open the galaxy map and plot a route to a named system.",

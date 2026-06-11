@@ -70,6 +70,7 @@ What works today:
 - shared journal parsing, bindings lookup, and platform input/runtime plumbing across supported targets
 - live-validated operator paths on macOS via CrossOver and on Windows via community testing from CMDR VRYAE
 - journal-driven `haul`, `jump`, `dock`, `undock`, `buy`, `sell`, and `dest` flows
+- a standalone `multi_leg_haul` / `mult` flow for finite multi-hop trade routes from our JSON schema or Spansh results
 - a live Control Room TUI with ship status, activity log, market panel, replay history, saved default haul setup, and repo-local journal-event logging
 
 What is not done:

@@ -905,6 +905,44 @@ class ControlRoomBindingsTests(unittest.TestCase):
         self.assertEqual(captured["kwargs"]["station_1_system"], "Sol")
         self.assertIn("Station 1 defaulting to current station", "\n".join(self.app.logged))
 
+    def test_multi_leg_haul_dispatch_loads_route_and_starts_routine(self) -> None:
+        captured: dict[str, object] = {}
+        definition = type(
+            "_Def",
+            (),
+            {"route_name": "Fixture route", "total_legs": 2, "source_provider": "spansh"},
+        )()
+
+        self.app._controls = object()
+        self.app._make_progress = lambda: (lambda _: None)
+        self.app._make_controls = lambda progress: object()
+        self.app._make_sleeper = lambda: (lambda _: None)
+        self.app._make_watcher = lambda: object()
+        self.app._run_in_thread = lambda fn: fn()
+
+        def fake_multi_leg_haul(controls, watcher, **kwargs):
+            captured["kwargs"] = kwargs
+            return RoutineResult(
+                action="multi_leg_haul",
+                dispatch=ActionDispatchResult(action="multi_leg_haul", status="ok"),
+            )
+
+        with patch("edap.control_room.routines_haul.load_multi_leg_haul_definition", return_value=definition), patch(
+            "edap.control_room.routines_haul.multi_leg_haul",
+            new=fake_multi_leg_haul,
+        ):
+            self.app._cmd_multi_leg_haul("fixture.json", raw_command="multi_leg_haul fixture.json")
+
+        self.assertEqual(captured["kwargs"]["definition"], definition)
+        self.assertEqual(self.app._active_routine_name, "multi_leg_haul")
+        self.assertIn("Starting multi-leg haul:", "\n".join(self.app.logged))
+
+    def test_multi_leg_haul_requires_source_argument(self) -> None:
+        self.app._controls = object()
+        self.app._cmd_multi_leg_haul("", raw_command="multi_leg_haul")
+
+        self.assertIn("Usage: multi_leg_haul", "\n".join(self.app.logged))
+
     def test_haul_confirm_no_cancels_launch(self) -> None:
         self.app.query_one = lambda *args, **kwargs: _InputStub()  # type: ignore[method-assign]
         self.app._haul_confirm_buy_station = "Mystery Base"

@@ -16,6 +16,7 @@ Routine commands (type in the input bar):
     sell [item] [N]    sell commodity (default: market filter); amount default MAX
     jump               FSD jump sequence
     haul [commodity]   start haul loop; prompts for commodity/stations if not provided
+    multi_leg_haul <route.json|spansh-url>   run a standalone multi-leg haul route
     dest <system>      open galaxy map and plot a route to the named system
     set_dest <system>  alias for dest
 
@@ -127,7 +128,7 @@ _STARTUP_BINDING_WARNING_IGNORED_ACTIONS = frozenset({
     "YawRightButton",
 })
 
-_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | dest <system> | market ... | reload | q"
+_DEFAULT_COMMAND_PLACEHOLDER = "commands | help dock | replay | dock | undock | boost | escape | jump | buy <item> [N] | sell [item] | haul [commodity] | multi_leg_haul <route> | dest <system> | market ... | reload | q"
 _ACTIVITY_AUTO_FOLLOW_DEBOUNCE_SECONDS = 10.0
 _JOURNAL_ARTIFACT_LOG_PATH = Path("artifacts/control-room.log")
 _JOURNAL_ARTIFACT_LOG_BUFFER_SIZE = 8192
@@ -942,9 +943,18 @@ class ControlRoomApp(App[None]):
             )
             self._announce_tts(AnnouncementId.HAUL_STOP_AFTER_RUN)
             return
+        if self._active_routine_name == "multi_leg_haul" and not self._haul_stop_requested:
+            self._haul_stop_requested = True
+            self._log(
+                f"[yellow]{escape(source)} received — multi-leg haul will stop at the next station boundary before departure.[/]"
+            )
+            return
         if self._active_routine_name == "haul" and self._haul_stop_requested:
             self._haul_stop_requested = False
             self._log(f"[yellow]{escape(source)} received again — cancelling haul immediately.[/]")
+        elif self._active_routine_name == "multi_leg_haul" and self._haul_stop_requested:
+            self._haul_stop_requested = False
+            self._log(f"[yellow]{escape(source)} received again — cancelling multi-leg haul immediately.[/]")
         else:
             self._log(f"[yellow]{escape(source)} received — cancelling active routine.[/]")
         self._routine_worker.cancel()

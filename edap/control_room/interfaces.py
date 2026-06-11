@@ -38,6 +38,13 @@ class CommandHost(Protocol):
         skip_delay: bool = False,
         raw_command: str | None = None,
     ) -> None: ...
+    def _cmd_multi_leg_haul(
+        self,
+        rest: str,
+        *,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None: ...
     def _cmd_dest(
         self,
         destination: str,
@@ -125,6 +132,7 @@ class HaulHost(RoutineHost, Protocol):
         station_1: str,
         station_2: str,
     ) -> None: ...
+    def _stop_haul_stats(self) -> None: ...
 
 
 class ReplayInputHost(Protocol):

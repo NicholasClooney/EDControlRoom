@@ -55,6 +55,8 @@ def dispatch(app: CommandHost, raw: str, *, skip_delay_override: bool | None = N
         app._cmd_sell(raw_rest, skip_delay=skip_delay)
     elif verb == "haul":
         app._cmd_haul(raw_rest, skip_delay=skip_delay, raw_command=raw)
+    elif verb in {"multi_leg_haul", "mult"}:
+        app._cmd_multi_leg_haul(raw_rest, skip_delay=skip_delay, raw_command=raw)
     elif verb in {"dest", "set_dest"}:
         if not raw_rest:
             app._log(f"[red]{escape(error_text.render(app._config, 'dest_usage'))}[/]")

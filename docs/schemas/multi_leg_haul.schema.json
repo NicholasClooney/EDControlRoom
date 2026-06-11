@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://edcontrolroom.local/schemas/multi_leg_haul.schema.json",
+  "title": "EDControlRoom Multi-Leg Haul Definition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "version", "route_name", "legs"],
+  "properties": {
+    "schema": {
+      "const": "edcontrolroom.multi_leg_haul"
+    },
+    "version": {
+      "const": 1
+    },
+    "route_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": { "type": ["string", "null"] },
+        "job": { "type": ["string", "null"] },
+        "url": { "type": ["string", "null"] },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "legs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["index", "source", "destination", "cargo"],
+        "properties": {
+          "index": { "type": "integer", "minimum": 1 },
+          "source": { "$ref": "#/$defs/endpoint" },
+          "destination": { "$ref": "#/$defs/endpoint" },
+          "distance_ly": { "type": ["number", "null"] },
+          "total_profit": { "type": ["integer", "null"] },
+          "cumulative_profit": { "type": ["integer", "null"] },
+          "cargo": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "$ref": "#/$defs/cargo_transfer" }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "endpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["system", "station"],
+      "properties": {
+        "system": { "type": "string" },
+        "station": { "type": "string" },
+        "distance_to_arrival": { "type": ["integer", "null"] },
+        "market_id": { "type": ["integer", "null"] },
+        "market_updated_at": { "type": ["integer", "null"] },
+        "system_id64": { "type": ["integer", "null"] },
+        "x": { "type": ["number", "null"] },
+        "y": { "type": ["number", "null"] },
+        "z": { "type": ["number", "null"] }
+      }
+    },
+    "cargo_transfer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commodity", "amount"],
+      "properties": {
+        "commodity": { "type": "string", "minLength": 1 },
+        "amount": { "type": "integer", "minimum": 1 },
+        "buy_price": { "type": ["integer", "null"] },
+        "sell_price": { "type": ["integer", "null"] },
+        "profit_per_unit": { "type": ["integer", "null"] },
+        "total_profit": { "type": ["integer", "null"] }
+      }
+    }
+  }
+}

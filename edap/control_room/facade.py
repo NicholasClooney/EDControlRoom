@@ -215,6 +215,20 @@ class ControlRoomFacade:
             raw_command=raw_command,
         )
 
+    def cmd_multi_leg_haul(
+        self,
+        rest: str,
+        *,
+        skip_delay: bool = False,
+        raw_command: str | None = None,
+    ) -> None:
+        routines_haul.cmd_multi_leg_haul(
+            self._app,
+            rest,
+            skip_delay=skip_delay,
+            raw_command=raw_command,
+        )
+
     def start_haul_confirm_prompt(self, station: str) -> None:
         _prompts.start_haul_confirm_prompt(self._app, station)
 
@@ -295,6 +309,7 @@ FACADE_METHOD_MAP = {
     "_sell_item": "sell_item",
     "_sell_all": "sell_all",
     "_cmd_haul": "cmd_haul",
+    "_cmd_multi_leg_haul": "cmd_multi_leg_haul",
     "_start_haul_confirm_prompt": "start_haul_confirm_prompt",
     "_handle_haul_confirm_prompt": "handle_haul_confirm_prompt",
     "_handle_haul_prompt": "handle_haul_prompt",

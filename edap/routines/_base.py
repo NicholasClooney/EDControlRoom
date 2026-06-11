@@ -138,6 +138,7 @@ class SupportsHaulControls(
     SupportsUndockControls,
     SupportsMarketControls,
     SupportsGalaxyMapControls,
+    SupportsJumpControls,
     SupportsRawKeyControls,
     Protocol,
 ):

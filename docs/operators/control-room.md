@@ -36,6 +36,7 @@ EDControlRoom works by sending keyboard input to Elite Dangerous. After you fire
 - `sell`
 - `sell <item> [N|max]`
 - `haul [commodity]`
+- `multi_leg_haul <route.json | spansh-url>`
 - `dest <system>`
 - `set_dest <system>`
 
@@ -47,6 +48,13 @@ EDControlRoom works by sending keyboard input to Elite Dangerous. After you fire
 - haul resumes from current journal and sidecar state rather than assuming a fresh start
 - one default haul setup can be saved and reused across restarts
 - `replay` / `Ctrl-R` is the quickest way to relaunch recent haul commands or rerun a saved pattern without retyping it
+
+## Multi-Leg Haul
+
+- `multi_leg_haul <route.json | spansh-url>` (alias `mult`) runs a standalone finite multi-leg haul route
+- the route can come from our normalized JSON schema or directly from a Spansh trade-result payload / URL
+- resume is still state-based: rerun the command and EDControlRoom re-derives the current stop/phase from journal, `Cargo.json`, `Market.json`, and the route definition
+- the public schema intentionally excludes plan or execution state; see `docs/schemas/multi_leg_haul.schema.json` and `templates/multi_leg_haul.example.json`
 
 Interrupt behavior during `haul` is special:
 

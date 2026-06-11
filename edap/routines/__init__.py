@@ -20,6 +20,7 @@ from edap.routines.docking import (
     undock,
 )
 from edap.routines.galaxy_map import set_gal_map_destination
+from edap.routines.haul_multi_leg import multi_leg_haul
 from edap.routines.haul_two_way import haul_loop_two_way
 from edap.routines.jump import jump
 from edap.routines.market import market_buy, market_sell
@@ -44,6 +45,7 @@ __all__ = [
     "escape_mass_lock",
     "docking_request_sequence",
     "haul_loop",
+    "multi_leg_haul",
     "haul_loop_two_way",
     "jump",
     "market_buy",
