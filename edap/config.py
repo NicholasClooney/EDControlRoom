@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 import sys
 import tomllib
@@ -144,6 +145,7 @@ class ConfigError(ValueError):
     """Raised when config parsing or validation fails."""
 
 
+@lru_cache(maxsize=1)
 def _load_default_tts_table() -> dict[str, object]:
     with DEFAULT_TTS_CONFIG_PATH.open("rb") as handle:
         raw = tomllib.load(handle)
@@ -155,6 +157,7 @@ def _load_default_tts_table() -> dict[str, object]:
     return value
 
 
+@lru_cache(maxsize=1)
 def _load_default_error_messages_table() -> dict[str, object]:
     raw = _load_yaml_table(DEFAULT_ERROR_MESSAGES_CONFIG_PATH)
     if not isinstance(raw, dict):
@@ -165,6 +168,7 @@ def _load_default_error_messages_table() -> dict[str, object]:
     return value
 
 
+@lru_cache(maxsize=1)
 def _load_default_messages_table() -> dict[str, object]:
     raw = _load_yaml_table(DEFAULT_MESSAGES_CONFIG_PATH)
     if not isinstance(raw, dict):

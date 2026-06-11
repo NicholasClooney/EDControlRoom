@@ -65,6 +65,7 @@ def dispatch_haul_loop(
     progress = app._make_progress()
     controls = app._make_controls(progress)
     sleeper = app._make_sleeper()
+    time_fn = app._time_fn
     step_delay = app._config.controls.step_delay_seconds
     undock_timeout = app._config.controls.undock_timeout_seconds
     undock_no_track_timeout = app._config.controls.undock_no_track_timeout_seconds
@@ -147,6 +148,7 @@ def dispatch_haul_loop(
             nav_panel_open_delay_s=app._config.controls.haul_two_way_nav_panel_open_delay_seconds,
             market_buy_hold_seconds_per_ton=app._config.controls.market_buy_hold_seconds_per_ton,
             market_critical_level_multiplier=app._config.controls.market_critical_level_multiplier,
+            time_fn=time_fn,
             sleeper=sleeper,
             progress_fn=progress,
             announce_fn=app._announce_tts,
@@ -194,6 +196,7 @@ def dispatch_multi_leg_haul(
     progress = app._make_progress()
     controls = app._make_controls(progress)
     sleeper = app._make_sleeper()
+    time_fn = app._time_fn
     watcher = app._make_watcher()
     app._clear_pending_haul_stop()
     app._record_history_entry(CommandHistoryEntry(
@@ -238,6 +241,7 @@ def dispatch_multi_leg_haul(
             nav_panel_open_delay_s=app._config.controls.haul_two_way_nav_panel_open_delay_seconds,
             market_buy_hold_seconds_per_ton=app._config.controls.market_buy_hold_seconds_per_ton,
             market_critical_level_multiplier=app._config.controls.market_critical_level_multiplier,
+            time_fn=time_fn,
             sleeper=sleeper,
             progress_fn=progress,
             announce_fn=app._announce_tts,

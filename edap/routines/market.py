@@ -50,22 +50,62 @@ def _market_sell_list(items: list[dict]) -> list[tuple[str, str]]:
     return sorted(rows, key=lambda r: (r[0].lower(), r[1].lower()))
 
 
-def _market_sell_list_for_target(items: list[dict], target_item: dict | None) -> list[tuple[str, str]]:
+def _cargo_inventory_names(inventory: list[dict] | None) -> set[str]:
+    if inventory is None:
+        return set()
+    names: set[str] = set()
+    for item in inventory:
+        if not isinstance(item, dict):
+            continue
+        count = item.get("Count", 0)
+        if isinstance(count, bool) or not isinstance(count, (int, float)) or count <= 0:
+            continue
+        raw_name = str(item.get("Name", "")).strip().lower()
+        localised_name = str(item.get("Name_Localised", "")).strip().lower()
+        if raw_name:
+            names.add(raw_name)
+        if localised_name:
+            names.add(localised_name)
+    return names
+
+
+def _market_sell_list_for_cargo(
+    items: list[dict],
+    inventory: list[dict] | None,
+    target_item: dict | None,
+) -> list[tuple[str, str]]:
     rows = _market_sell_list(items)
-    if target_item is None or not _is_sell_market_item(target_item):
-        return rows
-    target_row = (
-        _market_localised(target_item, "Category"),
-        _market_localised(target_item, "Name"),
-    )
-    if any(name.lower() == target_row[1].lower() for _, name in rows):
-        return rows
+    cargo_names = _cargo_inventory_names(inventory)
+    visible_names = {name.lower() for _, name in rows}
+    cargo_rows = []
+    if cargo_names:
+        for item in items:
+            if not _is_sell_market_item(item):
+                continue
+            raw_name = str(item.get("Name", "")).strip().lower()
+            localised_name = _market_localised(item, "Name").strip().lower()
+            if raw_name not in cargo_names and localised_name not in cargo_names:
+                continue
+            row = (
+                _market_localised(item, "Category"),
+                _market_localised(item, "Name"),
+            )
+            if row[1].lower() in visible_names:
+                continue
+            cargo_rows.append(row)
+    elif target_item is not None and _is_sell_market_item(target_item):
+        row = (
+            _market_localised(target_item, "Category"),
+            _market_localised(target_item, "Name"),
+        )
+        if row[1].lower() not in visible_names:
+            cargo_rows.append(row)
+
     # The visible SELL list is demand-based, but the game can still accept a
-    # sale for cargo already in the player's hold even when that commodity does
-    # not appear in the station's normal buy list. When Market.json exposes a
-    # price for the target, inject just that target row so cursor indexing still
-    # lines up with the game behavior we intentionally support.
-    rows = rows + [target_row]
+    # sale for cargo already in the player's hold even when those commodities
+    # do not appear in the station's normal buy list. Inject the whole hidden
+    # cargo subset so cursor indexing matches the in-game sell page ordering.
+    rows = rows + cargo_rows
     return sorted(rows, key=lambda r: (r[0].lower(), r[1].lower()))
 
 
@@ -660,7 +700,7 @@ def _market_trade_attempt(
     sorted_items = (
         _market_buy_list(items)
         if side == "buy"
-        else _market_sell_list_for_target(items, item)
+        else _market_sell_list_for_cargo(items, _read_cargo_inventory(market_path.parent), item)
     )
     try:
         item_index = _market_item_index(sorted_items, target)

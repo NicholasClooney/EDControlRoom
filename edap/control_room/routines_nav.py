@@ -39,6 +39,7 @@ def dispatch_dest(
     progress = app._make_progress()
     controls = app._make_controls(progress)
     sleeper = app._make_sleeper()
+    time_fn = app._time_fn
     step_delay = app._config.controls.step_delay_seconds
     journal_dir = app._journal_dir
 
@@ -64,6 +65,7 @@ def dispatch_dest(
             journal_dir=journal_dir,
             step_delay_s=step_delay,
             map_settle_s=galaxy_map_settle,
+            time_fn=time_fn,
             sleeper=sleeper,
             progress_fn=progress,
         ),

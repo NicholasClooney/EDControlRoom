@@ -10,6 +10,7 @@ def cmd_jump(app: RoutineHost, *, skip_delay: bool = False) -> None:
     progress = app._make_progress()
     controls = app._make_controls(progress)
     watcher = app._make_watcher()
+    time_fn = app._time_fn
 
     app._start_delayed_routine(
         description="jump",
@@ -18,6 +19,7 @@ def cmd_jump(app: RoutineHost, *, skip_delay: bool = False) -> None:
         fn=lambda: jump(
             controls,
             watcher,
+            time_fn=time_fn,
             progress_fn=progress,
         ),
     )

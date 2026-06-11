@@ -1398,6 +1398,16 @@ class RoutinesTests(unittest.TestCase):
                 json.dumps({"timestamp": "2024-01-01T00:00:00Z", "event": "Docked", "StationName": "Pawelczyk Dock"}) + "\n",
                 encoding="utf-8",
             )
+            (journal_dir / "Cargo.json").write_text(
+                json.dumps(
+                    {
+                        "Inventory": [
+                            {"Name": "foodcartridges", "Name_Localised": "Food Cartridges", "Count": 64},
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
             market_path = journal_dir / "Market.json"
             market_path.write_text(
                 json.dumps(
@@ -1468,6 +1478,102 @@ class RoutinesTests(unittest.TestCase):
         self.assertEqual(result.dispatch.status, "ok")
         self.assertIn("Target 'Food Cartridges' at position 4 in sell list (5 items)", progress)
         self.assertIn("  UI_Down x4 (navigate to 'Food Cartridges')", progress)
+
+    def test_market_sell_offsets_target_for_other_hidden_cargo_rows(self) -> None:
+        controls = FakeShipControls()
+        watcher = FakeWatcher(
+            [[{"event": "MarketSell", "Type": "foodcartridges", "Type_Localised": "Food Cartridges", "Count": 64, "TotalSale": 123456}]]
+        )
+        progress: list[str] = []
+
+        with tempfile.TemporaryDirectory() as tmp:
+            journal_dir = Path(tmp)
+            (journal_dir / "Journal.240101000000.01.log").write_text(
+                json.dumps({"timestamp": "2024-01-01T00:00:00Z", "event": "Docked", "StationName": "Pawelczyk Dock"}) + "\n",
+                encoding="utf-8",
+            )
+            (journal_dir / "Cargo.json").write_text(
+                json.dumps(
+                    {
+                        "Inventory": [
+                            {"Name": "fish", "Name_Localised": "Fish", "Count": 4},
+                            {"Name": "foodcartridges", "Name_Localised": "Food Cartridges", "Count": 64},
+                            {"Name": "fruitandvegetables", "Name_Localised": "Fruit and Vegetables", "Count": 12},
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            market_path = journal_dir / "Market.json"
+            market_path.write_text(
+                json.dumps(
+                    {
+                        "StationName": "Pawelczyk Dock",
+                        "Items": [
+                            {
+                                "Category": "Foods",
+                                "Name": "algae",
+                                "Name_Localised": "Algae",
+                                "Demand": 557_928,
+                                "DemandBracket": 1,
+                                "SellPrice": 656,
+                            },
+                            {
+                                "Category": "Foods",
+                                "Name": "animalmeat",
+                                "Name_Localised": "Animal Meat",
+                                "Demand": 26_603,
+                                "DemandBracket": 1,
+                                "SellPrice": 1927,
+                            },
+                            {
+                                "Category": "Foods",
+                                "Name": "fish",
+                                "Name_Localised": "Fish",
+                                "Demand": 0,
+                                "DemandBracket": 0,
+                                "SellPrice": 942,
+                            },
+                            {
+                                "Category": "Foods",
+                                "Name": "foodcartridges",
+                                "Name_Localised": "Food Cartridges",
+                                "Demand": 0,
+                                "DemandBracket": 0,
+                                "SellPrice": 1929,
+                            },
+                            {
+                                "Category": "Foods",
+                                "Name": "fruitandvegetables",
+                                "Name_Localised": "Fruit and Vegetables",
+                                "Demand": 0,
+                                "DemandBracket": 0,
+                                "SellPrice": 841,
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = market_sell(
+                controls,
+                watcher,
+                market_path=market_path,
+                target="Food Cartridges",
+                amount="MAX",
+                step_delay_s=0.0,
+                nav_delay_s=0.0,
+                trade_timeout_s=30.0,
+                skip_station_check=True,
+                time_fn=lambda: 0.0,
+                sleeper=lambda _: None,
+                progress_fn=progress.append,
+            )
+
+        self.assertEqual(result.dispatch.status, "ok")
+        self.assertIn("Target 'Food Cartridges' at position 3 in sell list (5 items)", progress)
+        self.assertIn("  UI_Down x3 (navigate to 'Food Cartridges')", progress)
 
     def test_market_sell_resets_trade_dialog_focus_before_confirm(self) -> None:
         controls = FakeShipControls()
