@@ -20,7 +20,7 @@ jobs:
 
     env:
       PROMOTION_BRANCH: promote-dev-to-main--generated-iteration-archive
-      PR_TITLE: chore: promote dev to main
+      PR_TITLE: "chore: promote dev to main"
       GH_TOKEN: ${{ secrets.PROMOTION_PR_TOKEN || secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
     steps:
