@@ -1,6 +1,7 @@
 # CI and Release Status
 ## Current
 - A repo-wide `workflow_run` notifier posts to Discord via `DISCORD_WEBHOOK_URL` whenever any workflow other than the notifier itself completes with `failure`.
+- Workflow YAML changes are expected to be locally parse-validated before push so GitHub does not become the first syntax check.
 - Tests run on `pull_request` and on `push` only for `main`.
 - `release-please` owns release PR generation on `main`.
 - `dev -> main` promotion PRs are maintained from `promote-dev-to-main--generated-iteration-archive`, rebuilt from `dev` with the generated iteration archive layered on top.
