@@ -7,6 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: write
   contents: write
   pull-requests: write
 
@@ -72,8 +73,7 @@ jobs:
           - Head branch is rebuilt from the latest `dev`.
           - `docs/iteration-archive.md` is regenerated on the promotion branch instead of committing generated archive churn directly onto `dev`.
           - Title stays `chore: promote dev to main`.
-
-          If you want the normal PR workflows to run on this bot-authored PR, provide `PROMOTION_PR_TOKEN` or reuse `RELEASE_PLEASE_TOKEN` instead of relying only on the default `GITHUB_TOKEN`.
+          - The promotion workflow explicitly dispatches `Tests` on the promotion branch, so verification still runs without needing a separate PR token.
           EOF
           )"
           pr_number="$(gh pr list \
@@ -91,3 +91,10 @@ jobs:
               --title "$PR_TITLE" \
               --body "$body"
           fi
+
+      - name: Dispatch verification workflow
+        if: steps.prepare.outputs.ahead_count != '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run tests.yml --ref "$PROMOTION_BRANCH"
