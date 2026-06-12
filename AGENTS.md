@@ -60,6 +60,7 @@ Use [docs/iteration-logs/](docs/iteration-logs/) for concise per-iteration notes
 - Failed-step logs only when needed: `gh run view <run-id> --job <job-id> --log-failed`
 - Default to summarizing failing jobs, failing test names, and a few key error lines. Do not pull full logs or broad JSON payloads unless the compact view is insufficient.
 - Keep Discord failure notifications enabled for GitHub Actions. New or substantially rewritten workflows must continue to trigger the repo-wide `DISCORD_WEBHOOK_URL` failure notification path instead of bypassing or replacing it silently.
+- Before pushing any change that adds or edits `.github/workflows/*.yml`, validate the changed workflow YAML locally with `uv run python3 -c "import sys, yaml; [yaml.safe_load(open(path, encoding='utf-8')) for path in sys.argv[1:]]" <workflow-files...>` and fix any parse errors before push or PR update.
 
 ## Working Rules
 

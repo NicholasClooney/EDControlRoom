@@ -38,22 +38,7 @@ jobs:
             echo "DISCORD_WEBHOOK_URL is not configured for this run; skipping notification."
             exit 0
           fi
-          content="$(python3 - <<'PY'
-import json
-import os
-
-message = (
-    "🚨 GitHub Actions workflow failed\n"
-    f"Repository: {os.environ['REPOSITORY']}\n"
-    f"Workflow: {os.environ['WORKFLOW_NAME']}\n"
-    f"Branch: {os.environ['BRANCH_NAME']}\n"
-    f"Commit: {os.environ['COMMIT_SHA'][:7]}\n"
-    f"Actor: {os.environ['ACTOR']}\n"
-    f"Run: {os.environ['WORKFLOW_URL']}"
-)
-print(json.dumps({"content": message}))
-PY
-)"
+          content="$(python3 -c "import json, os; print(json.dumps({'content': '🚨 GitHub Actions workflow failed\\nRepository: ' + os.environ['REPOSITORY'] + '\\nWorkflow: ' + os.environ['WORKFLOW_NAME'] + '\\nBranch: ' + os.environ['BRANCH_NAME'] + '\\nCommit: ' + os.environ['COMMIT_SHA'][:7] + '\\nActor: ' + os.environ['ACTOR'] + '\\nRun: ' + os.environ['WORKFLOW_URL']}))")"
           curl --fail --show-error --silent \
             -H 'Content-Type: application/json' \
             -d "$content" \
