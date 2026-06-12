@@ -1,0 +1,60 @@
+name: Discord Workflow Failure Notify
+
+on:
+  workflow_run:
+    workflows:
+      # Keep this list in sync with the repo workflows that should trigger Discord alerts.
+      - Tests
+      - Release Please
+      - Promote Dev to Main
+    types:
+      - completed
+
+jobs:
+  notify:
+    if: |
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.name != 'Discord Workflow Failure Notify'
+    runs-on: ubuntu-latest
+
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - name: Post failure notification to Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          WORKFLOW_URL: ${{ github.event.workflow_run.html_url }}
+          BRANCH_NAME: ${{ github.event.workflow_run.head_branch }}
+          COMMIT_SHA: ${{ github.event.workflow_run.head_sha }}
+          REPOSITORY: ${{ github.repository }}
+          ACTOR: ${{ github.event.workflow_run.actor.login }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${DISCORD_WEBHOOK_URL:-}" ]; then
+            echo "DISCORD_WEBHOOK_URL is not configured for this run; skipping notification."
+            exit 0
+          fi
+          content="$(python3 - <<'PY'
+import json
+import os
+
+message = (
+    "🚨 GitHub Actions workflow failed\n"
+    f"Repository: {os.environ['REPOSITORY']}\n"
+    f"Workflow: {os.environ['WORKFLOW_NAME']}\n"
+    f"Branch: {os.environ['BRANCH_NAME']}\n"
+    f"Commit: {os.environ['COMMIT_SHA'][:7]}\n"
+    f"Actor: {os.environ['ACTOR']}\n"
+    f"Run: {os.environ['WORKFLOW_URL']}"
+)
+print(json.dumps({"content": message}))
+PY
+)"
+          curl --fail --show-error --silent \
+            -H 'Content-Type: application/json' \
+            -d "$content" \
+            "$DISCORD_WEBHOOK_URL"

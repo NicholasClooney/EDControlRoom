@@ -57,6 +57,7 @@ Use [docs/iteration-logs/](docs/iteration-logs/) for concise per-iteration notes
 - Single run job summary: `gh run view <run-id> --json databaseId,workflowName,displayTitle,headBranch,event,status,conclusion,jobs,updatedAt`
 - Failed-step logs only when needed: `gh run view <run-id> --job <job-id> --log-failed`
 - Default to summarizing failing jobs, failing test names, and a few key error lines. Do not pull full logs or broad JSON payloads unless the compact view is insufficient.
+- Keep Discord failure notifications enabled for GitHub Actions. New or substantially rewritten workflows must continue to trigger the repo-wide `DISCORD_WEBHOOK_URL` failure notification path instead of bypassing or replacing it silently.
 
 ## Working Rules
 
